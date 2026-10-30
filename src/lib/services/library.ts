@@ -1,0 +1,315 @@
+import { applyPatch, createBook, findDuplicates } from '../domain/book';
+import { newId } from '../domain/ids';
+import { bookCounts, canParent, childrenOf, descendantIds, labelOf, nextOrder, reorder } from '../domain/locations';
+import type {
+  Book, BookDraft, Id, Location, LocationKind, MoveRecord, Settings, Snapshot, Timestamp, UndoEntry
+} from '../domain/types';
+import type { ChangeSet, LoadedState, Repository } from '../storage/repository';
+
+type Listener = (state: LoadedState) => void;
+
+interface Action {
+  putBooks?: Book[];
+  deleteBookIds?: Id[];
+  putLocations?: Location[];
+  deleteLocationIds?: Id[];
+  putMoves?: MoveRecord[];
+}
+
+/**
+ * The library: an in-memory model of all books and locations, persisted
+ * through a Repository. Every mutation is atomic and undoable.
+ * Implements the Svelte store contract (`subscribe`).
+ */
+export class Library {
+  private listeners = new Set<Listener>();
+  private books = new Map<Id, Book>();
+  private locations = new Map<Id, Location>();
+  private countsCache?: Map<Id | null, number>;
+  private lastTime = 0;
+
+  private constructor(private repo: Repository, public state: LoadedState) {
+    this.index();
+  }
+
+  static async open(repo: Repository): Promise<Library> {
+    return new Library(repo, await repo.load());
+  }
+
+  subscribe(fn: Listener): () => void {
+    this.listeners.add(fn);
+    fn(this.state);
+    return () => this.listeners.delete(fn);
+  }
+
+  // ------------------------------------------------------------- queries
+
+  book(id: Id): Book | undefined {
+    return this.books.get(id);
+  }
+
+  location(id: Id): Location | undefined {
+    return this.locations.get(id);
+  }
+
+  children(parentId: Id | null): Location[] {
+    return childrenOf(this.state.locations, parentId);
+  }
+
+  label(id: Id | null): string {
+    return labelOf(this.state.locations, id);
+  }
+
+  counts(): Map<Id | null, number> {
+    return (this.countsCache ??= bookCounts(this.state.locations, this.state.books));
+  }
+
+  duplicatesOf(candidate: { id?: Id; isbn10?: string; isbn13?: string }): Book[] {
+    return findDuplicates(this.state.books, candidate);
+  }
+
+  history(bookId: Id): Promise<MoveRecord[]> {
+    return this.repo.movesFor(bookId);
+  }
+
+  // ------------------------------------------------------------- books
+
+  async addBook(draft: BookDraft): Promise<Book> {
+    const book = createBook(
+      { locationId: this.state.settings.defaultLocationId, ...draft },
+      { id: newId(), now: this.now() }
+    );
+    await this.run(`Added “${book.title}”`, { putBooks: [book] });
+    return book;
+  }
+
+  async updateBook(id: Id, patch: Partial<Book>): Promise<Book> {
+    const before = this.mustBook(id);
+    const now = this.now();
+    if ('locationId' in patch && patch.locationId !== before.locationId) this.mustLocation(patch.locationId ?? null);
+    const after = applyPatch(before, patch, now);
+    const moves = this.moveRecords([[before, after]], now);
+    await this.run(`Edited “${after.title}”`, { putBooks: [after], putMoves: moves });
+    return after;
+  }
+
+  async deleteBooks(ids: Id[]): Promise<void> {
+    const books = ids.map((id) => this.mustBook(id));
+    const label = books.length === 1 ? `Deleted “${books[0].title}”` : `Deleted ${books.length} books`;
+    await this.run(label, { deleteBookIds: books.map((b) => b.id) });
+  }
+
+  /** Move books to a location (null = no location). Returns how many actually moved. */
+  async moveBooks(ids: Id[], toId: Id | null): Promise<number> {
+    this.mustLocation(toId);
+    const now = this.now();
+    const pairs = ids
+      .map((id) => this.mustBook(id))
+      .filter((b) => b.locationId !== toId)
+      .map((b): [Book, Book] => [b, { ...b, locationId: toId, updatedAt: now }]);
+    if (!pairs.length) return 0;
+    const n = pairs.length;
+    await this.run(`Moved ${n} book${n === 1 ? '' : 's'} to ${this.label(toId)}`, {
+      putBooks: pairs.map(([, after]) => after),
+      putMoves: this.moveRecords(pairs, now)
+    });
+    return n;
+  }
+
+  // ------------------------------------------------------------- locations
+
+  async addLocation(kind: LocationKind, name: string, parentId: Id | null): Promise<Location> {
+    const parent = parentId ? this.mustLocation(parentId) : undefined;
+    if (!canParent(parent, kind)) throw new Error(`A ${kind} can't go there`);
+    const now = this.now();
+    const loc: Location = {
+      id: newId(), kind, name: cleanName(name), parentId,
+      order: nextOrder(this.state.locations, parentId), createdAt: now, updatedAt: now
+    };
+    await this.run(`Added ${kind} “${loc.name}”`, { putLocations: [loc] });
+    return loc;
+  }
+
+  async renameLocation(id: Id, name: string): Promise<void> {
+    const loc = this.mustLocation(id)!;
+    const renamed = { ...loc, name: cleanName(name), updatedAt: this.now() };
+    await this.run(`Renamed “${loc.name}” to “${renamed.name}”`, { putLocations: [renamed] });
+  }
+
+  async updateLocation(id: Id, patch: Pick<Partial<Location>, 'geo'>): Promise<void> {
+    const loc = this.mustLocation(id)!;
+    await this.run(`Edited “${loc.name}”`, { putLocations: [{ ...loc, ...patch, updatedAt: this.now() }] });
+  }
+
+  async reorderLocations(parentId: Id | null, orderedIds: Id[]): Promise<void> {
+    await this.run('Reordered locations', { putLocations: reorder(this.state.locations, parentId, orderedIds, this.now()) });
+  }
+
+  /** Move a room (or shelf) with everything in it under another place (or room). */
+  async moveLocation(id: Id, newParentId: Id): Promise<void> {
+    const loc = this.mustLocation(id)!;
+    const parent = this.mustLocation(newParentId)!;
+    if (!canParent(parent, loc.kind)) throw new Error(`A ${loc.kind} can't go into a ${parent.kind}`);
+    if (loc.parentId === newParentId) return;
+    const now = this.now();
+    const moved: Location = {
+      ...loc, parentId: newParentId, order: nextOrder(this.state.locations, newParentId), updatedAt: now
+    };
+    const after = this.state.locations.map((l) => (l.id === id ? moved : l));
+    const inside = new Set(descendantIds(this.state.locations, id));
+    const pairs = this.state.books
+      .filter((b) => b.locationId && inside.has(b.locationId))
+      .map((b): [Book, Book] => [b, b]);
+    await this.run(`Moved “${loc.name}” to ${parent.name}`, {
+      putLocations: [moved],
+      putMoves: this.moveRecords(pairs, now, after)
+    });
+  }
+
+  /** Delete a location and everything below it; its books go to `moveBooksTo`. */
+  async deleteLocation(id: Id, moveBooksTo: Id | null): Promise<void> {
+    const loc = this.mustLocation(id)!;
+    this.mustLocation(moveBooksTo);
+    const doomed = descendantIds(this.state.locations, id);
+    if (moveBooksTo && doomed.includes(moveBooksTo)) throw new Error('Books must go somewhere outside the deleted location');
+    const now = this.now();
+    const inside = new Set(doomed);
+    const pairs = this.state.books
+      .filter((b) => b.locationId && inside.has(b.locationId))
+      .map((b): [Book, Book] => [b, { ...b, locationId: moveBooksTo, updatedAt: now }]);
+    const remaining = this.state.locations.filter((l) => !inside.has(l.id));
+    await this.run(`Deleted ${loc.kind} “${loc.name}”`, {
+      deleteLocationIds: doomed,
+      putBooks: pairs.map(([, b]) => b),
+      putMoves: this.moveRecords(pairs, now, remaining)
+    });
+    if (this.state.settings.defaultLocationId && inside.has(this.state.settings.defaultLocationId)) {
+      await this.updateSettings({ defaultLocationId: null });
+    }
+  }
+
+  // ------------------------------------------------------------- settings, undo, backup
+
+  async updateSettings(patch: Partial<Settings>): Promise<void> {
+    const settings = { ...this.state.settings, ...patch };
+    await this.repo.saveSettings(settings);
+    this.set({ ...this.state, settings });
+  }
+
+  /** Revert the most recent action. Returns its label, or undefined if there's nothing to undo. */
+  async undo(): Promise<string | undefined> {
+    const entry = await this.repo.latestUndo();
+    if (!entry) return undefined;
+    await this.commit(
+      {
+        putBooks: entry.booksBefore,
+        deleteBookIds: entry.createdBookIds,
+        putLocations: entry.locationsBefore,
+        deleteLocationIds: entry.createdLocationIds,
+        deleteMoveIds: entry.moveIds,
+        deleteUndoIds: [entry.id]
+      }
+    );
+    return entry.label;
+  }
+
+  async lastActionLabel(): Promise<string | undefined> {
+    return (await this.repo.latestUndo())?.label;
+  }
+
+  exportSnapshot(): Promise<Snapshot> {
+    return this.repo.exportSnapshot();
+  }
+
+  async importSnapshot(snapshot: Snapshot): Promise<void> {
+    if (snapshot?.app !== 'booked' || !Array.isArray(snapshot.books) || !Array.isArray(snapshot.locations)) {
+      throw new Error('This file is not a Booked backup');
+    }
+    await this.repo.importSnapshot(snapshot);
+    this.set(await this.repo.load());
+  }
+
+  // ------------------------------------------------------------- internals
+
+  /** Strictly increasing timestamps so undo order is unambiguous. */
+  private now(): Timestamp {
+    this.lastTime = Math.max(Date.now(), this.lastTime + 1);
+    return new Date(this.lastTime).toISOString();
+  }
+
+  private mustBook(id: Id): Book {
+    const b = this.books.get(id);
+    if (!b) throw new Error(`Book not found: ${id}`);
+    return b;
+  }
+
+  /** Validates a location id; null (no location) is always valid. */
+  private mustLocation(id: Id | null): Location | undefined {
+    if (id === null) return undefined;
+    const l = this.locations.get(id);
+    if (!l) throw new Error(`Location not found: ${id}`);
+    return l;
+  }
+
+  /** Move records for [before, after] pairs whose location label changes. */
+  private moveRecords(pairs: [Book, Book][], at: Timestamp, locationsAfter = this.state.locations): MoveRecord[] {
+    const batchId = newId();
+    return pairs.flatMap(([before, after]) => {
+      const fromLabel = this.label(before.locationId);
+      const toLabel = labelOf(locationsAfter, after.locationId);
+      if (before.locationId === after.locationId && fromLabel === toLabel) return [];
+      return [{ id: newId(), bookId: after.id, fromId: before.locationId, toId: after.locationId, fromLabel, toLabel, at, batchId }];
+    });
+  }
+
+  private async run(label: string, action: Action): Promise<void> {
+    const putBookIds = action.putBooks?.map((b) => b.id) ?? [];
+    const touchedBooks = [...putBookIds, ...(action.deleteBookIds ?? [])];
+    const putLocIds = action.putLocations?.map((l) => l.id) ?? [];
+    const touchedLocs = [...putLocIds, ...(action.deleteLocationIds ?? [])];
+    const undo: UndoEntry = {
+      id: newId(),
+      label,
+      at: this.now(),
+      booksBefore: unique(touchedBooks).flatMap((id) => this.books.get(id) ?? []),
+      createdBookIds: putBookIds.filter((id) => !this.books.has(id)),
+      locationsBefore: unique(touchedLocs).flatMap((id) => this.locations.get(id) ?? []),
+      createdLocationIds: putLocIds.filter((id) => !this.locations.has(id)),
+      moveIds: action.putMoves?.map((m) => m.id) ?? []
+    };
+    await this.commit({ ...action, pushUndo: undo });
+  }
+
+  private async commit(changes: ChangeSet): Promise<void> {
+    await this.repo.commit(changes);
+    const books = new Map(this.books);
+    changes.deleteBookIds?.forEach((id) => books.delete(id));
+    changes.putBooks?.forEach((b) => books.set(b.id, b));
+    const locations = new Map(this.locations);
+    changes.deleteLocationIds?.forEach((id) => locations.delete(id));
+    changes.putLocations?.forEach((l) => locations.set(l.id, l));
+    this.set({ ...this.state, books: [...books.values()], locations: [...locations.values()] });
+  }
+
+  private set(state: LoadedState) {
+    this.state = state;
+    this.index();
+    this.listeners.forEach((fn) => fn(state));
+  }
+
+  private index() {
+    this.books = new Map(this.state.books.map((b) => [b.id, b]));
+    this.locations = new Map(this.state.locations.map((l) => [l.id, l]));
+    this.countsCache = undefined;
+  }
+}
+
+function cleanName(name: string): string {
+  const n = name.trim();
+  if (!n) throw new Error('Name cannot be empty');
+  return n;
+}
+
+function unique<T>(items: T[]): T[] {
+  return [...new Set(items)];
+}
