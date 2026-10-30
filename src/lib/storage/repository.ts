@@ -32,6 +32,9 @@ export interface Repository {
   exportSnapshot(): Promise<Snapshot>;
   /** Replace everything with the snapshot's contents. */
   importSnapshot(snapshot: Snapshot): Promise<void>;
+  /** A copy of the library taken right before a restore, so the restore can be undone. */
+  saveSafetyCopy(snapshot: Snapshot | undefined): Promise<void>;
+  loadSafetyCopy(): Promise<Snapshot | undefined>;
 }
 
 /** Number of undoable actions kept. */

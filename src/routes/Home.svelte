@@ -4,6 +4,7 @@
   import { navigate } from '../lib/router';
   import { library } from '../lib/stores/app';
   import Cover from '../lib/ui/Cover.svelte';
+  import BackupReminder from '../lib/ui/BackupReminder.svelte';
   import Icon from '../lib/ui/Icon.svelte';
 
   const lib = library();
@@ -34,6 +35,8 @@
     <span class="muted">·</span>
     <a class="btn btn-ghost" href="#/add">ISBN / by hand</a>
   </div>
+
+  <BackupReminder />
 
   <section class="stack">
     <div class="spread">

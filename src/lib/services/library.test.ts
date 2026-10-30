@@ -195,7 +195,41 @@ describe('backup', () => {
     await other.destroy();
   });
 
+  it('records when a backup was made', async () => {
+    await lib.addBook({ title: 'A' });
+    const snap = await lib.createBackup();
+    expect(lib.state.settings.lastBackupAt).toBe(snap.exportedAt);
+    expect(snap.settings.lastBackupAt).toBe(snap.exportedAt);
+  });
+
+  it('keeps a safety copy so a restore can be undone', async () => {
+    await lib.addBook({ title: 'Before' });
+    const other = new DexieRepository(`test-${n++}`);
+    const lib2 = await Library.open(other);
+    await lib2.addBook({ title: 'From backup' });
+    const backup = await lib2.exportSnapshot();
+    await other.destroy();
+
+    await lib.importSnapshot(backup);
+    expect(lib.state.books.map((b) => b.title)).toEqual(['From backup']);
+    expect(await lib.hasSafetyCopy()).toBe(true);
+
+    expect(await lib.undoRestore()).toBe(true);
+    expect(lib.state.books.map((b) => b.title)).toEqual(['Before']);
+    expect(await lib.hasSafetyCopy()).toBe(false);
+    expect(await lib.undoRestore()).toBe(false);
+  });
+
   it('rejects foreign files', async () => {
     await expect(lib.importSnapshot({} as never)).rejects.toThrow(/backup/i);
+  });
+});
+
+describe('persistence of proxied input', () => {
+  it('stores drafts that arrive as Proxies (e.g. from reactive UI state)', async () => {
+    const reactive = <T extends object>(o: T): T => new Proxy(o, {});
+    const book = await lib.addBook(reactive({ title: 'A', authors: reactive(['X']) }));
+    const reopened = await Library.open(repo);
+    expect(reopened.book(book.id)?.authors).toEqual(['X']);
   });
 });

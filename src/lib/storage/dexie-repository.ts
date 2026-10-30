@@ -96,6 +96,15 @@ export class DexieRepository implements Repository {
     });
   }
 
+  async saveSafetyCopy(snapshot: Snapshot | undefined): Promise<void> {
+    if (snapshot) await this.db.meta.put({ key: 'safetyCopy', value: snapshot });
+    else await this.db.meta.delete('safetyCopy');
+  }
+
+  async loadSafetyCopy(): Promise<Snapshot | undefined> {
+    return (await this.db.meta.get('safetyCopy'))?.value as Snapshot | undefined;
+  }
+
   /** For tests. */
   async destroy(): Promise<void> {
     await this.db.delete();

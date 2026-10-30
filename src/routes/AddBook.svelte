@@ -36,7 +36,7 @@
   // Duplicate confirmation
   let dupOpen = $state(false);
   let dups = $state<Book[]>([]);
-  let pendingDraft = $state<BookDraft>();
+  let pendingDraft = $state.raw<BookDraft>();
   let pendingAfterLookup = $state<string>();
   /** ISBN the user already confirmed as "another copy", so the form doesn't ask again. */
   let confirmedIsbn = $state<string>();

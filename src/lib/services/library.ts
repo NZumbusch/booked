@@ -221,12 +221,45 @@ export class Library {
     return this.repo.exportSnapshot();
   }
 
+  /** Take a snapshot for a backup file and remember when, for backup reminders. */
+  async createBackup(): Promise<Snapshot> {
+    const snapshot = await this.repo.exportSnapshot();
+    await this.markBackedUp(snapshot.exportedAt);
+    return { ...snapshot, settings: { ...snapshot.settings, lastBackupAt: snapshot.exportedAt } };
+  }
+
+  /** Record that a snapshot taken at `at` was saved somewhere safe. */
+  async markBackedUp(at: Timestamp): Promise<void> {
+    await this.updateSettings({ lastBackupAt: at });
+  }
+
+  /** Replace the library with a backup. The current library is kept as a safety copy (see undoRestore). */
   async importSnapshot(snapshot: Snapshot): Promise<void> {
     if (snapshot?.app !== 'booked' || !Array.isArray(snapshot.books) || !Array.isArray(snapshot.locations)) {
       throw new Error('This file is not a Booked backup');
     }
+    await this.repo.saveSafetyCopy(await this.repo.exportSnapshot());
+    await this.replaceWith(plain(snapshot));
+  }
+
+  async hasSafetyCopy(): Promise<boolean> {
+    return !!(await this.repo.loadSafetyCopy());
+  }
+
+  /** Go back to the library as it was before the last restore. */
+  async undoRestore(): Promise<boolean> {
+    const copy = await this.repo.loadSafetyCopy();
+    if (!copy) return false;
+    await this.replaceWith(copy);
+    await this.repo.saveSafetyCopy(undefined);
+    return true;
+  }
+
+  private async replaceWith(snapshot: Snapshot): Promise<void> {
     await this.repo.importSnapshot(snapshot);
     this.set(await this.repo.load());
+    // The data now matches a backup file, so nothing is "unsaved".
+    await this.updateSettings({ lastBackupAt: this.now() });
   }
 
   // ------------------------------------------------------------- internals
@@ -281,7 +314,7 @@ export class Library {
   }
 
   private async commit(changes: ChangeSet): Promise<void> {
-    await this.repo.commit(changes);
+    await this.repo.commit(plain(changes));
     const books = new Map(this.books);
     changes.deleteBookIds?.forEach((id) => books.delete(id));
     changes.putBooks?.forEach((b) => books.set(b.id, b));
@@ -308,6 +341,14 @@ function cleanName(name: string): string {
   const n = name.trim();
   if (!n) throw new Error('Name cannot be empty');
   return n;
+}
+
+/**
+ * Deep plain copy. UI frameworks may hand us reactive proxies, which IndexedDB cannot store
+ * ("could not be cloned"); everything we persist is JSON, so a JSON round-trip is safe.
+ */
+function plain<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value));
 }
 
 function unique<T>(items: T[]): T[] {

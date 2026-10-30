@@ -179,6 +179,8 @@ export interface Settings {
   dateFormat: 'iso' | 'dmy' | 'mdy';
   currency: string;
   view: 'grid' | 'list';
+  /** When the last backup file was made (for reminders). */
+  lastBackupAt?: Timestamp;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
