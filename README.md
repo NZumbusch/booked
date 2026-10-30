@@ -131,6 +131,11 @@ Labels are snapshots, so renaming a room later doesn't rewrite history. Moving a
   - Metadata lookup merged from Open Library, then Google Books (keyless), then Wikidata. Each field records its source, shown behind a "?" on the book page
   - Search by title/author
   - "Fetch missing details" on the book page fills only empty fields
+- [x] **Backup (pulled forward)**
+  - "Back up now" opens the phone's share sheet, so you can save straight to Google Drive or Files. On desktop it downloads a file
+  - Each backup file has a date and time in its name, so new backups never overwrite old ones
+  - The home screen reminds you if you've never backed up, after 20 changed books, or after 7 days with any change. "Later" snoozes it for a day
+  - Restore checks the file first (wrong app, newer version, damaged records) and keeps a safety copy of the current library, so you can undo it
 - [ ] **Phase 3: Organising**
   - Combinable filters as chips, plus saved filters
   - Group-by and a virtualised list
