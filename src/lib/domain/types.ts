@@ -110,6 +110,8 @@ export interface Book {
   writing?: WritingInfo;
   /** Which providers contributed metadata, e.g. ["openlibrary","googlebooks"]. */
   sources?: SourceId[];
+  /** Online details still to be fetched in the background (survives restarts / offline). */
+  pendingLookup?: boolean;
   /** Per-field origin of auto-filled data, keyed by field name (e.g. "description", "writing"). */
   provenance?: Record<string, SourceRef>;
 

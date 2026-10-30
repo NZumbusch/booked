@@ -57,6 +57,15 @@ describe('books', () => {
     expect(history[0]).toMatchObject({ fromLabel: 'Flat A › Study', toLabel: 'Flat A › Living room › Top shelf' });
   });
 
+  it('enriches in the background without hijacking undo', async () => {
+    const a = await lib.addBook({ title: 'A' });
+    await lib.enrichBook(a.id, { publisher: 'P' });
+    expect(lib.book(a.id)?.publisher).toBe('P');
+    expect(await lib.undo()).toMatch(/Added/);
+    expect(lib.state.books).toEqual([]);
+    expect(await lib.enrichBook(a.id, { publisher: 'Q' })).toBeUndefined();
+  });
+
   it('deletes books and can undo it', async () => {
     const a = await lib.addBook({ title: 'A' });
     await lib.deleteBooks([a.id]);

@@ -8,7 +8,7 @@ import gb from './fixtures/gb-isbn.json';
 import wdWork from './fixtures/wd-work-dune.json';
 import wdAuthor from './fixtures/wd-author-herbert.json';
 import type { Fetcher } from './http';
-import { lookupIsbn, mergeResults, searchBooks, setGoogleApiKey } from './lookup';
+import { lookupIsbn, mergeResults, quickLookupIsbn, searchBooks, setGoogleApiKey } from './lookup';
 
 /** Image probe for tests: every cover loads. */
 const allLoad = async () => true;
@@ -143,5 +143,36 @@ describe('searchBooks', () => {
   it('falls back to Google Books', async () => {
     const hits = await searchBooks('dune', world({ 'search.json?q=': 'offline', 'volumes?q=dune': gb }));
     expect(hits[0]).toMatchObject({ title: 'Dune', source: 'googlebooks' });
+  });
+});
+
+describe('quickLookupIsbn', () => {
+  it('answers from a single fast request', async () => {
+    const calls: string[] = [];
+    const f: Fetcher = async (url, init) => { calls.push(url); return world()(url, init); };
+    const r = await quickLookupIsbn('9780441172719', f);
+    expect(r.status).toBe('found');
+    expect(r.draft).toMatchObject({ title: 'Dune', authors: ['Frank Herbert'], isbn13: '9780441172719' });
+    expect(calls).toHaveLength(2); // OL search + Google, in parallel; no follow-up requests
+  });
+
+  it('takes Google when Open Library does not know the book', async () => {
+    const r = await quickLookupIsbn('9780441172719', world({ 'search.json?isbn': { docs: [] } }));
+    expect(r.draft.sources).toEqual(['googlebooks']);
+  });
+
+  it('gives up quickly when the network is slow', async () => {
+    const slow: Fetcher = () => new Promise(() => {});
+    const t = Date.now();
+    const r = await quickLookupIsbn('9780441172719', slow, 50);
+    expect(r.status).toBe('error');
+    expect(Date.now() - t).toBeLessThan(1000);
+    expect(r.draft.isbn13).toBe('9780441172719');
+  });
+
+  it('reports not found and offline', async () => {
+    expect((await quickLookupIsbn('9780306406157', world())).status).toBe('notfound');
+    const offline: Fetcher = async () => { throw new TypeError('Failed to fetch'); };
+    expect((await quickLookupIsbn('9780306406157', offline)).status).toBe('error');
   });
 });

@@ -1,8 +1,17 @@
 import { writable } from 'svelte/store';
+import { lookupCandidate, lookupIsbn } from '../metadata/lookup';
+import { Enricher } from '../services/enrich';
 import { Library } from '../services/library';
 import { DexieRepository } from '../storage/dexie-repository';
 
 let instance: Library | undefined;
+let enricherInstance: Enricher | undefined;
+
+/** Background filler for books added before their online details were known. */
+export function enricher(): Enricher {
+  if (!enricherInstance) throw new Error('Library not opened yet');
+  return enricherInstance;
+}
 
 /** The single Library instance used by the UI. */
 export function library(): Library {
@@ -11,7 +20,12 @@ export function library(): Library {
 }
 
 export async function openLibrary(): Promise<Library> {
-  instance ??= await Library.open(new DexieRepository());
+  if (!instance) {
+    instance = await Library.open(new DexieRepository());
+    enricherInstance = new Enricher(instance, { lookupIsbn: (isbn) => lookupIsbn(isbn), lookupCandidate: (c) => lookupCandidate(c) });
+    enricherInstance.resumeAll();
+    window.addEventListener('online', () => enricherInstance?.resumeAll());
+  }
   // Ask the browser not to evict our data under storage pressure.
   navigator.storage?.persist?.().catch(() => {});
   return instance;

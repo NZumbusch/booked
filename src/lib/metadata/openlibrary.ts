@@ -225,3 +225,24 @@ export async function olSearch(query: string, f: Fetcher, limit = 20): Promise<C
 function compact(o: Record<string, string | undefined>): Record<string, string> {
   return Object.fromEntries(Object.entries(o).filter(([, v]) => v)) as Record<string, string>;
 }
+
+/** One request: the search index entry for an ISBN (title, authors, year, cover). Used for instant results. */
+export async function olQuickIsbn(isbn: string, f: Fetcher): Promise<ProviderResult | undefined> {
+  const res = await getJson<OlSearch>(f, `${OL}/search.json?isbn=${isbn}&limit=1&fields=${SEARCH_FIELDS}`, { timeoutMs: 4000 });
+  const d = res?.docs?.[0];
+  if (!d) return undefined;
+  const workId = tail(d.key);
+  return {
+    source: 'openlibrary',
+    url: workId ? `${OL}/works/${workId}` : undefined,
+    fields: {
+      title: d.title,
+      subtitle: d.subtitle,
+      authors: d.author_name,
+      firstPublishedYear: d.first_publish_year,
+      cover: coverUrl(d.cover_i, 'L'),
+      subjects: cleanSubjects(d.subject),
+      identifiers: workId ? { olwork: workId } : undefined
+    }
+  };
+}

@@ -93,6 +93,18 @@ export class Library {
     return after;
   }
 
+  /**
+   * Background update (online details arriving later). Not an undoable user action, so it
+   * doesn't push an undo entry and can't hijack "Undo". No-op if the book is gone.
+   */
+  async enrichBook(id: Id, patch: Partial<Book>): Promise<Book | undefined> {
+    const before = this.books.get(id);
+    if (!before) return undefined;
+    const after = applyPatch(before, patch, this.now());
+    await this.commit({ putBooks: [after] });
+    return after;
+  }
+
   async deleteBooks(ids: Id[]): Promise<void> {
     const books = ids.map((id) => this.mustBook(id));
     const label = books.length === 1 ? `Deleted “${books[0].title}”` : `Deleted ${books.length} books`;

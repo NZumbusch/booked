@@ -122,3 +122,22 @@ export function fillMissing(book: Book, found: Partial<Book>): Partial<Book> {
   patch.sources = [...new Set([...(book.sources ?? []), ...(found.sources ?? [])])];
   return patch as Partial<Book>;
 }
+
+/** Title used for a book added before its details are known (e.g. fast batch scanning). */
+export function placeholderTitle(isbn13: string): string {
+  return `ISBN ${isbn13}`;
+}
+
+export function hasPlaceholderTitle(book: Pick<Book, 'title' | 'isbn13'>): boolean {
+  return !!book.isbn13 && book.title === placeholderTitle(book.isbn13);
+}
+
+/**
+ * Patch for background enrichment: fills empty fields (and a placeholder title) and clears
+ * `pendingLookup`. Never touches values the user entered.
+ */
+export function enrichmentPatch(book: Book, found: Partial<Book>): Partial<Book> {
+  const target = hasPlaceholderTitle(book) ? { ...book, title: '' } : book;
+  const patch = fillMissing(target, found);
+  return { ...patch, pendingLookup: undefined };
+}

@@ -100,3 +100,16 @@ describe('provenance via forms', () => {
     expect(applyPatch(b, { publisher: 'Y', provenance: prov }, now).provenance).toBeUndefined();
   });
 });
+
+describe('enrichmentPatch', () => {
+  it('replaces a placeholder title and clears the pending flag', async () => {
+    const { enrichmentPatch, placeholderTitle } = await import('./book');
+    const b = createBook({ title: placeholderTitle('9780306406157'), isbn13: '9780306406157', pendingLookup: true }, { id: 'a', now });
+    expect(enrichmentPatch(b, { title: 'Real', authors: ['X'] })).toMatchObject({ title: 'Real', authors: ['X'], pendingLookup: undefined });
+  });
+  it('keeps a title the user typed', async () => {
+    const { enrichmentPatch } = await import('./book');
+    const b = createBook({ title: 'Mine', isbn13: '9780306406157', pendingLookup: true }, { id: 'a', now });
+    expect(enrichmentPatch(b, { title: 'Theirs' }).title).toBeUndefined();
+  });
+});

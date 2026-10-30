@@ -4,7 +4,7 @@
   import { lookupIsbn, searchBooks, lookupCandidate } from '../lib/metadata/lookup';
   import { FORMAT_LABEL, STATUS_LABEL, formatDate, formatPrice, languageName } from '../lib/format';
   import { navigate } from '../lib/router';
-  import { attempt, library, toast } from '../lib/stores/app';
+  import { attempt, enricher, library, toast } from '../lib/stores/app';
   import BookForm from '../lib/ui/BookForm.svelte';
   import Confirm from '../lib/ui/Confirm.svelte';
   import Cover from '../lib/ui/Cover.svelte';
@@ -19,6 +19,7 @@
   const lib = library();
   const book = $derived($lib && lib.book(id));
   const s = $derived($lib.settings);
+  const fetchingIds = enricher().pending;
 
   let moves = $state<MoveRecord[]>([]);
   let moveOpen = $state(false);
@@ -161,6 +162,9 @@
         </div>
         <div class="row">
           {#if book.ownership === 'wishlist'}<span class="badge warn">Wishlist</span>{/if}
+          {#if book.pendingLookup}
+            <span class="badge">{$fetchingIds.has(book.id) ? 'Fetching details…' : 'Details will be fetched when online'}</span>
+          {/if}
           {#each book.tags as tag}<a class="chip" href="#/books?q={encodeURIComponent(tag)}">#{tag}</a>{/each}
         </div>
         <div class="loc card">

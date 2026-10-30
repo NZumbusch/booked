@@ -3,7 +3,7 @@ import { normalizeIsbn } from '../domain/isbn';
 import type { BookDraft, SourceId, SourceRef } from '../domain/types';
 import { gbByIsbn, gbSearch } from './googlebooks';
 import { HttpError, type Fetcher } from './http';
-import { olByIsbn, olSearch, olWork } from './openlibrary';
+import { olByIsbn, olQuickIsbn, olSearch, olWork } from './openlibrary';
 import type { Candidate, MetaFields, ProviderResult } from './types';
 import { wdEnrich } from './wikidata';
 
@@ -136,6 +136,43 @@ export async function lookupIsbn(input: string, f: Fetcher = fetch.bind(globalTh
     delete draft.provenance!.cover;
   }
   return { status: 'found', draft, warnings };
+}
+
+/**
+ * Fast first answer for the add form: one request each to Open Library's search index and
+ * Google Books, whichever finds the book first, capped at `timeoutMs`. Full details are filled
+ * in later in the background (see services/enrich).
+ */
+export async function quickLookupIsbn(input: string, f: Fetcher = fetch.bind(globalThis), timeoutMs = 3000): Promise<LookupResult> {
+  const isbn = normalizeIsbn(input);
+  if (!isbn) throw new Error(`Not a valid ISBN: ${input}`);
+  const base: LookupDraft = { isbn13: isbn.isbn13, isbn10: isbn.isbn10 };
+  const warnings: string[] = [];
+  let failures = 0;
+  const providers: Promise<ProviderResult | undefined>[] = [
+    olQuickIsbn(isbn.isbn13, f),
+    gbByIsbn(isbn.isbn13, f, config.googleApiKey)
+  ].map((p, i) =>
+    p.catch((e) => {
+      failures++;
+      warnings.push(describe(i === 0 ? 'openlibrary' : 'googlebooks', e));
+      return undefined;
+    })
+  );
+  const firstFound = new Promise<ProviderResult | undefined>((resolve) => {
+    let pending = providers.length;
+    for (const p of providers) {
+      p.then((r) => {
+        if (r) resolve(r);
+        else if (--pending === 0) resolve(undefined);
+      });
+    }
+  });
+  const timeout = new Promise<'timeout'>((resolve) => setTimeout(() => resolve('timeout'), timeoutMs));
+  const winner = await Promise.race([firstFound, timeout]);
+  if (winner === 'timeout') return { status: 'error', draft: base, warnings: [...warnings, 'Lookup is slow; details will be added in the background'] };
+  if (!winner) return { status: failures === providers.length ? 'error' : 'notfound', draft: base, warnings };
+  return { status: 'found', draft: { ...mergeResults([winner]), ...base }, warnings };
 }
 
 /** Free-text search (title, author…): Open Library first, Google Books as fallback. */
