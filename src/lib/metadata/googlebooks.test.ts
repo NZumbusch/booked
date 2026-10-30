@@ -16,6 +16,14 @@ describe('Google Books', () => {
     expect(r!.url).toBe('https://books.google.com/books?id=B1hSG45JCX4C');
   });
 
+  it('sends the API key when one is configured', async () => {
+    const calls: string[] = [];
+    await gbByIsbn('9780441172719', fakeFetch({ 'q=isbn': volumes }, calls), ' my key ');
+    expect(calls[0]).toBe('https://www.googleapis.com/books/v1/volumes?q=isbn:9780441172719&key=my%20key');
+    await gbByIsbn('9780441172719', fakeFetch({ 'q=isbn': volumes }, calls), '');
+    expect(calls[1]).not.toContain('key=');
+  });
+
   it('returns undefined when nothing is found', async () => {
     expect(await gbByIsbn('9780441172719', fakeFetch({ 'q=isbn': { totalItems: 0 } }))).toBeUndefined();
   });

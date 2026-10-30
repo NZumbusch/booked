@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { route } from './lib/router';
   import { openLibrary } from './lib/stores/app';
+  import { setGoogleApiKey } from './lib/metadata/lookup';
   import type { Library } from './lib/services/library';
   import NavBar from './lib/ui/NavBar.svelte';
   import Toasts from './lib/ui/Toasts.svelte';
@@ -24,6 +25,7 @@
   $effect(() => {
     if (!lib) return;
     return lib.subscribe((s) => {
+      setGoogleApiKey(s.settings.googleBooksKey);
       const media = matchMedia('(prefers-color-scheme: dark)');
       const dark = s.settings.theme === 'dark' || (s.settings.theme === 'system' && media.matches);
       document.documentElement.dataset.theme = dark ? 'dark' : 'light';

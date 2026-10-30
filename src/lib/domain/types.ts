@@ -179,6 +179,8 @@ export interface Settings {
   dateFormat: 'iso' | 'dmy' | 'mdy';
   currency: string;
   view: 'grid' | 'list';
+  /** Optional free Google Books API key for a reliable 1,000 lookups/day. */
+  googleBooksKey?: string;
   /** When the last backup file was made (for reminders). */
   lastBackupAt?: Timestamp;
 }

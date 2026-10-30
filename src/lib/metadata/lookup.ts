@@ -9,6 +9,12 @@ import { wdEnrich } from './wikidata';
 
 export type LookupDraft = Partial<BookDraft>;
 
+/** App-wide lookup settings (set from the user's settings). */
+const config: { googleApiKey?: string } = {};
+export function setGoogleApiKey(key: string | undefined) {
+  config.googleApiKey = key?.trim() || undefined;
+}
+
 export interface LookupResult {
   /** found = at least one source knew the book; notfound = all answered "unknown"; error = couldn't ask (offline…). */
   status: 'found' | 'notfound' | 'error';
@@ -102,7 +108,7 @@ export async function lookupIsbn(input: string, f: Fetcher = fetch.bind(globalTh
 
   const [ol, gb] = await Promise.all([
     attempt('openlibrary', olByIsbn(isbn.isbn13, f), warnings),
-    attempt('googlebooks', gbByIsbn(isbn.isbn13, f), warnings)
+    attempt('googlebooks', gbByIsbn(isbn.isbn13, f, config.googleApiKey), warnings)
   ]);
   const olValue = ol.ok ? ol.value : undefined;
   const gbValue = gb.ok ? gb.value : undefined;
@@ -140,7 +146,7 @@ export async function searchBooks(query: string, f: Fetcher = fetch.bind(globalT
   } catch {
     // fall through to Google Books
   }
-  return gbSearch(query, f);
+  return gbSearch(query, f, config.googleApiKey);
 }
 
 /** Full details for a chosen search hit (work-level; no edition-specific ISBN). */

@@ -27,6 +27,19 @@ npm run preview  # serve the production build locally (the service worker is act
 The build uses a relative base path (`./`) and hash routing (`#/books`). Because of that, it works under any sub-path and needs no 404 redirect hacks.
 Pull requests run the same checks but skip the deploy.
 
+## Google Books API key (optional)
+
+Without a key, Google Books lookups share an anonymous quota that is often used up. Nothing breaks when that happens, because Open Library and Wikidata still answer.
+A free key gives you **1,000 lookups per day**, and each book uses one. No billing account is needed.
+
+1. Open <https://console.cloud.google.com/>, then create a project (any name).
+2. Go to **APIs & Services → Library**, search for **Books API**, and choose **Enable**.
+3. Go to **APIs & Services → Credentials → Create credentials → API key**.
+4. Recommended: open the key and set **Application restrictions → Websites** to `https://<user>.github.io/*`. Then set **API restrictions → Books API**.
+5. Paste the key into the app under **Settings → Online lookups**.
+
+The key is stored only on your device, and it's included in backups so a restored device keeps it.
+
 ## PWA or Capacitor?
 
 **Recommendation: PWA now. Capacitor stays possible later with no rewrite.**

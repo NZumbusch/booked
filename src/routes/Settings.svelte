@@ -83,6 +83,19 @@
     </div>
   </section>
 
+  <section class="card stack">
+    <h2>Online lookups</h2>
+    <p class="muted small">
+      Book details come from Open Library and Wikidata (no limits) and Google Books. Without a key, Google’s shared free
+      quota is often used up; with your own free key you get 1,000 Google lookups per day.
+      <a href="https://github.com/nzumbusch/booked#google-books-api-key-optional" target="_blank" rel="noopener">How to get a key ↗</a>
+    </p>
+    <label class="field">Google Books API key (optional)
+      <input value={s.googleBooksKey ?? ''} autocomplete="off" spellcheck="false" placeholder="AIza…"
+        onchange={(e) => update({ googleBooksKey: e.currentTarget.value.trim() || undefined })} />
+    </label>
+  </section>
+
   <section class="card stack" id="backup">
     <h2>Backup</h2>
     <p class="small">

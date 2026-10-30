@@ -8,7 +8,7 @@ import gb from './fixtures/gb-isbn.json';
 import wdWork from './fixtures/wd-work-dune.json';
 import wdAuthor from './fixtures/wd-author-herbert.json';
 import type { Fetcher } from './http';
-import { lookupIsbn, mergeResults, searchBooks } from './lookup';
+import { lookupIsbn, mergeResults, searchBooks, setGoogleApiKey } from './lookup';
 
 /** Image probe for tests: every cover loads. */
 const allLoad = async () => true;
@@ -74,6 +74,15 @@ describe('lookupIsbn', () => {
   it('leaves the cover empty when no image loads', async () => {
     const r = await lookupIsbn('9780441172719', world(), async () => false);
     expect(r.draft.cover).toBeUndefined();
+  });
+
+  it('uses the configured Google Books key', async () => {
+    const calls: string[] = [];
+    const f: Fetcher = async (url, init) => { calls.push(url); return world()(url, init); };
+    setGoogleApiKey('abc');
+    await lookupIsbn('9780441172719', f, allLoad);
+    setGoogleApiKey(undefined);
+    expect(calls.find((u) => u.includes('googleapis'))).toContain('&key=abc');
   });
 
   it('works when Google Books is over quota', async () => {
