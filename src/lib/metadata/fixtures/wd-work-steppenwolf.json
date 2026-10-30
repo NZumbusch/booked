@@ -1,0 +1,42 @@
+{
+  "head" : {
+    "vars" : [ "work", "workLabel", "inception", "published", "creationPlace", "creationPlaceLabel", "creationCoord", "pubPlace", "pubPlaceLabel", "pubCoord", "pubIsCountry", "langCode", "genreLabel", "sitelinks" ]
+  },
+  "results" : {
+    "bindings" : [ {
+      "work" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q217073"
+      },
+      "sitelinks" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#integer",
+        "type" : "literal",
+        "value" : "58"
+      },
+      "inception" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+        "type" : "literal",
+        "value" : "1920-01-01T00:00:00Z"
+      },
+      "published" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+        "type" : "literal",
+        "value" : "1927-01-01T00:00:00Z"
+      },
+      "langCode" : {
+        "type" : "literal",
+        "value" : "de"
+      },
+      "workLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Steppenwolf"
+      },
+      "genreLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "philosophical fiction"
+      }
+    } ]
+  }
+}

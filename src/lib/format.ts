@@ -29,3 +29,13 @@ export function formatPrice(value: number | undefined, currency: string): string
 export function plural(n: number, word: string, many = `${word}s`): string {
   return `${n.toLocaleString()} ${n === 1 ? word : many}`;
 }
+
+/** "de" → "German" (in the browser's language); unknown codes are shown as-is. */
+export function languageName(code: string | undefined): string | undefined {
+  if (!code) return undefined;
+  try {
+    return new Intl.DisplayNames(undefined, { type: 'language' }).of(code) ?? code;
+  } catch {
+    return code;
+  }
+}

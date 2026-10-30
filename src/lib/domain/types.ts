@@ -50,12 +50,31 @@ export interface Lending {
   dueOn?: IsoDate;
 }
 
-/** Where a work was written — powers the "where was this written" map. */
+/**
+ * How `WritingInfo.place` was determined, best first:
+ * written = Wikidata "location of creation"; published = place of first publication;
+ * author = the author's home town (birthplace); country = only the country of publication is known.
+ */
+export type PlaceBasis = 'written' | 'published' | 'author' | 'country';
+
+/** Where and when a work was written — powers the "where was this written" map. */
 export interface WritingInfo {
-  /** Year (or range start) the work was written / first published. */
+  /** Year the work was written (or started). */
   year?: number;
   yearEnd?: number;
   place?: GeoPoint;
+  placeBasis?: PlaceBasis;
+}
+
+export type SourceId = 'openlibrary' | 'googlebooks' | 'wikidata' | 'manual';
+
+/** Where a piece of metadata came from, shown behind a "?" next to the field. */
+export interface SourceRef {
+  source: SourceId;
+  /** Link to the record at the source. */
+  url?: string;
+  /** Extra explanation, e.g. "author's birthplace". */
+  note?: string;
 }
 
 export interface Book {
@@ -90,7 +109,9 @@ export interface Book {
   seriesNumber?: string;
   writing?: WritingInfo;
   /** Which providers contributed metadata, e.g. ["openlibrary","googlebooks"]. */
-  sources?: string[];
+  sources?: SourceId[];
+  /** Per-field origin of auto-filled data, keyed by field name (e.g. "description", "writing"). */
+  provenance?: Record<string, SourceRef>;
 
   // --- my data
   ownership: Ownership;

@@ -30,13 +30,15 @@ export default defineConfig({
         ]
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
+        globPatterns: ['**/*.{js,css,html,svg,png,woff2,wasm}'],
+        // The barcode decoder (WASM, ~1 MB) is precached so scanning works offline on iOS too.
+        maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
         navigateFallback: 'index.html',
         runtimeCaching: [
           {
             // Cover images from metadata providers: cache once, serve offline.
             urlPattern: ({ url }) =>
-              /covers\.openlibrary\.org|books\.google|googleusercontent/.test(url.hostname),
+              /covers\.openlibrary\.org|archive\.org|books\.google|googleusercontent/.test(url.hostname),
             handler: 'CacheFirst',
             options: {
               cacheName: 'covers',

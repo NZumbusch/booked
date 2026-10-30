@@ -1,0 +1,31 @@
+{
+ "type": {
+  "key": "/type/author"
+ },
+ "key": "/authors/OL79034A",
+ "name": "Frank Herbert",
+ "birth_date": "8 October 1920",
+ "title": "novelist",
+ "remote_ids": {
+  "viaf": "59083797",
+  "wikidata": "Q7934",
+  "isni": "0000000121347853",
+  "amazon": "B000APO5OM",
+  "bookbrainz": "22d93ec7-ee1e-4034-9453-8c1103b98dc0",
+  "goodreads": "58",
+  "gnd": "118897772",
+  "imdb": "nm0378541",
+  "lc_naf": "n80044450",
+  "librarything": "herbertfrank",
+  "musicbrainz": "61ab2306-3f9b-431d-97b1-39868b1b351b",
+  "storygraph": "8d85ae8e-9ec7-4efe-9d87-ee53feb2f542",
+  "inventaire": "wd:Q7934",
+  "librivox": "50",
+  "project_gutenberg": "25754",
+  "opac_sbn": "CFIV006318"
+ },
+ "death_date": "11 February 1986",
+ "personal_name": "Herbert, Frank.",
+ "latest_revision": 51,
+ "revision": 51
+}

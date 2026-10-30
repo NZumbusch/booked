@@ -26,8 +26,14 @@
     <input type="search" bind:value={q} placeholder="Search title, author, ISBN, tag…" aria-label="Search your books" />
   </form>
 
-  <a class="scan btn btn-primary" href="#/add?scan=1"><Icon name="scan" size={28} /> Scan a book</a>
-  <a class="btn btn-ghost add-manual" href="#/add">or add by ISBN, title or by hand</a>
+  <a class="scan btn btn-primary" href="#/add?mode=scan"><Icon name="scan" size={28} /> Scan a book</a>
+  <div class="row more-ways">
+    <a class="btn btn-ghost" href="#/scan">Batch scan</a>
+    <span class="muted">·</span>
+    <a class="btn btn-ghost" href="#/add?mode=search">Search title</a>
+    <span class="muted">·</span>
+    <a class="btn btn-ghost" href="#/add">ISBN / by hand</a>
+  </div>
 
   <section class="stack">
     <div class="spread">
@@ -88,7 +94,8 @@
   .search input { border: none; background: transparent; padding-left: 0; }
   .search input:focus-visible { outline: none; }
   .scan { min-height: 72px; font-size: 1.2rem; border-radius: 20px; }
-  .add-manual { margin-top: -6px; color: var(--muted); }
+  .more-ways { margin-top: -6px; justify-content: center; gap: 0; color: var(--muted); }
+  .more-ways .btn { padding: 0 10px; color: var(--muted); }
   .places { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
   .place { display: grid; gap: 10px; text-decoration: none; }
   .title { text-decoration: none; min-height: 32px; }

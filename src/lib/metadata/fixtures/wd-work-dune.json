@@ -1,0 +1,268 @@
+{
+  "head" : {
+    "vars" : [ "work", "workLabel", "inception", "published", "creationPlace", "creationPlaceLabel", "creationCoord", "pubPlace", "pubPlaceLabel", "pubCoord", "pubIsCountry", "langCode", "genreLabel", "sitelinks" ]
+  },
+  "results" : {
+    "bindings" : [ {
+      "work" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q190192"
+      },
+      "sitelinks" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#integer",
+        "type" : "literal",
+        "value" : "77"
+      },
+      "published" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+        "type" : "literal",
+        "value" : "1965-01-01T00:00:00Z"
+      },
+      "pubPlace" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q30"
+      },
+      "pubCoord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-98.5795 39.828175)"
+      },
+      "pubIsCountry" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#boolean",
+        "type" : "literal",
+        "value" : "true"
+      },
+      "workLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Dune"
+      },
+      "pubPlaceLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "United States"
+      },
+      "genreLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "science fiction"
+      }
+    }, {
+      "work" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q190192"
+      },
+      "sitelinks" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#integer",
+        "type" : "literal",
+        "value" : "77"
+      },
+      "published" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+        "type" : "literal",
+        "value" : "1965-01-01T00:00:00Z"
+      },
+      "pubPlace" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q30"
+      },
+      "pubCoord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-98.5795 39.828175)"
+      },
+      "pubIsCountry" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#boolean",
+        "type" : "literal",
+        "value" : "true"
+      },
+      "workLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Dune"
+      },
+      "pubPlaceLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "United States"
+      },
+      "genreLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "social science fiction"
+      }
+    }, {
+      "work" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q6095696"
+      },
+      "sitelinks" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#integer",
+        "type" : "literal",
+        "value" : "16"
+      },
+      "workLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Dune"
+      },
+      "genreLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "science fiction"
+      }
+    }, {
+      "work" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q190192"
+      },
+      "sitelinks" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#integer",
+        "type" : "literal",
+        "value" : "77"
+      },
+      "published" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+        "type" : "literal",
+        "value" : "1965-01-01T00:00:00Z"
+      },
+      "pubPlace" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q30"
+      },
+      "pubCoord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-98.5795 39.828175)"
+      },
+      "pubIsCountry" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#boolean",
+        "type" : "literal",
+        "value" : "true"
+      },
+      "workLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Dune"
+      },
+      "pubPlaceLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "United States"
+      },
+      "genreLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "planetary romance"
+      }
+    }, {
+      "work" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q18010882"
+      },
+      "sitelinks" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#integer",
+        "type" : "literal",
+        "value" : "0"
+      },
+      "workLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Dune series"
+      },
+      "genreLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "science fiction"
+      }
+    }, {
+      "work" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q190192"
+      },
+      "sitelinks" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#integer",
+        "type" : "literal",
+        "value" : "77"
+      },
+      "published" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+        "type" : "literal",
+        "value" : "1965-01-01T00:00:00Z"
+      },
+      "pubPlace" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q30"
+      },
+      "pubCoord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-98.5795 39.828175)"
+      },
+      "pubIsCountry" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#boolean",
+        "type" : "literal",
+        "value" : "true"
+      },
+      "workLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Dune"
+      },
+      "pubPlaceLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "United States"
+      },
+      "genreLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "soft science fiction"
+      }
+    }, {
+      "work" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q190192"
+      },
+      "sitelinks" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#integer",
+        "type" : "literal",
+        "value" : "77"
+      },
+      "published" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+        "type" : "literal",
+        "value" : "1965-01-01T00:00:00Z"
+      },
+      "pubPlace" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q30"
+      },
+      "pubCoord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-98.5795 39.828175)"
+      },
+      "pubIsCountry" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#boolean",
+        "type" : "literal",
+        "value" : "true"
+      },
+      "workLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Dune"
+      },
+      "pubPlaceLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "United States"
+      },
+      "genreLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "adventure fiction"
+      }
+    } ]
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "head" : {
+    "vars" : [ "author", "authorLabel", "birthPlace", "birthPlaceLabel", "birthCoord" ]
+  },
+  "results" : {
+    "bindings" : [ {
+      "author" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q25973"
+      },
+      "birthPlace" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q487921"
+      },
+      "birthCoord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(8.7375 48.714444444)"
+      },
+      "authorLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Hermann Hesse"
+      },
+      "birthPlaceLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Calw"
+      }
+    } ]
+  }
+}

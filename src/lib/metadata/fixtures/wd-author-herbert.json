@@ -1,0 +1,32 @@
+{
+  "head" : {
+    "vars" : [ "author", "authorLabel", "birthPlace", "birthPlaceLabel", "birthCoord" ]
+  },
+  "results" : {
+    "bindings" : [ {
+      "author" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q7934"
+      },
+      "birthPlace" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q199797"
+      },
+      "birthCoord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-122.4475 47.2525)"
+      },
+      "authorLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Frank Herbert"
+      },
+      "birthPlaceLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Tacoma"
+      }
+    } ]
+  }
+}

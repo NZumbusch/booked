@@ -18,6 +18,9 @@
   const kidKind = $derived<LocationKind | null>(current ? childKind(current.kind) : 'place');
 
   let newName = $state('');
+  // Shelves are optional: their add form stays hidden until asked for.
+  let showShelfForm = $state(false);
+  const showAddForm = $derived(kidKind !== 'shelf' || kids.length > 0 || showShelfForm);
 
   // The location being managed in the edit sheet.
   let editing = $state<Location>();
@@ -139,18 +142,21 @@
         {/each}
       </ul>
 
-      {#if !kids.length}
+      {#if !kids.length && kidKind !== 'shelf'}
         <p class="muted empty-hint">
           {#if !current}No places yet. Start with where your books live, e.g. “Flat A” or “Parents’ house”.
-          {:else if kidKind === 'room'}Add the rooms of {current.name}, e.g. “Living room”.
-          {:else}Shelves are optional. Add some if you want to be precise.{/if}
+          {:else}Add the rooms of {current.name}, e.g. “Living room”.{/if}
         </p>
       {/if}
 
+      {#if !showAddForm}
+        <button class="btn-ghost small optional" onclick={() => (showShelfForm = true)}>+ Add shelves (optional)</button>
+      {:else}
       <form class="add" onsubmit={add}>
         <input bind:value={newName} placeholder="New {KIND_LABEL[kidKind].toLowerCase()} name" aria-label="New {KIND_LABEL[kidKind].toLowerCase()} name" />
         <button class="btn-primary" type="submit" disabled={!newName.trim()}><Icon name="plus" /> Add</button>
       </form>
+      {/if}
     </section>
   {/if}
 
@@ -219,4 +225,5 @@
   .tools button { color: var(--muted); }
   .add { display: flex; gap: 8px; }
   .empty-hint { margin: 0; }
+  .optional { color: var(--muted); justify-self: start; }
 </style>

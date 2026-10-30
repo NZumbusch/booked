@@ -1,9 +1,10 @@
 <script lang="ts">
-  import { isOverdue, todayIso } from '../lib/domain/book';
-  import type { BookDraft, MoveRecord, ReadingStatus } from '../lib/domain/types';
-  import { FORMAT_LABEL, STATUS_LABEL, formatDate, formatPrice } from '../lib/format';
+  import { fillMissing, isOverdue, todayIso } from '../lib/domain/book';
+  import type { BookDraft, MoveRecord, PlaceBasis, ReadingStatus } from '../lib/domain/types';
+  import { lookupIsbn, searchBooks, lookupCandidate } from '../lib/metadata/lookup';
+  import { FORMAT_LABEL, STATUS_LABEL, formatDate, formatPrice, languageName } from '../lib/format';
   import { navigate } from '../lib/router';
-  import { attempt, library } from '../lib/stores/app';
+  import { attempt, library, toast } from '../lib/stores/app';
   import BookForm from '../lib/ui/BookForm.svelte';
   import Confirm from '../lib/ui/Confirm.svelte';
   import Cover from '../lib/ui/Cover.svelte';
@@ -11,6 +12,7 @@
   import Icon from '../lib/ui/Icon.svelte';
   import LocationPicker from '../lib/ui/LocationPicker.svelte';
   import Rating from '../lib/ui/Rating.svelte';
+  import SourceInfo from '../lib/ui/SourceInfo.svelte';
 
   let { id, edit = false }: { id: string; edit?: boolean } = $props();
 
@@ -45,26 +47,72 @@
     await attempt(() => lib.moveBooks([id], moveTarget), `Moved to ${lib.label(moveTarget)}`, { undo: true });
   }
 
+  let fetching = $state(false);
+
+  /** Fill empty fields from online sources; never overwrites what's there. */
+  async function fetchDetails() {
+    if (!book) return;
+    fetching = true;
+    try {
+      let result;
+      if (book.isbn13 || book.isbn10) result = await lookupIsbn(book.isbn13 ?? book.isbn10!);
+      else {
+        const hit = (await searchBooks(`${book.title} ${book.authors[0] ?? ''}`.trim()))[0];
+        result = hit ? await lookupCandidate(hit) : undefined;
+      }
+      if (!result || result.status === 'notfound') return toast('Nothing found online');
+      if (result.status === 'error') return toast('Couldn’t reach the online catalogues');
+      const patch = fillMissing(book, result.draft);
+      if (!Object.keys(patch).length) return toast('Nothing new found, all details are already filled in');
+      await attempt(() => lib.updateBook(id, patch), `Added ${Object.keys(patch).filter((k) => k !== 'provenance' && k !== 'sources').length} details`, { undo: true });
+    } catch {
+      toast('Couldn’t reach the online catalogues');
+    } finally {
+      fetching = false;
+    }
+  }
+
+  const BASIS: Record<PlaceBasis, string> = {
+    written: 'where it was written', published: 'place of first publication', author: 'author’s home town', country: 'country of publication'
+  };
+
   async function doDelete() {
     const title = book?.title;
     if (await attempt(() => lib.deleteBooks([id]).then(() => true), `Deleted “${title}”`, { undo: true })) navigate('/books');
   }
 
+  const written = $derived.by(() => {
+    const w = book?.writing;
+    if (!w || (!w.year && !w.place)) return undefined;
+    const year = w.year ? `${w.year}${w.yearEnd ? `–${w.yearEnd}` : ''}` : '';
+    const place = w.place?.label ? `${w.place.label}${w.placeBasis && w.placeBasis !== 'written' ? ` (${BASIS[w.placeBasis]})` : ''}` : '';
+    return [year, place].filter(Boolean).join(' · ');
+  });
+
+  // [label, value, field key for provenance]
   const facts = $derived(book ? ([
-    ['Publisher', book.publisher],
-    ['Published', book.publishedYear],
-    ['First published', book.firstPublishedYear],
-    ['Edition', book.edition],
-    ['Format', book.format && FORMAT_LABEL[book.format]],
-    ['Pages', book.pageCount],
-    ['Language', book.language],
-    ['Series', book.series && `${book.series}${book.seriesNumber ? ` #${book.seriesNumber}` : ''}`],
-    ['ISBN-13', book.isbn13],
-    ['ISBN-10', book.isbn10],
-    ['Contributors', book.contributors?.join(', ')],
-    ['Genres', book.genres.join(', ')],
-    ['Subjects', book.subjects?.join(', ')]
+    ['Written', written, 'writing'],
+    ['First published', book.firstPublishedYear, 'firstPublishedYear'],
+    ['Original language', languageName(book.originalLanguage), 'originalLanguage'],
+    ['Publisher', book.publisher, 'publisher'],
+    ['This edition', book.publishedYear, 'publishedYear'],
+    ['Edition', book.edition, 'edition'],
+    ['Format', book.format && FORMAT_LABEL[book.format], 'format'],
+    ['Pages', book.pageCount, 'pageCount'],
+    ['Language', languageName(book.language), 'language'],
+    ['Series', book.series && `${book.series}${book.seriesNumber ? ` #${book.seriesNumber}` : ''}`, 'series'],
+    ['ISBN-13', book.isbn13, ''],
+    ['ISBN-10', book.isbn10, ''],
+    ['Contributors', book.contributors?.join(', '), 'contributors'],
+    ['Genres', book.genres.join(', '), 'genres'],
+    ['Subjects', book.subjects?.join(', '), 'subjects']
   ] as const).filter(([, v]) => v !== undefined && v !== '') : []);
+
+  const links = $derived(book?.identifiers ? ([
+    ['Open Library', book.identifiers.olid ? `https://openlibrary.org/books/${book.identifiers.olid}` : book.identifiers.olwork && `https://openlibrary.org/works/${book.identifiers.olwork}`],
+    ['Google Books', book.identifiers.gbid && `https://books.google.com/books?id=${book.identifiers.gbid}`],
+    ['Wikidata', book.identifiers.wikidata && `https://www.wikidata.org/wiki/${book.identifiers.wikidata}`]
+  ] as const).filter(([, url]) => url) : []);
 
   const mine = $derived(book ? ([
     ['Collections', book.collections.join(', ')],
@@ -147,19 +195,27 @@
     {/if}
 
     {#if book.description}
-      <section class="card"><h2>About</h2><p class="desc">{book.description}</p></section>
+      <section class="card"><h2>About <SourceInfo ref={book.provenance?.description} /></h2><p class="desc">{book.description}</p></section>
     {/if}
 
     {#if book.notes}
       <section class="card"><h2>My notes</h2><p class="desc">{book.notes}</p></section>
     {/if}
 
-    {#if facts.length}
-      <section class="card">
+    <section class="card">
+      <div class="spread">
         <h2>Details</h2>
-        <dl>{#each facts as [k, v]}<dt>{k}</dt><dd>{v}</dd>{/each}</dl>
-      </section>
-    {/if}
+        <button class="btn-sm" onclick={fetchDetails} disabled={fetching}>{fetching ? 'Searching…' : 'Fetch missing details'}</button>
+      </div>
+      {#if facts.length}
+        <dl>{#each facts as [k, v, key]}<dt>{k}</dt><dd>{v}<SourceInfo ref={key ? book.provenance?.[key] : undefined} /></dd>{/each}</dl>
+      {:else}
+        <p class="muted small">No details yet.</p>
+      {/if}
+      {#if links.length}
+        <p class="row small links">{#each links as [name, url]}<a class="chip" href={url} target="_blank" rel="noopener">{name} ↗</a>{/each}</p>
+      {/if}
+    </section>
 
     <section class="card">
       <h2>My copy</h2>
@@ -212,6 +268,7 @@
   dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 0; }
   dt { color: var(--muted); }
   dd { margin: 0; overflow-wrap: anywhere; }
+  .links { margin: 12px 0 0; }
   .history { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
   .history li { display: grid; gap: 2px; }
 </style>

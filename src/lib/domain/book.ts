@@ -64,7 +64,17 @@ export function createBook(draft: BookDraft, { id, now }: { id: Id; now: Timesta
 /** Apply user edits. Identity and audit fields can't be overwritten. */
 export function applyPatch(book: Book, patch: Partial<Book>, now: Timestamp): Book {
   const { id: _id, createdAt: _c, updatedAt: _u, ...rest } = patch;
-  return normalize({ ...book, ...rest, id: book.id, createdAt: book.createdAt, updatedAt: now });
+  const next = normalize({ ...book, ...rest, id: book.id, createdAt: book.createdAt, updatedAt: now });
+  // A field edited by hand no longer comes from its online source.
+  // (Forms send the old provenance back unchanged, so only a *different* entry counts as fresh.)
+  if (next.provenance) {
+    const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+    const field = (b: Book, key: string) => (b as unknown as Record<string, unknown>)[key];
+    const kept = Object.fromEntries(Object.entries(next.provenance).filter(([key, ref]) =>
+      same(field(book, key), field(next, key)) || !same(ref, book.provenance?.[key])));
+    next.provenance = Object.keys(kept).length ? kept : undefined;
+  }
+  return next;
 }
 
 export function findDuplicates(books: Book[], candidate: { id?: Id; isbn10?: string; isbn13?: string }): Book[] {
@@ -87,4 +97,28 @@ export function missingMetadata(book: Book): boolean {
 
 export function todayIso(): IsoDate {
   return new Date().toISOString().slice(0, 10);
+}
+
+/**
+ * Patch that fills only the fields the book doesn't have yet, so a refresh from online
+ * sources never overwrites the user's edits. Provenance is kept only for filled fields.
+ */
+export function fillMissing(book: Book, found: Partial<Book>): Partial<Book> {
+  const empty = (v: unknown) => v === undefined || v === null || v === '' || (Array.isArray(v) && !v.length);
+  const patch: Record<string, unknown> = {};
+  const provenance: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(found)) {
+    if (key === 'provenance' || key === 'sources' || key === 'identifiers' || empty(value)) continue;
+    if (!empty((book as unknown as Record<string, unknown>)[key])) continue;
+    patch[key] = value;
+    if (found.provenance?.[key]) provenance[key] = found.provenance[key];
+  }
+  if (found.identifiers) {
+    const merged = { ...found.identifiers, ...book.identifiers };
+    if (JSON.stringify(merged) !== JSON.stringify(book.identifiers ?? {})) patch.identifiers = merged;
+  }
+  if (!Object.keys(patch).length) return {};
+  if (Object.keys(provenance).length) patch.provenance = { ...book.provenance, ...provenance };
+  patch.sources = [...new Set([...(book.sources ?? []), ...(found.sources ?? [])])];
+  return patch as Partial<Book>;
 }

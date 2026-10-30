@@ -13,3 +13,12 @@ describe('format', () => {
     expect(plural(1200, 'book')).toBe('1,200 books');
   });
 });
+
+describe('languageName', () => {
+  it('names ISO codes and passes unknown ones through', async () => {
+    const { languageName } = await import('./format');
+    expect(languageName('de')).toBe('German');
+    expect(languageName(undefined)).toBeUndefined();
+    expect(languageName('not a code!')).toBe('not a code!');
+  });
+});

@@ -65,3 +65,38 @@ describe('helpers', () => {
     expect(missingMetadata(createBook({ title: 'A', authors: ['x'], publishedYear: 2000, isbn13: '9780306406157' }, { id: 'a', now }))).toBe(false);
   });
 });
+
+describe('fillMissing', () => {
+  it('only fills empty fields and merges provenance', async () => {
+    const { fillMissing } = await import('./book');
+    const b = createBook({ title: 'Mine', authors: [], notes: 'keep', genres: ['A'] }, { id: 'a', now });
+    const patch = fillMissing(b, {
+      title: 'Theirs', authors: ['X'], publisher: 'P', genres: ['B'],
+      provenance: { authors: { source: 'openlibrary' }, title: { source: 'openlibrary' } }, sources: ['openlibrary']
+    });
+    expect(patch).toEqual({
+      authors: ['X'], publisher: 'P', provenance: { authors: { source: 'openlibrary' } }, sources: ['openlibrary']
+    });
+  });
+});
+
+describe('provenance on edit', () => {
+  it('drops the source of a field the user changed by hand', () => {
+    const b = createBook({ title: 'A', publisher: 'X', provenance: { publisher: { source: 'openlibrary' }, title: { source: 'openlibrary' } } }, { id: 'a', now });
+    const p = applyPatch(b, { publisher: 'Y', title: 'A' }, now);
+    expect(p.provenance).toEqual({ title: { source: 'openlibrary' } });
+  });
+  it('keeps provenance supplied with the patch', () => {
+    const b = createBook({ title: 'A' }, { id: 'a', now });
+    const p = applyPatch(b, { publisher: 'Y', provenance: { publisher: { source: 'wikidata' } } }, now);
+    expect(p.provenance).toEqual({ publisher: { source: 'wikidata' } });
+  });
+});
+
+describe('provenance via forms', () => {
+  it('drops stale provenance even when the form echoes it back', () => {
+    const prov = { publisher: { source: 'openlibrary' as const } };
+    const b = createBook({ title: 'A', publisher: 'X', provenance: prov }, { id: 'a', now });
+    expect(applyPatch(b, { publisher: 'Y', provenance: prov }, now).provenance).toBeUndefined();
+  });
+});

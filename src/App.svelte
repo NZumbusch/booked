@@ -6,6 +6,7 @@
   import NavBar from './lib/ui/NavBar.svelte';
   import Toasts from './lib/ui/Toasts.svelte';
   import AddBook from './routes/AddBook.svelte';
+  import BatchScan from './routes/BatchScan.svelte';
   import BookDetail from './routes/BookDetail.svelte';
   import Books from './routes/Books.svelte';
   import Home from './routes/Home.svelte';
@@ -53,7 +54,9 @@
     {:else if section === 'book' && param}
       {#key param}<BookDetail id={param} edit={$route.query.edit === '1'} />{/key}
     {:else if section === 'add'}
-      {#key $route.query.scan}<AddBook scan={$route.query.scan === '1'} />{/key}
+      {#key $route.query.mode}<AddBook mode={$route.query.mode === 'scan' || $route.query.mode === 'search' ? $route.query.mode : 'isbn'} />{/key}
+    {:else if section === 'scan'}
+      <BatchScan />
     {:else if section === 'locations'}
       {#key param}<Locations id={param ?? null} />{/key}
     {:else if section === 'settings'}

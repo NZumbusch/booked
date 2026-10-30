@@ -76,15 +76,32 @@ Each mutation builds a `ChangeSet` and an `UndoEntry` (the before-state of every
 Because every action stores its before-state, **any** action can be undone: a bulk move, a room move, a delete.
 A future Google Drive sync module only needs `Repository.exportSnapshot/importSnapshot`, or it can wrap `commit()`. The UI and domain don't change.
 
+### Where the metadata comes from
+
+| Source | Used for |
+|---|---|
+| Open Library (edition + work + author records) | Title, authors, publisher, edition year, pages, language, series, edition cover, description, subjects, author Wikidata ids |
+| Google Books (keyless) | Gaps in the above, genres (categories), and a cover fallback. If it's over quota, it's skipped quietly |
+| Wikidata (SPARQL) | First publication year, writing year ("inception"), original language, genres, and the **writing place** |
+
+The writing place uses the best available evidence, in this order:
+1. The work's recorded *location of creation*
+2. The city of first publication
+3. **The author's home town (birthplace)**
+4. The country of publication
+
+The book page says which of these was used, and the "?" links to the Wikidata record.
+A field you edit by hand loses its source marker.
+
 ## Data schema (v1)
 
 All records are plain JSON. A backup is `{ app, schemaVersion, books, locations, moves, settings }`.
 
 **Location**: `{ id, kind: 'place'|'room'|'shelf', name, parentId, order, geo?, createdAt, updatedAt }`.
-A place has no parent, a room's parent is a place, and a shelf's parent is a room. Shelves are optional.
+A place has no parent, a room's parent is a place, and a shelf's parent is a room. Shelves are optional and stay out of the way: the shelf picker only appears once a room has shelves.
 
 **Book**
-- *Bibliographic:* `title, subtitle, authors[], contributors[], publisher, publishedYear, firstPublishedYear, edition, language, originalLanguage, pageCount, format, isbn10, isbn13, identifiers{olid,gbid,oclc,lccn,wikidata…}, description, cover, genres[], subjects[], series, seriesNumber, writing{year,yearEnd,place{lat,lon,label}}, sources[]`
+- *Bibliographic:* `title, subtitle, authors[], contributors[], publisher, publishedYear, firstPublishedYear, edition, language, originalLanguage, pageCount, format, isbn10, isbn13, identifiers{olid,gbid,oclc,lccn,wikidata…}, description, cover, genres[], subjects[], series, seriesNumber, writing{year,yearEnd,place{lat,lon,label},placeBasis}, sources[], provenance{field → {source,url,note}}`
 - *Mine:* `ownership: owned|wishlist, locationId, tags[], collections[], status: unread|reading|read|abandoned, rating 1–5, startedOn, finishedOn, notes, condition, purchasedOn, price, signed, copies, lending{to,lentOn,dueOn}`
 - *Meta:* `createdAt, updatedAt`
 
@@ -107,11 +124,13 @@ Labels are snapshots, so renaming a room later doesn't rewrite history. Moving a
   - Book detail with quick status, rating and move, the full edit form, and lending return
   - Settings, plus a JSON backup and restore
   - PWA (offline, installable) and the GitHub Pages CI
-- [ ] **Phase 2: Adding books fast**
-  - Camera ISBN scanner (`BarcodeDetector` with a ZXing-WASM fallback)
-  - Batch scan mode: preset location, beep/vibrate, and a running list with undo
-  - Metadata lookup merged from Open Library, Google Books (keyless) and Wikidata: original publication year, subjects, and where available the place of writing or publication
+- [x] **Phase 2: Adding books fast**
+  - Camera ISBN scanner: native `BarcodeDetector` on Android, a bundled ZXing-WASM decoder elsewhere (precached, so it works offline)
+  - Batch scan: preset location, beep/vibrate, a running list with per-item undo and "Undo last", and "Retry lookups" for books scanned offline
+  - Repeated ISBNs (already owned, or already scanned in this batch) are never added silently: you confirm "another copy?" and it becomes a separate entry
+  - Metadata lookup merged from Open Library, then Google Books (keyless), then Wikidata. Each field records its source, shown behind a "?" on the book page
   - Search by title/author
+  - "Fetch missing details" on the book page fills only empty fields
 - [ ] **Phase 3: Organising**
   - Combinable filters as chips, plus saved filters
   - Group-by and a virtualised list
@@ -123,3 +142,6 @@ Labels are snapshots, so renaming a room later doesn't rewrite history. Moving a
   - Libib-compatible CSV export, and CSV import with column mapping
   - Printable location lists
   - Zotero export as CSL-JSON / RIS / BibTeX. Zotero imports these directly, so no API key is needed.
+- [ ] **Later: Google Drive sync**
+  - Uses Drive's hidden per-app folder (`appDataFolder`). It's free, but needs a one-time OAuth client ID from a Google Cloud project
+  - Plugs in behind `Repository.exportSnapshot/importSnapshot`
