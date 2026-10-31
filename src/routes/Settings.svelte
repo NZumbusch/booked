@@ -11,6 +11,7 @@
   import SyncSettings from '../lib/ui/SyncSettings.svelte';
   import SharedPlaces from '../lib/ui/SharedPlaces.svelte';
   import CoverCacheSettings from '../lib/ui/CoverCacheSettings.svelte';
+  import CoverStatus from '../lib/ui/CoverStatus.svelte';
   import RatesSettings from '../lib/ui/RatesSettings.svelte';
 
   const lib = library();
@@ -113,6 +114,7 @@
   </section>
 
   <CoverCacheSettings />
+  <CoverStatus />
 
   <SyncSettings />
   <SharedPlaces />

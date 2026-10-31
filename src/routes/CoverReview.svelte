@@ -7,7 +7,7 @@
   import type { Book, Id } from '../lib/domain/types';
   import { plural } from '../lib/format';
   import { fileToCoverDataUrl } from '../lib/images';
-  import { alternativeCovers, isbnCoverUrls, type CoverOption } from '../lib/metadata/covers';
+  import { alternativeCovers, isbnCovers, type CoverOption } from '../lib/metadata/covers';
   import { dnbByIsbn } from '../lib/metadata/dnb';
   import { reviewQueue, type ReviewScope } from '../lib/services/coverReview';
   import { groupOf, LOOK_LIMIT, siblingLooks } from '../lib/services/seriesCovers';
@@ -119,7 +119,7 @@
         .catch(() => {});
     }
     // 2. candidate covers: by ISBN, and other editions of the work
-    const { early, last } = isbnCoverUrls(b);
+    const { early, last } = await isbnCovers(b, fetch.bind(globalThis));
     const byIsbn: Option[] = [...early, ...last].map((u) => ({
       url: u, thumb: u, label: u.includes('openlibrary') ? 'Open Library (ISBN)' : u.includes('dnb.de') ? 'DNB (ISBN)' : 'Google Books (ISBN)',
       source: u.includes('openlibrary') ? 'openlibrary' : 'googlebooks', sameEdition: true

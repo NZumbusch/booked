@@ -83,6 +83,15 @@ const tail = (key: string | undefined) => key?.split('/').pop();
 const coverUrl = (id: number | undefined, size: 'M' | 'L') =>
   id && id > 0 ? `https://covers.openlibrary.org/b/id/${id}-${size}.jpg?default=false` : undefined;
 
+/**
+ * The cover of an ISBN's edition as a stable numeric-id URL. Open Library throttles and slows
+ * the by-ISBN cover URLs (about 100 per 5 minutes), numeric ids it doesn't.
+ */
+export async function olCoverByIsbn(isbn: string, f: Fetcher): Promise<string | undefined> {
+  const res = await getJson<OlSearch>(f, `${OL}/search.json?isbn=${isbn}&limit=1&fields=cover_i`, { timeoutMs: 8000 });
+  return coverUrl(res?.docs?.[0]?.cover_i, 'L');
+}
+
 function format(physical: string | undefined): BookFormat | undefined {
   const p = physical?.toLowerCase() ?? '';
   if (!p) return undefined;

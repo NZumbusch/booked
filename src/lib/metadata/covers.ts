@@ -2,7 +2,7 @@ import { fold } from '../domain/query';
 import type { Book } from '../domain/types';
 import { getJson, type Fetcher } from './http';
 import { gbSearch } from './googlebooks';
-import { marcToIso, olSearch } from './openlibrary';
+import { marcToIso, olCoverByIsbn, olSearch } from './openlibrary';
 import type { ImageProbe } from './lookup';
 import { titlesMatch } from './wikidata';
 
@@ -107,7 +107,7 @@ export function isbnCoverUrls(book: Pick<Book, 'isbn13' | 'isbn10'>): { early: s
   const isbn = book.isbn13 ?? book.isbn10;
   if (!isbn) return { early: [], last: [] };
   return {
-    early: [`https://covers.openlibrary.org/b/isbn/${isbn}-L.jpg?default=false`],
+    early: [],
     // Google by ISBN (checked: returns the real scan, small, even for books the API search doesn't list; zoom=0 would
     // only give a blank tile for many of them), then the DNB cover service (not checked: unreachable from where this was built).
     last: [
@@ -117,9 +117,22 @@ export function isbnCoverUrls(book: Pick<Book, 'isbn13' | 'isbn10'>): { early: s
   };
 }
 
+/** The same, plus Open Library's cover for the ISBN resolved to its stable id URL (never the slow, throttled by-ISBN URL). */
+export async function isbnCovers(book: Pick<Book, 'isbn13' | 'isbn10'>, f: Fetcher): Promise<{ early: string[]; last: string[] }> {
+  const urls = isbnCoverUrls(book);
+  const isbn = book.isbn13 ?? book.isbn10;
+  if (!isbn) return urls;
+  try {
+    const ol = await olCoverByIsbn(isbn, f);
+    return ol ? { ...urls, early: [ol] } : urls;
+  } catch {
+    return urls;
+  }
+}
+
 /** First working cover for a book: by ISBN, then other editions of the same work, then Google's ISBN image. */
 export async function findCover(book: Book, f: Fetcher, probe: ImageProbe, key?: string): Promise<string | undefined> {
-  const { early, last } = isbnCoverUrls(book);
+  const { early, last } = await isbnCovers(book, f);
   for (const u of early) if (await probe(u)) return u;
   try {
     const options = await alternativeCovers(book, f, key);

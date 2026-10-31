@@ -90,7 +90,9 @@ export function rgbCss([r, g, b]: RGB): string {
 
 /** Google Books' "image not available" tile (and similar blanks): pale, nearly colourless, almost no contrast. */
 export function looksLikePlaceholder(a: Pick<CoverAnalysis, 'lightness' | 'saturation' | 'contrast'>): boolean {
-  return a.lightness > 0.8 && a.saturation < 0.25 && a.contrast < 0.12;
+  // Measured on Google's "image not available" tiles: white, no colour, contrast 0.03. Real light covers
+  // (a pencil sketch on cream, contrast 0.09) must not be caught.
+  return a.lightness >= 0.9 && a.saturation < 0.1 && a.contrast < 0.06;
 }
 
 /** Book covers are portrait (about 2:3). Wide title-page scans, strips and thumbnails of other shapes are not covers. */

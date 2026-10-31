@@ -53,7 +53,8 @@ describe('colorSortKey', () => {
 import { looksLikePlaceholder } from './colors';
 describe('looksLikePlaceholder', () => {
   it('flags pale colourless low-contrast tiles only', () => {
-    expect(looksLikePlaceholder({ lightness: 0.9, saturation: 0.05, contrast: 0.04 })).toBe(true);
+    expect(looksLikePlaceholder({ lightness: 1, saturation: 0, contrast: 0.03 })).toBe(true);
+    expect(looksLikePlaceholder({ lightness: 0.99, saturation: 0.05, contrast: 0.088 })).toBe(false); // a pale sketch cover
     expect(looksLikePlaceholder({ lightness: 0.5, saturation: 0.6, contrast: 0.3 })).toBe(false);
   });
 });
