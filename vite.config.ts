@@ -63,7 +63,7 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     setupFiles: ['./tests/setup.ts'],
-    include: ['src/**/*.test.ts', 'tests/**/*.test.ts']
+    include: ['src/**/*.test.ts', 'tests/**/*.test.ts', 'worker/**/*.test.ts']
   },
   resolve: process.env.VITEST ? { conditions: ['browser'] } : undefined
 });

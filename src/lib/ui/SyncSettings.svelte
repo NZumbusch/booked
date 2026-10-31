@@ -8,12 +8,26 @@
   const s = $derived($lib.settings);
   // svelte-ignore state_referenced_locally
   let clientId = $state(s.sync?.clientId ?? '');
+  // svelte-ignore state_referenced_locally
+  let helperUrl = $state(s.sync?.helperUrl ?? '');
+  // Own state: a settings update (e.g. after each sync) must not snap the panel shut.
+  // svelte-ignore state_referenced_locally
+  let stayOpen = $state(!!s.sync?.helperUrl);
+  const helperValid = $derived(!helperUrl.trim() || /^https:\/\/[^\s]+$/.test(helperUrl.trim()));
   let busy = $state(false);
+
+  const update = (patch: Partial<NonNullable<typeof s.sync>>) => attempt(() => lib.updateSettings({ sync: { ...s.sync, ...patch } }));
 
   const OUTCOME = { unchanged: 'Already up to date', pulled: 'Updated from Google Drive', pushed: 'Saved to Google Drive', both: 'Synced both ways' };
 
   async function save() {
     await attempt(() => lib.updateSettings({ sync: { ...s.sync, clientId: clientId.trim() || undefined, enabled: !!clientId.trim() } }));
+  }
+
+  async function saveHelper() {
+    if (!helperValid) return toast('The helper URL must start with https://');
+    await attempt(() => lib.updateSettings({ sync: { ...s.sync, helperUrl: helperUrl.trim() || undefined } }),
+      helperUrl.trim() ? 'Helper saved. Connect once more to stay signed in.' : 'Helper removed');
   }
 
   async function run(fn: () => Promise<keyof typeof OUTCOME | undefined | void>) {
@@ -53,7 +67,7 @@
     </p>
     <div class="row">
       {#if $status.state === 'needs-auth' || !controller.connected}
-        <button class="btn-primary" disabled={busy} onclick={() => run(() => controller.connect())}>
+        <button class="btn-primary" data-sync-connect disabled={busy} onclick={() => run(() => controller.connect())}>
           {s.sync.lastSyncAt ? 'Reconnect' : 'Connect Google Drive'}
         </button>
       {:else}
@@ -61,7 +75,29 @@
         <button disabled={busy} onclick={() => run(() => controller.disconnect())}>Disconnect</button>
       {/if}
     </div>
-    <p class="muted small">Syncs automatically when the app opens, a few seconds after changes, and every few minutes. Google sign-ins last about an hour; after that, tap Reconnect.</p>
+    <p class="muted small">Syncs automatically when the app opens, a few seconds after changes, and every few minutes.</p>
+
+    <details class="stay" bind:open={stayOpen}>
+      <summary class="small">Stay signed in {s.sync.helperUrl ? '✓' : '(optional)'}</summary>
+      <div class="stack inner">
+        <p class="muted small">
+          Google sign-ins from a website last about an hour. A small free helper on Cloudflare keeps you signed in
+          until you disconnect. <a href="https://github.com/nzumbusch/booked#stay-signed-in-optional-token-helper" target="_blank" rel="noopener">Set it up ↗</a>
+        </p>
+        <form class="row add" onsubmit={(e) => { e.preventDefault(); saveHelper(); }}>
+          <input bind:value={helperUrl} placeholder="https://booked-auth.….workers.dev" autocomplete="off" spellcheck="false"
+            aria-label="Token helper URL" aria-invalid={!helperValid} />
+          <button type="submit" disabled={helperUrl.trim() === (s.sync.helperUrl ?? '')}>Save</button>
+        </form>
+        {#if !s.sync.helperUrl}
+          <label class="check small">
+            <input type="checkbox" checked={s.sync.autoReconnect !== false}
+              onchange={(e) => update({ autoReconnect: e.currentTarget.checked })} />
+            Without a helper: renew the sign-in automatically on my first tap after it expired (Google’s window flashes briefly)
+          </label>
+        {/if}
+      </div>
+    </details>
   {/if}
 </section>
 
@@ -70,4 +106,6 @@
   .status { margin: 0; }
   .status.error { color: var(--danger); }
   .status.needs-auth { color: var(--warn); }
+  .stay summary { cursor: pointer; min-height: 36px; display: flex; align-items: center; font-weight: 600; }
+  .inner { margin-top: 6px; }
 </style>

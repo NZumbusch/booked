@@ -21,8 +21,8 @@
 
 {#if show}
   <div class="card banner">
-    <span class="small">Google Drive sync is paused.</span>
-    <button class="btn-sm btn-primary" disabled={busy} onclick={reconnect}>Reconnect</button>
+    <span class="small">Google Drive sync is paused (sign-in expired).</span>
+    <button class="btn-sm btn-primary" data-sync-connect disabled={busy} onclick={reconnect}>Reconnect</button>
   </div>
 {:else if $status.state === 'error' && $lib.settings.sync?.enabled}
   <div class="card banner"><span class="small">Sync problem: {$status.message}</span><a class="btn btn-sm" href="#/settings">Details</a></div>

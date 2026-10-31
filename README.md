@@ -86,9 +86,36 @@ Google requires an OAuth *client ID* to identify the app. It's free, and because
 How it behaves:
 - **Automatic syncing:** when the app opens, about 15 s after changes, when you come back online, and every 5 minutes.
 - **Merging:** changes are merged per book, place and move, and the newer edit wins. Deletions are tracked, so a deleted book doesn't come back from another device. Undo and Restore propagate too.
-- **Sign-in expiry:** Google sign-ins last about an hour. After that, Home shows "Reconnect": one tap, and usually no consent screen.
+- **Sign-in expiry:** without a helper, Google sign-ins last about an hour. Your next tap afterwards renews it automatically; Google's window flashes briefly, with no consent screen. If that's blocked, Home shows a one-tap "Reconnect". With the optional token helper (below), you stay signed in.
 - **Settings stay per device:** theme, view, default location and keys aren't synced.
 - **Backups:** a recent sync counts as a backup for the backup reminder. Exporting a file now and then is still a good idea.
+
+## Stay signed in (optional token helper)
+
+A website can only get one-hour Google tokens on its own. Staying signed in needs a *refresh token*, and Google only hands those out to a server that knows the client secret.
+`worker/` contains a tiny **Cloudflare Worker** (free plan) that does exactly that:
+
+- It exchanges your one-time sign-in for a refresh token, then turns that into new hourly tokens in the background.
+- It stores nothing, only talks to Google's token endpoint, and only accepts requests from your app's address.
+- The refresh token stays on your device. "Disconnect" revokes it.
+
+**One-time setup** (about 10 minutes, needs Node.js on a computer):
+
+1. **Get the client secret.** In the Google Cloud console, open **Credentials**, then your *Web application* OAuth client. Copy its **client secret**; create one there if none is shown.
+2. **Publish the app.** In **Google Auth Platform → Audience**, choose **Publish app** ("In production").
+   - In *Testing* mode, Google expires refresh tokens after 7 days.
+   - Google may then show a "Google hasn't verified this app" screen once. Choose *Advanced → Go to Booked*. For an app only you use, verification isn't needed.
+3. **Configure the Worker.** Edit `worker/wrangler.toml`: set `GOOGLE_CLIENT_ID` to your client ID, and `ALLOWED_ORIGIN` to `https://<user>.github.io`. To allow local development too, comma-separate a second address: `https://<user>.github.io, http://localhost:5173`.
+4. **Deploy it.** Create a free account at <https://dash.cloudflare.com/sign-up>, then run:
+   ```bash
+   cd worker
+   npx wrangler login                              # opens the browser once
+   npx wrangler secret put GOOGLE_CLIENT_SECRET    # paste the secret from step 1
+   npx wrangler deploy                             # prints https://booked-auth.<you>.workers.dev
+   ```
+5. **Connect the app.** In the app, open **Settings → Sync with Google Drive → Stay signed in**. Paste the Worker URL, tap **Save**, then **Connect / Reconnect** once. Do this on each device.
+
+The free plan allows 100,000 requests a day. Booked uses a handful.
 
 ## PWA or Capacitor?
 
@@ -135,6 +162,7 @@ src/
   routes/                    one component per screen
 tests/setup.ts               fake IndexedDB + testing-library cleanup
 .github/workflows/deploy.yml CI + GitHub Pages deploy
+worker/                      optional Cloudflare Worker: keeps Google Drive sync signed in
 ```
 
 ### Architecture in one paragraph
@@ -234,6 +262,7 @@ Labels are snapshots, so renaming a room later doesn't rewrite history. Moving a
     - Optionally skips duplicates. Missing places/rooms are created, details are filled in in the background, and the whole import is one undo step
   - **Printable list** per place or room, grouped by room/shelf and sorted by author. Print it, or save it as a PDF
 - [x] **Phase 5: Google Drive sync**
+  - Optional Cloudflare token helper (`worker/`) to stay signed in. Without it, the sign-in renews automatically on your first tap after it expires
   - Works through Drive's hidden per-app folder (`appDataFolder`), and needs no backend
   - Merges per record with deletion markers (tombstones). Optimistic concurrency: if another device writes during a sync, it merges again
   - See "Google Drive sync setup" above

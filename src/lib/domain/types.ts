@@ -186,7 +186,15 @@ export interface Settings {
   /** Optional free Google Books API key for a reliable 1,000 lookups/day. */
   googleBooksKey?: string;
   /** Google Drive sync (per device). */
-  sync?: { clientId?: string; enabled?: boolean; lastSyncAt?: Timestamp };
+  sync?: {
+    clientId?: string;
+    enabled?: boolean;
+    lastSyncAt?: Timestamp;
+    /** Optional token helper (Cloudflare Worker) that keeps you signed in. */
+    helperUrl?: string;
+    /** Without a helper: renew the sign-in on the first tap after it expired (default on). */
+    autoReconnect?: boolean;
+  };
   /** When the last backup file was made (for reminders). */
   lastBackupAt?: Timestamp;
 }
