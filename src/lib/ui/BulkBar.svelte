@@ -6,7 +6,6 @@
   import type { Id, ReadingStatus } from '../domain/types';
   import { STATUS_LABEL, plural } from '../format';
   import { sampleImage } from '../covers/cache';
-  import { helperUrlOf } from '../config';
   import { matchingCover } from '../services/seriesCovers';
   import { attempt, coverContext, covers, library, toast } from '../stores/app';
   import Confirm from './Confirm.svelte';
@@ -73,10 +72,9 @@
   async function matchCovers() {
     const ref = refId ? lib.book(refId) : undefined;
     if (!ref?.cover) return;
-    const proxy = helperUrlOf(lib.state.settings);
     let model = covers().meta(ref.cover)?.analysis;
     try {
-      model ??= (await sampleImage(ref.cover, proxy)).analysis;
+      model ??= (await sampleImage(ref.cover)).analysis;
     } catch {
       return toast('That cover can’t be read right now. Try again with a connection.');
     }

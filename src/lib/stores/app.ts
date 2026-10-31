@@ -1,5 +1,5 @@
 import { writable } from 'svelte/store';
-import { booksKeyOf, helperUrlOf } from '../config';
+import { booksKeyOf } from '../config';
 import { coverFor, siblingLooks, type SeriesCoverContext } from '../services/seriesCovers';
 import { browserProbe, lookupCandidate, lookupIsbn } from '../metadata/lookup';
 import { Enricher } from '../services/enrich';
@@ -171,7 +171,6 @@ export function coverContext(): SeriesCoverContext {
   const cache = covers();
   return {
     key: booksKeyOf(lib.state.settings),
-    proxy: helperUrlOf(lib.state.settings),
     probe: browserProbe,
     siblings: (b) => siblingLooks(lib.state.books, b, (c) => cache.meta(c)?.analysis)
   };
