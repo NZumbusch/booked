@@ -1,4 +1,5 @@
 import { get, writable, type Readable } from 'svelte/store';
+import { helperUrlOf } from '../config';
 import { descendantIds } from '../domain/locations';
 import { EMPTY_BOOKKEEPING, exportSpace } from '../domain/spaces';
 import type { Id, SpaceConfig } from '../domain/types';
@@ -113,7 +114,7 @@ export class SpacesController {
   async share(rootLocationId: Id): Promise<SpaceConfig> {
     const existing = this.spaces.find((s) => s.rootLocationId === rootLocationId);
     if (existing) return existing;
-    const helperUrl = this.lib.state.settings.sync?.helperUrl;
+    const helperUrl = helperUrlOf(this.lib.state.settings);
     if (!helperUrl) throw new Error('Sharing needs the Cloudflare helper. Set it up under Settings › Sync › Stay signed in (see README).');
     const key = generateKey();
     const data = exportSpace(await this.lib.exportSyncData(), rootLocationId, EMPTY_BOOKKEEPING);

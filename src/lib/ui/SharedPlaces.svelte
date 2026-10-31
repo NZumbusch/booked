@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { helperUrlOf } from '../config';
   import { formatDate } from '../format';
   import { attempt, library, spaces, toast } from '../stores/app';
   import { shareLink } from '../sync/spaces';
@@ -30,7 +31,7 @@
     <input value={$lib.settings.userName ?? ''} placeholder="e.g. Nils"
       onchange={(e) => attempt(() => lib.updateSettings({ userName: e.currentTarget.value.trim() || undefined }))} />
   </label>
-  {#if !$lib.settings.sync?.helperUrl}
+  {#if !helperUrlOf($lib.settings)}
     <label class="field">Cloudflare helper address (needed to share; family members don’t need one)
       <input placeholder="https://booked-auth.….workers.dev" autocomplete="off" spellcheck="false"
         onchange={(e) => {

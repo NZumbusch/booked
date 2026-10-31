@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { BUILT_IN, syncConfig } from '../config';
   import { formatDate } from '../format';
   import { attempt, library, sync, toast } from '../stores/app';
 
@@ -6,6 +7,7 @@
   const controller = sync();
   const status = controller.status;
   const s = $derived($lib.settings);
+  const cfg = $derived(syncConfig(s));
   // svelte-ignore state_referenced_locally
   let clientId = $state(s.sync?.clientId ?? '');
   // svelte-ignore state_referenced_locally
@@ -51,24 +53,31 @@
   <p class="muted small">
     Keeps your library the same on all your devices. It's stored in Booked's private folder on your Google Drive (invisible in
     “My Drive”, and Booked can’t see your other files). Changes from different devices are merged book by book.
-    Needs a free one-time setup: <a href="https://github.com/nzumbusch/booked#google-drive-sync-setup" target="_blank" rel="noopener">how to get a client ID ↗</a>
+    {#if !BUILT_IN.googleClientId}Needs a free one-time setup: <a href="https://github.com/nzumbusch/booked#google-drive-sync-setup" target="_blank" rel="noopener">how to get a client ID ↗</a>{/if}
   </p>
-  <form class="row add" onsubmit={(e) => { e.preventDefault(); save(); }}>
-    <input bind:value={clientId} placeholder="…apps.googleusercontent.com" autocomplete="off" spellcheck="false" aria-label="Google OAuth client ID" />
-    <button type="submit" disabled={clientId.trim() === (s.sync?.clientId ?? '')}>Save</button>
-  </form>
+  {#snippet clientIdForm()}
+    <form class="row add" onsubmit={(e) => { e.preventDefault(); save(); }}>
+      <input bind:value={clientId} placeholder={BUILT_IN.googleClientId ? 'Built in' : '…apps.googleusercontent.com'} autocomplete="off" spellcheck="false" aria-label="Google OAuth client ID" />
+      <button type="submit" disabled={clientId.trim() === (s.sync?.clientId ?? '')}>Save</button>
+    </form>
+  {/snippet}
+  {#if !BUILT_IN.googleClientId}{@render clientIdForm()}{/if}
 
-  {#if s.sync?.enabled && s.sync.clientId}
+  {#if !cfg.enabled && cfg.clientId}
+    <button class="btn-primary" onclick={() => update({ enabled: true })}>Turn on sync</button>
+  {/if}
+
+  {#if cfg.enabled && cfg.clientId}
     <p class="small status {$status.state}">
       {#if $status.state === 'syncing'}Syncing…
       {:else if $status.state === 'needs-auth'}Not connected{#if $status.lastSyncAt} · last synced {when($status.lastSyncAt)}{/if}
       {:else if $status.state === 'error'}Sync problem: {$status.message}
-      {:else}Connected ✓ · last synced {when($status.lastSyncAt ?? s.sync.lastSyncAt)}{/if}
+      {:else}Connected ✓ · last synced {when($status.lastSyncAt ?? s.sync?.lastSyncAt)}{/if}
     </p>
     <div class="row">
       {#if $status.state === 'needs-auth' || !controller.connected}
         <button class="btn-primary" data-sync-connect disabled={busy} onclick={() => run(() => controller.connect())}>
-          {s.sync.lastSyncAt ? 'Reconnect' : 'Connect Google Drive'}
+          {s.sync?.lastSyncAt ? 'Reconnect' : 'Connect Google Drive'}
         </button>
       {:else}
         <button class="btn-primary" disabled={busy || $status.state === 'syncing'} onclick={() => run(() => controller.syncNow())}>Sync now</button>
@@ -77,8 +86,11 @@
     </div>
     <p class="muted small">Syncs automatically when the app opens, a few seconds after changes, and every few minutes.</p>
 
+    {#if BUILT_IN.helperUrl && !s.sync?.helperUrl}
+      <p class="muted small">✓ Stays signed in until you disconnect.</p>
+    {:else}
     <details class="stay" bind:open={stayOpen}>
-      <summary class="small">Stay signed in {s.sync.helperUrl ? '✓' : '(optional)'}</summary>
+      <summary class="small">Stay signed in {cfg.helperUrl ? '✓' : '(optional)'}</summary>
       <div class="stack inner">
         <p class="muted small">
           Google sign-ins from a website last about an hour. A small free helper on Cloudflare keeps you signed in
@@ -87,16 +99,24 @@
         <form class="row add" onsubmit={(e) => { e.preventDefault(); saveHelper(); }}>
           <input bind:value={helperUrl} placeholder="https://booked-auth.….workers.dev" autocomplete="off" spellcheck="false"
             aria-label="Token helper URL" aria-invalid={!helperValid} />
-          <button type="submit" disabled={helperUrl.trim() === (s.sync.helperUrl ?? '')}>Save</button>
+          <button type="submit" disabled={helperUrl.trim() === (s.sync?.helperUrl ?? '')}>Save</button>
         </form>
-        {#if !s.sync.helperUrl}
+        {#if !cfg.helperUrl}
           <label class="check small">
-            <input type="checkbox" checked={s.sync.autoReconnect !== false}
+            <input type="checkbox" checked={s.sync?.autoReconnect !== false}
               onchange={(e) => update({ autoReconnect: e.currentTarget.checked })} />
             Without a helper: renew the sign-in automatically on my first tap after it expired (Google’s window flashes briefly)
           </label>
         {/if}
       </div>
+    </details>
+    {/if}
+  {/if}
+
+  {#if BUILT_IN.googleClientId}
+    <details class="stay">
+      <summary class="small muted">Advanced: use your own Google client ID</summary>
+      <div class="stack inner">{@render clientIdForm()}</div>
     </details>
   {/if}
 </section>

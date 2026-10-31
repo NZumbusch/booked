@@ -1,4 +1,5 @@
 import { get, writable, type Readable } from 'svelte/store';
+import { syncConfig } from '../config';
 import type { Library } from '../services/library';
 import { DriveTarget } from './drive';
 import { GoogleAuth } from './google-auth';
@@ -26,7 +27,8 @@ export class SyncController {
 
   constructor(private lib: Library) {
     lib.subscribe((s) => {
-      this.configure(s.settings.sync?.clientId, !!s.settings.sync?.enabled, s.settings.sync?.helperUrl);
+      const cfg = syncConfig(s.settings);
+      this.configure(cfg.clientId, cfg.enabled, cfg.helperUrl);
       // Only book/location changes trigger a sync (not theme or view switches).
       const data = [s.books, s.locations];
       if (data.some((d, i) => d !== this.lastData[i])) {
@@ -49,7 +51,7 @@ export class SyncController {
   private autoReconnect(e: Event) {
     const sync = this.lib.state.settings.sync;
     const auth = this.auth;
-    if (!auth || !sync?.enabled || sync.autoReconnect === false) return;
+    if (!auth || !syncConfig(this.lib.state.settings).enabled || sync?.autoReconnect === false) return;
     if (auth.connected || !auth.everConnected || this.autoTried) return;
     if ((e.target as Element | null)?.closest?.('[data-sync-connect]')) return; // explicit buttons handle it
     if (!navigator.onLine) return;
