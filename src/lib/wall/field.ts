@@ -23,9 +23,9 @@ export const FIELD_ORDERS: Record<FieldOrder, string> = {
   color: 'Colour', topic: 'Topic', title: 'Title', author: 'Author', time: 'When written', room: 'Room'
 };
 
-/** World size of one cell (cover 1 × 1.5 plus a small gap). */
-export const CELL_W = 1.12;
-export const CELL_H = 1.62;
+/** World size of one cell: exactly one 2:3 cover, so the field is seamless. */
+export const CELL_W = 1;
+export const CELL_H = 1.5;
 
 /** Cell geometry: the world size of one grid cell. */
 export interface Geometry {

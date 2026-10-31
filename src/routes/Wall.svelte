@@ -24,6 +24,7 @@
   const shape = $derived<FieldShape>(query.shape === 'disc' ? 'disc' : 'endless');
   const topic = $derived(query.topic ?? '');
   const niceOnly = $derived(query.all !== '1');
+  const showLabels = $derived(query.labels !== 'off');
   const focusId = $derived(query.focus);
   const filter = $derived(filterFromQuery(query));
   const chips = $derived(filterChips(filter, $lib.locations));
@@ -167,42 +168,79 @@
         for (const wy of copies(base.y, periodY, vy0, vy1)) drawTile(ctx, it, t.id, wx, wy, { grey, ring, cx, cy, reach });
       }
     }
-    // Floating labels: groups when zoomed out, subgroups at medium zoom.
-    const showLevel = (lvl: 1 | 2) => (lvl === 1 ? scale < 40 : scale >= 40 && scale < 150);
-    for (const l of layout.labels) {
-      if (!showLevel(l.level)) continue;
-      const size = l.level === 1 ? Math.max(13, Math.min(30, scale * 0.9 + Math.sqrt(l.count) * 0.6)) : Math.max(11, Math.min(20, scale * 0.35));
-      ctx.font = `${l.level === 1 ? 700 : 600} ${size}px system-ui, sans-serif`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      for (const wx of copies(l.x, periodX, vx0, vx1)) {
-        for (const wy of copies(l.y, periodY, vy0, vy1)) {
-          const x = wx * scale + ox;
-          const y = wy * scale + oy;
-          const text = l.level === 1 ? `${l.text} · ${l.count}` : l.text;
-          const w = ctx.measureText(text).width + size;
-          ctx.fillStyle = l.level === 1 ? css('--text', '#222') : css('--surface', '#fff');
-          ctx.globalAlpha = 0.86;
+    if (showLabels) drawLabels(ctx, copies, periodX, periodY, [vx0, vy0, vx1, vy1]);
+    ctx.textAlign = 'start';
+  }
+
+  /**
+   * Floating topic tags: broad groups when zoomed out, subgroups at medium zoom. Dark frosted
+   * pills with the count in a lighter weight; bigger groups win when tags would overlap.
+   */
+  function drawLabels(ctx: CanvasRenderingContext2D, copies: (x: number, period: number, lo: number, hi: number) => number[], periodX: number, periodY: number, v: number[]) {
+    // Zoomed out: broad groups (or the subgroups, if there is only one broad group anyway).
+    const level: 1 | 2 = scale < 40 && layout.labels.some((l) => l.level === 1) ? 1 : 2;
+    if (scale >= 150) return;
+    const placed: { x0: number; y0: number; x1: number; y1: number }[] = [];
+    const list = layout.labels.filter((l) => l.level === level).sort((a, b) => b.count - a.count);
+    ctx.textBaseline = 'middle';
+    ctx.textAlign = 'left';
+    for (const l of list) {
+      const size = level === 1 ? Math.max(13, Math.min(22, 11 + Math.sqrt(l.count) * 0.9)) : Math.max(12, Math.min(16, scale * 0.16));
+      const name = l.text;
+      const count = String(l.count);
+      ctx.font = `650 ${size}px system-ui, sans-serif`;
+      const nameW = ctx.measureText(name).width;
+      ctx.font = `500 ${size * 0.82}px system-ui, sans-serif`;
+      const countW = level === 1 ? ctx.measureText(count).width + size * 0.5 : 0;
+      const padX = size * 0.75;
+      const w = nameW + countW + padX * 2;
+      const h = size * 2;
+      for (const wx of copies(l.x, periodX, v[0], v[2])) {
+        for (const wy of copies(l.y, periodY, v[1], v[3])) {
+          const x = Math.round(wx * scale + ox - w / 2);
+          const y = Math.round(wy * scale + oy - h / 2);
+          if (x + w < 0 || y + h < 0 || x > width || y > height) continue;
+          const box = { x0: x - 6, y0: y - 4, x1: x + w + 6, y1: y + h + 4 };
+          if (placed.some((p) => p.x0 < box.x1 && box.x0 < p.x1 && p.y0 < box.y1 && box.y0 < p.y1)) continue;
+          placed.push(box);
+          ctx.save();
+          ctx.shadowColor = 'rgba(0,0,0,0.35)';
+          ctx.shadowBlur = 14;
+          ctx.shadowOffsetY = 3;
+          ctx.fillStyle = 'rgba(22,20,18,0.78)';
           ctx.beginPath();
-          ctx.roundRect(x - w / 2, y - size * 0.8, w, size * 1.6, size * 0.8);
+          ctx.roundRect(x, y, w, h, h / 2);
           ctx.fill();
-          ctx.globalAlpha = 1;
-          ctx.fillStyle = l.level === 1 ? css('--bg', '#fff') : css('--text', '#222');
-          ctx.fillText(text, x, y);
+          ctx.restore();
+          ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.roundRect(x + 0.5, y + 0.5, w - 1, h - 1, h / 2);
+          ctx.stroke();
+          ctx.font = `650 ${size}px system-ui, sans-serif`;
+          ctx.fillStyle = '#fff';
+          ctx.fillText(name, x + padX, y + h / 2 + 0.5);
+          if (countW) {
+            ctx.font = `500 ${size * 0.82}px system-ui, sans-serif`;
+            ctx.fillStyle = 'rgba(255,255,255,0.62)';
+            ctx.fillText(count, x + padX + nameW + size * 0.5, y + h / 2 + 0.5);
+          }
         }
       }
     }
-    ctx.textAlign = 'start';
   }
 
   /** What was drawn last frame (screen space), for hit-testing exactly what the eye sees. */
   let drawn: { id: string; x: number; y: number; w: number; h: number }[] = [];
 
   function drawTile(ctx: CanvasRenderingContext2D, it: FieldItem, id: string, wx: number, wy: number, o: { grey: string; ring: string; cx: number; cy: number; reach: number }) {
-    const sx = wx * scale + ox;
-    const sy = wy * scale + oy;
-    const w = scale;
-    const h = tileH * scale;
+    // Snap tile edges to device pixels so neighbouring covers meet without hairline seams.
+    const dpr = window.devicePixelRatio || 1;
+    const snap = (v: number) => Math.round(v * dpr) / dpr;
+    const sx = snap(wx * scale + ox);
+    const sy = snap(wy * scale + oy);
+    const w = snap((wx + 1) * scale + ox) - sx;
+    const h = snap((wy + tileH) * scale + oy) - sy;
     if (sx + w < 0 || sy + h < 0 || sx > width || sy > height || w < 0.6) return;
     drawn.push({ id, x: sx, y: sy, w, h });
     const url = it.book.cover!;
@@ -213,7 +251,7 @@
       ctx.strokeStyle = o.ring;
       ctx.lineWidth = 3;
       ctx.beginPath();
-      ctx.roundRect(sx - 2.5, sy - 2.5, w + 5, h + 5, 4);
+      ctx.rect(sx + 1.5, sy + 1.5, w - 3, h - 3);
       ctx.stroke();
     }
   }
@@ -228,12 +266,6 @@
     }
     const p = placeInRect(bmp.width, bmp.height, { x, y, w, h });
     ctx.drawImage(bmp, p.src.x, p.src.y, p.src.w, p.src.h, p.dst.x, p.dst.y, p.dst.w, p.dst.h);
-    if (w > 14) {
-      // Hairline edge, so pale covers don't melt into a pale background.
-      ctx.strokeStyle = 'rgba(0,0,0,0.12)';
-      ctx.lineWidth = 1;
-      ctx.strokeRect(p.dst.x + 0.5, p.dst.y + 0.5, p.dst.w - 1, p.dst.h - 1);
-    }
   }
 
   // ---- input
@@ -419,7 +451,7 @@
       }
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      for (const l of layout.labels.filter((x) => x.level === 1)) {
+      for (const l of showLabels ? layout.labels.filter((x) => x.level === 1) : []) {
         const size = Math.round(cell * 0.9);
         ctx.font = `700 ${size}px system-ui, sans-serif`;
         const x = pad + (l.x - box.x0) * cell;
@@ -477,6 +509,14 @@
     <div class="tools" role="toolbar" aria-label="Wall options">
       <button class:on={shape === 'endless'} aria-pressed={shape === 'endless'} title="Endless: scroll forever in every direction"
         aria-label="Endless scrolling" onclick={() => setQuery({ shape: shape === 'endless' ? 'disc' : undefined })}>∞</button>
+      {#if layout.labels.length}
+        <button class:on={showLabels} aria-pressed={showLabels} title={showLabels ? 'Hide topic tags' : 'Show topic tags'} aria-label="Topic tags"
+          onclick={() => setQuery({ labels: showLabels ? 'off' : undefined })}>
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M3 12V4a1 1 0 0 1 1-1h8l9 9-9 9-9-9z" /><circle cx="7.5" cy="7.5" r="1.5" />
+          </svg>
+        </button>
+      {/if}
       <button aria-label="Back to the start" title="Back to the start" onclick={fit}>⤢</button>
       <button aria-label="Save as poster" title="Save as poster" disabled={exporting} onclick={exportPoster}>{exporting ? '…' : '⤓'}</button>
     </div>
@@ -501,9 +541,15 @@
   .wall { position: fixed; inset: 0 0 calc(var(--nav-h) + env(safe-area-inset-bottom)) 0; display: flex; flex-direction: column; background: var(--bg); }
   .bar { display: flex; gap: 6px; align-items: center; padding: 8px 10px 4px; }
   .bar select { width: auto; min-height: 40px; border-radius: 999px; flex: 1; min-width: 0; max-width: 220px; padding: 0 10px; font-size: 0.95rem; }
-  .tools { position: absolute; right: 10px; top: 10px; z-index: 2; display: grid; gap: 8px; }
-  .tools button { width: 44px; min-height: 44px; padding: 0; border-radius: 50%; font-size: 1.15rem; box-shadow: var(--shadow); }
-  .tools .on { background: var(--accent); color: var(--accent-text); border-color: transparent; }
+  /* One frosted pill for all wall controls: white icons, a soft halo marks what's switched on. */
+  .tools { position: absolute; right: 10px; top: 10px; z-index: 2; display: grid; gap: 2px; padding: 5px; border-radius: 999px;
+    background: rgba(24, 22, 20, 0.93); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.28); border: 1px solid rgba(255, 255, 255, 0.12); }
+  .tools button { width: 44px; min-height: 44px; padding: 0; border: none; border-radius: 50%; font-size: 1.15rem;
+    background: transparent; color: #fff; box-shadow: none; display: grid; place-items: center; }
+  .tools button:hover:not(:disabled) { background: rgba(255, 255, 255, 0.1); }
+  .tools button:disabled { opacity: 0.5; }
+  .tools .on { background: rgba(255, 255, 255, 0.2); }
   .info { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; padding: 0 12px 6px; color: var(--muted); }
   .linkish { min-height: 28px; padding: 0 8px; border: none; background: transparent; color: var(--text); text-decoration: underline; font-size: 0.85rem; }
   .stage { position: relative; flex: 1; min-height: 0; }
