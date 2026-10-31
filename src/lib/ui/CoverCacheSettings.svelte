@@ -1,8 +1,10 @@
 <script lang="ts">
+  import { booksKeyOf } from '../config';
+  import { booksWithoutCover, findMissingCovers, type CoverSearchProgress } from '../services/coverSearch';
   import { COVER_SIZES, estimateBytes, formatBytes, type CoverSize } from '../covers/sizes';
   import type { CacheMode } from '../covers/policy';
   import { plural } from '../format';
-  import { attempt, covers, library } from '../stores/app';
+  import { attempt, covers, library, toast } from '../stores/app';
   import Confirm from './Confirm.svelte';
   import CoverDownload from './CoverDownload.svelte';
 
@@ -13,6 +15,23 @@
   let clearOpen = $state(false);
 
   const update = (patch: { mode?: CacheMode; size?: CoverSize }) => attempt(() => lib.updateSettings({ covers: { ...s, ...patch } }));
+  const missingCovers = $derived($lib && booksWithoutCover($lib.books, (u) => cache.isBroken(u)).length);
+  let search = $state<CoverSearchProgress>();
+  let searching = $state(false);
+  let abort: AbortController | undefined;
+  async function findCovers() {
+    abort = new AbortController();
+    searching = true;
+    try {
+      const r = await findMissingCovers(lib, {
+        key: booksKeyOf($lib.settings), signal: abort.signal, isBroken: (u) => cache.isBroken(u), onProgress: (p) => (search = p)
+      });
+      toast(r.found ? `Found ${plural(r.found, 'cover')}` : 'No new covers found');
+      cache.run().catch(() => {});
+    } finally {
+      searching = false;
+    }
+  }
   const measured = $derived($status && cache.measured());
 
 </script>
@@ -56,6 +75,20 @@
     <CoverDownload disabled={$status.running || (s.mode ?? 'wifi') === 'off' || $status.current >= $status.total}>Download now</CoverDownload>
     <button disabled={!$status.cached} onclick={() => (clearOpen = true)}>Remove saved covers</button>
   </div>
+
+  <div class="stack find">
+    <strong>Books without a cover</strong>
+    <p class="muted small">
+      {missingCovers ? `${plural(missingCovers, 'book')} have no usable cover.` : 'Every book has a cover.'}
+      Searches by ISBN and across other editions, one book after another.
+    </p>
+    {#if searching && search}
+      <p class="small">Searching {search.done + 1} of {search.total} · found {search.found}<br /><span class="muted">{search.current}</span></p>
+      <div><button onclick={() => abort?.abort()}>Stop</button></div>
+    {:else}
+      <div><button class="btn-primary" disabled={!missingCovers} onclick={findCovers}>Find missing covers</button></div>
+    {/if}
+  </div>
 </section>
 
 <Confirm bind:open={clearOpen} title="Remove saved covers?" confirmLabel="Remove"
@@ -68,5 +101,6 @@
   .size.on { border-color: var(--brand); background: color-mix(in srgb, var(--brand) 8%, transparent); }
   .size input { width: 20px; min-height: 20px; }
   .est { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 0.9rem; }
+  .find { border-top: 1px solid var(--line); padding-top: 12px; }
   p { margin: 0; }
 </style>

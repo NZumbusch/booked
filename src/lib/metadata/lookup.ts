@@ -2,6 +2,7 @@ import { cleanList } from '../domain/book';
 import { normalizeIsbn } from '../domain/isbn';
 import type { BookDraft, SourceId, SourceRef } from '../domain/types';
 import { dnbByIsbn } from './dnb';
+import { isbnCoverUrls } from './covers';
 import { gbByIsbn, gbSearch } from './googlebooks';
 import { HttpError, type Fetcher } from './http';
 import { olByIsbn, olQuickIsbn, olSearch, olWork } from './openlibrary';
@@ -133,7 +134,17 @@ export async function lookupIsbn(input: string, f: Fetcher = fetch.bind(globalTh
   if (wd.ok && wd.value) results.push(wd.value);
 
   const draft = { ...mergeResults(results), ...base };
-  const cover = await pickCover(results, probe);
+  let cover = await pickCover(results, probe);
+  if (!cover) {
+    // The catalogues' records have no cover: ask the cover services by ISBN directly.
+    const { early } = isbnCoverUrls({ isbn13: isbn.isbn13, isbn10: isbn.isbn10 });
+    for (const url of early) {
+      if (await probe(url)) {
+        cover = { url, result: results[0] };
+        break;
+      }
+    }
+  }
   if (cover) {
     draft.cover = cover.url;
     draft.provenance!.cover = cover.result.url ? { source: cover.result.source, url: cover.result.url } : { source: cover.result.source };

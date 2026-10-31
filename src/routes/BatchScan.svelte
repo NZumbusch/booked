@@ -1,9 +1,10 @@
 <script lang="ts">
-  import { hasPlaceholderTitle, placeholderTitle } from '../lib/domain/book';
+  import { hasPlaceholderTitle, MANUAL_TAG, placeholderTitle } from '../lib/domain/book';
   import { normalizeIsbn } from '../lib/domain/isbn';
   import { classifyScan } from '../lib/domain/scan';
   import type { Book, Id, ListPrice } from '../lib/domain/types';
   import { plural } from '../lib/format';
+  import { fileToCoverDataUrl } from '../lib/images';
   import { feedback } from '../lib/scanner/camera';
   import { enricher, library, toast } from '../lib/stores/app';
   import Cover from '../lib/ui/Cover.svelte';
@@ -36,6 +37,33 @@
     confirm: items.filter((i) => i.state === 'confirm').length,
     waiting: items.filter((i) => i.state === 'added' && book(i.bookId)?.pendingLookup && !$fetching.has(i.bookId!)).length
   });
+  /** Books no catalogue knew: a distinct sound, tagged so they can be typed in later. */
+  const notified = new Set<Id>();
+  $effect(() => {
+    void $lib;
+    for (const item of items) {
+      const b = item.state === 'added' ? book(item.bookId) : undefined;
+      if (!b || b.pendingLookup || !hasPlaceholderTitle(b) || notified.has(b.id)) continue;
+      notified.add(b.id);
+      feedback('error');
+      if (!b.tags.includes(MANUAL_TAG)) lib.enrichBook(b.id, { tags: [...b.tags, MANUAL_TAG] });
+    }
+  });
+  const manualCount = $derived($lib.books.filter((b) => b.tags.includes(MANUAL_TAG)).length);
+
+  /** A photo of the cover for a book that wasn't found: it shows up on the list with something to go by. */
+  async function photo(b: Book, e: Event & { currentTarget: HTMLInputElement }) {
+    const file = e.currentTarget.files?.[0];
+    e.currentTarget.value = '';
+    if (!file) return;
+    try {
+      await lib.enrichBook(b.id, { cover: await fileToCoverDataUrl(file, 900) });
+      toast('Photo saved. It’s on your “enter manually” list.');
+    } catch {
+      toast('That image couldn’t be read');
+    }
+  }
+
   const book = (id: Id | undefined) => (id ? $lib && lib.book(id) : undefined);
 
   function scanned(isbn: string) {
@@ -124,7 +152,7 @@
     if (item.state === 'undone') return 'Removed';
     if (!b) return 'Adding…';
     if (b.pendingLookup) return $fetching.has(b.id) ? 'Fetching details…' : 'Details pending (offline), retried automatically';
-    if (hasPlaceholderTitle(b)) return 'Added, no details found online';
+    if (hasPlaceholderTitle(b)) return 'Not found online. Take a photo of the cover, it’s on your list to enter by hand.';
     return 'Added';
   }
 </script>
@@ -164,6 +192,7 @@
         {#if counts.confirm}· <span class="warn">{counts.confirm} to confirm</span>{/if}
       </span>
       <div class="row">
+        {#if manualCount}<a class="btn btn-sm" href="#/books?tag={encodeURIComponent(MANUAL_TAG)}">To enter by hand ({manualCount})</a>{/if}
         {#if counts.waiting}<button class="btn-sm" onclick={() => enrich.resumeAll()}>Retry lookups</button>{/if}
         <button class="btn-sm" onclick={undoLast} disabled={!items.length}><Icon name="undo" size={16} /> Undo last</button>
       </div>
@@ -194,6 +223,11 @@
                 <button class="btn-sm" onclick={() => update(item.n, { state: 'skipped' })}>Skip</button>
                 <button class="btn-sm btn-primary" onclick={() => confirm(item.n)}>Add copy</button>
               {:else if item.state === 'added'}
+                {#if b && !b.pendingLookup && hasPlaceholderTitle(b)}
+                  <label class="btn btn-sm photo">📷
+                    <input type="file" accept="image/*" capture="environment" onchange={(e) => photo(b, e)} />
+                  </label>
+                {/if}
                 <button class="btn-ghost btn-icon" aria-label="Remove {b?.title ?? item.isbn}" onclick={() => undo(item)}><Icon name="undo" size={18} /></button>
               {/if}
             </div>
@@ -218,6 +252,8 @@
   .text > * { min-width: 0; }
   .text a { text-decoration: none; }
   .text strong { max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+  .photo { position: relative; overflow: hidden; }
+  .photo input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
   .actions { display: flex; gap: 6px; }
   .pending { animation: pulse 1.2s ease-in-out infinite; }
   @keyframes pulse { 50% { opacity: 0.4; } }

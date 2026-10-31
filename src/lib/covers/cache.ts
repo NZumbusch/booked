@@ -177,7 +177,7 @@ export class CoverCache {
 
   /** The source gave us nothing usable (download failed or only a "not available" tile). */
   isBroken(url: string | undefined): boolean {
-    const e = url ? this.index.get(url) : undefined;
+    const e = url && !url.startsWith('data:') ? this.index.get(url) : undefined;
     return !!e && !e.px && !!e.failedAt;
   }
 
@@ -240,7 +240,7 @@ export class CoverCache {
         const stored = kind === 'shrink' ? await this.db.covers.get(url) : undefined;
         try {
           const p = await this.process({ url, size: this.size, proxy, stored: stored?.data, storedType: stored?.type });
-          if (kind === 'download' && looksLikePlaceholder(p.analysis)) throw new Error('placeholder image');
+          if (kind === 'download' && !url.startsWith('data:') && looksLikePlaceholder(p.analysis)) throw new Error('placeholder image');
           // A local shrink keeps knowing how big the source was (to grow again later).
           const sourcePx = kind === 'shrink' ? Math.max(this.index.get(url)?.sourcePx ?? 0, p.sourcePx) : p.sourcePx;
           const entry: CoverEntry = {

@@ -121,3 +121,16 @@ describe('topicKeys', () => {
     expect(k.get(items[14].book.id)).toEqual({ topic: 'Cooking', sub: '' });
   });
 });
+
+import { spreadCopies } from './field';
+describe('spreadCopies', () => {
+  it('pads to the cell count without putting a copy beside its original', () => {
+    const sorted = Array.from({ length: 10 }, (_, i) => i);
+    const out = spreadCopies(sorted, 14, (src) => src);
+    expect(out).toHaveLength(14);
+    for (let i = 1; i < out.length; i++) expect(out[i]).not.toBe(out[i - 1]);
+  });
+  it('leaves a list that already fits alone', () => {
+    expect(spreadCopies([1, 2, 3], 3, (s) => s)).toEqual([1, 2, 3]);
+  });
+});
