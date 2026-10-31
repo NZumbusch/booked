@@ -17,6 +17,8 @@
   const counts = $derived($lib && lib.counts());
   const recent = $derived(sortBooks($lib.books, 'added', 'desc').slice(0, 12));
   const unplaced = $derived(counts.get(null) ?? 0);
+  const reading = $derived($lib.books.filter((b) => b.status === 'reading'));
+  const upNext = $derived($lib.books.filter((b) => b.queuedAt && b.status !== 'read').sort((a, b) => a.queuedAt!.localeCompare(b.queuedAt!)));
   const lent = $derived($lib.books.filter((b) => b.lending || b.away).length);
   const overdue = $derived($lib.books.filter((b) => isOverdue(b, todayIso())).length);
 </script>
@@ -92,6 +94,29 @@
     {/if}
   </section>
 
+  {#if reading.length || upNext.length}
+    <section class="stack">
+      <h2>Reading</h2>
+      {#each reading.slice(0, 3) as b (b.id)}
+        <a class="card now" href="#/book/{b.id}">
+          <Cover book={b} size="sm" />
+          <span class="now-text">
+            <strong>{b.title}</strong>
+            {#if b.pageCount && b.currentPage}
+              <span class="bar"><span style:width="{Math.min(100, (b.currentPage / b.pageCount) * 100)}%"></span></span>
+              <span class="muted small">page {b.currentPage} of {b.pageCount}</span>
+            {:else}<span class="muted small">{b.authors.join(', ')}</span>{/if}
+          </span>
+        </a>
+      {/each}
+      {#if reading.length > 3}<a class="btn btn-sm btn-ghost more" href="#/books?status=reading">and {reading.length - 3} more reading</a>{/if}
+      {#if upNext.length}
+        <span class="muted small">Up next</span>
+        <div class="strip">{#each upNext as b (b.id)}<a href="#/book/{b.id}" title={b.title}><Cover book={b} /></a>{/each}</div>
+      {/if}
+    </section>
+  {/if}
+
   {#if recent.length}
     <section class="stack">
       <div class="spread">
@@ -126,4 +151,10 @@
   .title { text-decoration: none; min-height: 32px; }
   .strip { display: grid; grid-auto-flow: column; grid-auto-columns: 96px; gap: 12px; overflow-x: auto; padding: 4px 2px 12px; scroll-snap-type: x mandatory; }
   .strip a { scroll-snap-align: start; }
+  .more { justify-self: start; }
+  .now { display: flex; gap: 12px; align-items: center; text-decoration: none; padding: 10px 12px; }
+  .now-text { display: grid; gap: 4px; flex: 1; min-width: 0; }
+  .now-text strong { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .bar { height: 6px; border-radius: 3px; background: var(--surface-2); overflow: hidden; display: block; }
+  .bar span { display: block; height: 100%; background: var(--chart-bar); }
 </style>

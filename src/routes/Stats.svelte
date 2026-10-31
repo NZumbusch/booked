@@ -5,6 +5,9 @@
   import { STATUS_LABEL, formatPrice, plural } from '../lib/format';
   import { library } from '../lib/stores/app';
   import BarList from '../lib/ui/BarList.svelte';
+  import { breadth, readingStats, roomProfiles } from '../lib/domain/reading';
+  import { languageName, ordinal } from '../lib/format';
+  import { attempt } from '../lib/stores/app';
 
   const lib = library();
   const s = $derived(computeStats($lib.books, $lib.locations, todayIso(), $lib.settings.currency));
@@ -21,6 +24,14 @@
   const maxYear = $derived(Math.max(1, ...years.map((y) => y.books)));
   const peak = $derived(years.reduce((m, y) => (y.books > m.books ? y : m), years[0] ?? { year: 0, books: 0, pages: 0 }));
   let hover = $state<number>();
+  let hoverMonth = $state<string>();
+
+  const r = $derived(readingStats($lib.books, todayIso(), $lib.settings.readingGoal));
+  const maxMonth = $derived(Math.max(1, ...r.perMonth.map((m) => m.books)));
+  const monthLabel = (m: string) => new Date(`${m}-01T00:00:00Z`).toLocaleDateString(undefined, { month: 'short' });
+  const wide = $derived(breadth($lib.books.filter((b) => b.ownership === 'owned')));
+  const rooms = $derived(roomProfiles($lib.books.filter((b) => b.ownership === 'owned'), $lib.locations));
+  const setGoal = (v: string) => attempt(() => lib.updateSettings({ readingGoal: Number(v) > 0 ? Math.round(Number(v)) : undefined }));
 </script>
 
 <div class="page stack">
@@ -40,6 +51,42 @@
         <div class="tile"><span class="v">{formatPrice(v.amount, v.currency)}</span><span class="k">collection value ({plural(v.books, 'book')} with a price)</span></div>
       {/each}
       {#if s.copies !== s.owned}<div class="tile"><span class="v">{s.copies.toLocaleString()}</span><span class="k">copies incl. duplicates</span></div>{/if}
+    </section>
+
+    <section class="card stack">
+      <h2>Reading in {r.year}</h2>
+      <div class="goal">
+        <span class="v">{r.readThisYear}{#if r.goal}<span class="muted"> / {r.goal}</span>{/if}</span>
+        <span class="k">books read{r.pagesThisYear ? ` · ${r.pagesThisYear.toLocaleString()} pages` : ''}</span>
+      </div>
+      {#if r.goal}
+        <span class="goalbar" role="progressbar" aria-valuenow={r.readThisYear} aria-valuemax={r.goal}>
+          <span style:width="{Math.min(100, (r.readThisYear / r.goal) * 100)}%"></span>
+          {#if r.expectedByNow !== undefined}<i style:left="{Math.min(100, (r.expectedByNow / r.goal) * 100)}%" title="Where you’d be on an even pace"></i>{/if}
+        </span>
+        <span class="muted small">
+          {r.readThisYear >= (r.expectedByNow ?? 0) ? 'On track ✓' : `${(r.expectedByNow ?? 0) - r.readThisYear} behind an even pace`}
+        </span>
+      {/if}
+      <label class="field goal-input">Yearly goal (books)
+        <input type="number" min="0" inputmode="numeric" value={r.goal ?? ''} onchange={(e) => setGoal(e.currentTarget.value)} placeholder="e.g. 24" />
+      </label>
+      <div class="cols months" role="img" aria-label="Books finished per month: {r.perMonth.map((m) => `${m.month}: ${m.books}`).join(', ')}">
+        {#each r.perMonth as m (m.month)}
+          <div class="col" role="presentation" onpointerenter={() => (hoverMonth = m.month)} onpointerleave={() => (hoverMonth = undefined)}>
+            <span class="val" class:show={hoverMonth === m.month || (m.books > 0 && m.books === maxMonth)}>{m.books}</span>
+            <span class="colbar" style:height="{(m.books / maxMonth) * 100}%"></span>
+            <span class="yr">{monthLabel(m.month)}</span>
+            {#if hoverMonth === m.month}<span class="tip">{m.month}: {m.books} books{m.pages ? `, ${m.pages.toLocaleString()} pages` : ''}</span>{/if}
+          </div>
+        {/each}
+      </div>
+      <p class="muted small facts">
+        {[
+          r.medianDays !== undefined ? (r.medianDays < 1 ? 'You usually finish a book within a day.' : `A book takes you about ${plural(r.medianDays, 'day')} (median).`) : '',
+          ...r.abandonByGenre.slice(0, 2).map((a) => `You abandon ${Math.round(a.rate * 100)}% of ${a.genre} books.`)
+        ].filter(Boolean).join(' ')}
+      </p>
     </section>
 
     <section class="card stack">
@@ -93,6 +140,33 @@
       </section>
     {/if}
 
+    {#if wide.languages.length > 1 || wide.centuries.length > 1}
+      <section class="card stack">
+        <h2>Breadth</h2>
+        {#if wide.languages.length > 1}
+          <span class="muted small">Original languages</span>
+          <BarList items={wide.languages.slice(0, 8).map((l) => ({ key: l.code, label: languageName(l.code) ?? l.code, count: l.count }))} href={(c) => q({ languages: [c.key!] })} />
+        {/if}
+        {#if wide.centuries.length > 1}
+          <span class="muted small">Written in</span>
+          <BarList items={wide.centuries.map((c) => ({ key: String(c.century), label: `${ordinal(c.century)} century`, count: c.count }))}
+            href={(c) => q({ yearFrom: (Number(c.key) - 1) * 100 + 1, yearTo: Number(c.key) * 100 })} />
+        {/if}
+      </section>
+    {/if}
+
+    {#if rooms.length}
+      <section class="card stack">
+        <h2>What each room is about</h2>
+        {#each rooms as room (room.id)}
+          <div class="room">
+            <a href={q({ loc: room.id })}><strong>{room.label}</strong></a> <span class="muted small">{room.total}</span>
+            <div class="small">{room.top.map((t) => `${t.topic} ${Math.round(t.share * 100)}%`).join(' · ')}</div>
+          </div>
+        {/each}
+      </section>
+    {/if}
+
     {#if s.byDecade.length > 1}
       <section class="card stack">
         <h2>When they were first published</h2>
@@ -119,6 +193,17 @@
     white-space: nowrap; z-index: 2; pointer-events: none;
   }
   details { margin-top: 24px; }
+  .goal { display: flex; align-items: baseline; gap: 10px; }
+  .goal .v { font-size: 2rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .goal .k { color: var(--muted); }
+  .goalbar { position: relative; height: 12px; border-radius: 6px; background: var(--surface-2); display: block; }
+  .goalbar span { display: block; height: 100%; border-radius: 6px; background: var(--chart-bar); }
+  .goalbar i { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--text); }
+  .goal-input { max-width: 200px; }
+  .months { height: 120px; margin-bottom: 8px; }
+  .facts { margin: 16px 0 0; }
+  .room { border-top: 1px solid var(--line); padding-top: 8px; }
+  .room a { text-decoration: none; }
   table { border-collapse: collapse; margin-top: 8px; }
   th, td { padding: 2px 12px 2px 0; text-align: left; }
 </style>

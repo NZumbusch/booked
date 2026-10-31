@@ -133,6 +133,10 @@ export interface Book {
   rating?: number;
   startedOn?: IsoDate;
   finishedOn?: IsoDate;
+  /** Reading progress (page you're on). */
+  currentPage?: number;
+  /** On the "Up next" list since this time (queue order). */
+  queuedAt?: Timestamp;
   notes?: string;
   condition?: string;
   purchasedOn?: IsoDate;
@@ -199,6 +203,8 @@ export interface Settings {
   savedFilters?: SavedFilter[];
   /** Optional free Google Books API key for a reliable 1,000 lookups/day. */
   googleBooksKey?: string;
+  /** Books to read per year. */
+  readingGoal?: number;
   /** Your name, shown to family on books you add to a shared place. */
   userName?: string;
   /** Places/rooms shared with family (per device; the key never leaves the share link). */

@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { borrowers, cleanList, lendingFrom } from '../domain/book';
+  import { borrowers, cleanList, lendingFrom, todayIso } from '../domain/book';
+  import { statusPatch } from '../domain/reading';
   import { facet } from '../domain/filters';
   import { fold } from '../domain/query';
   import type { Id, ReadingStatus } from '../domain/types';
@@ -103,7 +104,7 @@
   {:else if panel === 'status'}
     <div class="grid2">
       {#each Object.entries(STATUS_LABEL) as [v, l]}
-        <button onclick={() => { status = v as ReadingStatus; run(() => lib.bulkUpdate(ids, () => ({ status }), `Marked ${what} as ${l}`), (c) => `Marked ${plural(c, 'book')} as ${l.toLowerCase()}`); }}>{l}</button>
+        <button onclick={() => { status = v as ReadingStatus; run(() => lib.bulkUpdate(ids, (b) => statusPatch(b, status, todayIso()), `Marked ${what} as ${l}`), (c) => `Marked ${plural(c, 'book')} as ${l.toLowerCase()}`); }}>{l}</button>
       {/each}
     </div>
   {:else if panel === 'lend'}

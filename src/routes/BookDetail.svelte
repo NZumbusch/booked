@@ -7,6 +7,7 @@
   import { navigate } from '../lib/router';
   import { attempt, enricher, knowledge, library, toast } from '../lib/stores/app';
   import { buildIndex, similarTo } from '../lib/domain/similar';
+  import { progressPatch, statusPatch } from '../lib/domain/reading';
   import { connectionsOf, KIND_LABEL, seriesStatus } from '../lib/domain/connections';
   import BookForm from '../lib/ui/BookForm.svelte';
   import Confirm from '../lib/ui/Confirm.svelte';
@@ -222,12 +223,28 @@
         </div>
         <div class="row">
           <select class="status" value={book.status} aria-label="Reading status"
-            onchange={(e) => quick({ status: e.currentTarget.value as ReadingStatus })}>
+            onchange={(e) => quick(statusPatch(book!, e.currentTarget.value as ReadingStatus, todayIso()))}>
             {#each Object.entries(STATUS_LABEL) as [v, l]}<option value={v}>{l}</option>{/each}
           </select>
           <Rating value={book.rating} onchange={(rating) => quick({ rating })} />
         </div>
+        {#if book.status === 'reading'}
+          <div class="progress">
+            <label class="small">Page
+              <input type="number" min="0" max={book.pageCount} inputmode="numeric" value={book.currentPage ?? ''} aria-label="Current page"
+                onchange={(e) => quick(progressPatch(book!, Number(e.currentTarget.value), todayIso()))} />
+              {#if book.pageCount} of {book.pageCount}{/if}
+            </label>
+            {#if book.pageCount && book.currentPage}
+              <span class="bar" role="progressbar" aria-valuenow={book.currentPage} aria-valuemax={book.pageCount}><span style:width="{Math.min(100, (book.currentPage / book.pageCount) * 100)}%"></span></span>
+            {/if}
+          </div>
+        {/if}
         <div class="row">
+          {#if book.status !== 'read'}
+            <button class="btn-sm" class:queued={!!book.queuedAt} aria-pressed={!!book.queuedAt}
+              onclick={() => quick({ queuedAt: book!.queuedAt ? undefined : new Date().toISOString() })}>{book.queuedAt ? '✓ Up next' : '＋ Up next'}</button>
+          {/if}
           {#if book.ownership === 'wishlist'}
             <button class="btn-sm btn-primary" onclick={() => quick({ ownership: 'owned', purchasedOn: book.purchasedOn ?? todayIso() })}>🛍️ Bought it</button>
           {:else if !book.lending}
@@ -427,6 +444,11 @@
   .sim .t { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .sim .why { font-size: 0.72rem; line-height: 1.2; }
   .end { justify-content: flex-end; margin-top: 8px; }
+  .progress { display: grid; gap: 6px; }
+  .progress input { width: 90px; min-height: 40px; display: inline-block; margin: 0 4px; }
+  .bar { height: 8px; border-radius: 4px; background: var(--surface-2); overflow: hidden; display: block; }
+  .bar span { display: block; height: 100%; background: var(--chart-bar); }
+  .queued { background: var(--accent); color: var(--accent-text); border-color: transparent; }
   .history { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
   .history li { display: grid; gap: 2px; }
 </style>

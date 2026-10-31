@@ -19,9 +19,15 @@ All data stays on your device (IndexedDB). The app needs no backend and no API k
   - Multi-select with bulk actions
   - Tags/collections/genres management
   - Undo for every action
-- **Enjoy it**
-  - Stats dashboard
-  - A map of where your books were written
+- **Discover**
+  - "More like this" from your own shelves, plus topic pages (your books on a timeline, related topics, well-known books to wishlist)
+  - Author pages with a Wikipedia bio in the author's language, influences and notable works
+  - Connections: series gaps, shared movements, settings, awards and sources
+  - A map of where books were written, where the stories are set, and where your books are
+- **Reading and analysis**
+  - Up next queue, reading progress and a yearly goal
+  - Stats: per month, pace, abandon rate, breadth (languages, centuries), what each room is about
+  - List prices (DNB fixed German price, price barcode, Google) and collection value
   - Lending tracker with overdue highlighting
 - **Keep it safe and portable**
   - Backups to Google Drive/Files with reminders, and safe restore
@@ -210,7 +216,10 @@ A future Google Drive sync module only needs `Repository.exportSnapshot/importSn
 |---|---|
 | Open Library (edition + work + author records) | Title, authors, publisher, edition year, pages, language, series, edition cover, description, subjects, author Wikidata ids |
 | Google Books (keyless) | Gaps in the above, genres (categories), and a cover fallback. If it's over quota, it's skipped quietly |
-| Wikidata (SPARQL) | First publication year, writing year ("inception"), original language, genres, and the **writing place** |
+| Deutsche Nationalbibliothek (SRU, MARC 21) | German book details and the **fixed German/Austrian list price** |
+| Wikidata (SPARQL) | First publication year, writing year ("inception"), original language, genres, the **writing place**. For Discover: series and volume numbers, "based on", main subjects, where the story is set, awards, movements, and authors' life, influences and languages |
+| Wikipedia (REST) | Author bios. German or English, whichever is the author's own language; otherwise German, then English |
+| Open Library subjects | Related topics and the best-known books on a topic |
 
 The writing place uses the best available evidence, in this order:
 1. The work's recorded *location of creation*
@@ -309,3 +318,11 @@ Labels are snapshots, so renaming a room later doesn't rewrite history. Moving a
   - A generated 5,000-book library
   - Offline reload
   - Backup/restore, and sync against a simulated Drive
+
+### Prices
+
+- **Germany and Austria:** fixed book prices come from the Deutsche Nationalbibliothek, e.g. `EUR 24.00 (DE), EUR 24.70 (AT)`.
+- **English-language books:** many have a small 5-digit price barcode next to the ISBN. The scanner reads it after the ISBN without slowing scanning, e.g. `51699` = $16.99, `0xxxx` = £, `6xxxx` = CA$.
+- **Google Books:** its print prices are used as a fallback. Its e-book prices are ignored, because they'd be misleading.
+- **Collection value:** uses what you paid where you recorded it, otherwise the list price, summed per currency.
+- **No used-market value:** there's no free source for second-hand prices.
