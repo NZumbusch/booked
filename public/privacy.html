@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Booked privacy policy</title>
+<meta name="description" content="How Booked, a personal home-library app, handles your data." />
+<link rel="icon" href="icon.svg" />
+<style>
+  :root { --bg: #f7f5f0; --text: #1c1f24; --muted: #5d6470; --line: #e3ded3; --brand: #b26b1f; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #121417; --text: #ecebe7; --muted: #a3a8b1; --line: #2b3038; --brand: #e0a35a; } }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.6 system-ui, -apple-system, sans-serif; }
+  main { max-width: 680px; margin: 0 auto; padding: 32px 16px 64px; }
+  h1 { font-size: 1.8rem; margin: 0 0 4px; }
+  h2 { font-size: 1.15rem; margin: 28px 0 6px; }
+  p, li { color: var(--text); }
+  .muted { color: var(--muted); }
+  a { color: var(--brand); }
+  ul { padding-left: 1.2em; }
+  footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--line); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Privacy policy</h1>
+  <p class="muted">Booked, a personal home-library app · last updated 31 October 2026</p>
+
+  <p>Booked catalogues your books. It has no accounts, no servers of its own that store your library, no ads and no tracking or analytics.</p>
+
+  <h2>What stays on your device</h2>
+  <p>Your library (books, places, rooms, notes, lending, reading progress), your settings and the saved cover images are stored in your browser on your own device. Nobody else can see them.</p>
+
+  <h2>Google Drive sync (optional)</h2>
+  <ul>
+    <li>If you connect Google Drive, Booked saves one file with your library in its <strong>private app folder</strong> on your Drive (Google's “appDataFolder”).</li>
+    <li>Booked only requests the <code>drive.appdata</code> permission. It can <strong>not</strong> see, read or change any of your other Drive files, and the app folder doesn't appear in “My Drive”.</li>
+    <li>The data is only used to keep your library the same on your devices. It is never shared, sold or used for anything else.</li>
+    <li>Disconnecting in Booked revokes access. You can also remove it any time at <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a>, and delete the stored file under Drive → Settings → Manage apps.</li>
+  </ul>
+  <p>Booked's use of information received from Google APIs adheres to the <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>, including the Limited Use requirements.</p>
+
+  <h2>Staying signed in (optional helper)</h2>
+  <p>To keep you signed in, a small helper on Cloudflare exchanges your Google sign-in for a renewable token. It only talks to Google's sign-in service, stores nothing, and the renewable token stays on your device.</p>
+
+  <h2>Shared places (optional)</h2>
+  <p>If you share a room with family, the books in it are <strong>encrypted on your phone</strong> before upload and stored in that encrypted form with the helper on Cloudflare. The key exists only in the share link, so neither the helper nor Cloudflare can read them. Stopping sharing deletes the stored copy.</p>
+
+  <h2>Looking up books</h2>
+  <p>To fill in book details and covers, Booked sends the ISBN or title/author you scan or search to public catalogues: Open Library, Google Books, the German National Library (DNB), Wikidata and Wikipedia. No personal information is sent with these requests.</p>
+
+  <h2>Your choices</h2>
+  <p>You can export your whole library at any time (Settings → Backup). Uninstalling the app or clearing the browser’s site data deletes everything stored on the device; the Drive copy is deleted as described above.</p>
+
+  <footer>
+    <p class="muted">Questions: open an issue at <a href="https://github.com/NZumbusch/booked/issues">github.com/NZumbusch/booked</a>.</p>
+    <p><a href="./">← Back to Booked</a></p>
+  </footer>
+</main>
+</body>
+</html>

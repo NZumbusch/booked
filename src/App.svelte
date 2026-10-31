@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { booksKeyOf } from './lib/config';
   import { onMount } from 'svelte';
   import { route } from './lib/router';
   import { openLibrary } from './lib/stores/app';
@@ -46,7 +47,7 @@
       const { theme, googleBooksKey: key } = s.settings;
       if (!last.first && theme === last.theme && key === last.key) return; // book edits don't concern us
       last = { theme, key, first: false };
-      setGoogleApiKey(key);
+      setGoogleApiKey(booksKeyOf(s.settings));
       apply();
     });
     return () => {

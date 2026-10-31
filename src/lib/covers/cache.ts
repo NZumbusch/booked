@@ -1,4 +1,5 @@
 import Dexie, { type Table } from 'dexie';
+import { helperUrlOf } from '../config';
 import { writable, type Readable } from 'svelte/store';
 import type { Library } from '../services/library';
 import { analyzePixels, isNiceCover, type CoverAnalysis } from './colors';
@@ -213,7 +214,7 @@ export class CoverCache {
     const queue = this.wanted().filter((u) => this.needs(u, now));
     if (!queue.length) return;
     this.status$.update((s) => ({ ...s, running: true }));
-    const proxy = this.lib.state.settings.sync?.helperUrl;
+    const proxy = helperUrlOf(this.lib.state.settings);
     let i = 0;
     const worker = async () => {
       while (i < queue.length) {

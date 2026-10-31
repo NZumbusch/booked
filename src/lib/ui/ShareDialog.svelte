@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { helperUrlOf } from '../config';
   import type { Location } from '../domain/types';
   import { saveFile } from '../files';
   import { plural } from '../format';
@@ -13,7 +14,7 @@
   const statuses = ctl.statuses;
   const space = $derived($lib && ctl.spaces.find((s) => s.rootLocationId === location.id));
   const link = $derived(space ? shareLink(space) : '');
-  const hasHelper = $derived(!!$lib.settings.sync?.helperUrl);
+  const hasHelper = $derived(!!helperUrlOf($lib.settings));
   // svelte-ignore state_referenced_locally
   let name = $state($lib.settings.userName ?? '');
   let busy = $state(false);

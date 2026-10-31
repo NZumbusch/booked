@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { BUILT_IN } from '../lib/config';
   import { onMount } from 'svelte';
   import { backupStatus, parseBackup } from '../lib/domain/backup';
   import type { Settings, Snapshot } from '../lib/domain/types';
@@ -88,15 +89,24 @@
 
   <section class="card stack">
     <h2>Online lookups</h2>
-    <p class="muted small">
-      Book details come from Open Library and Wikidata (no limits) and Google Books. Without a key, Google’s shared free
-      quota is often used up; with your own free key you get 1,000 Google lookups per day.
-      <a href="https://github.com/nzumbusch/booked#google-books-api-key-optional" target="_blank" rel="noopener">How to get a key ↗</a>
-    </p>
-    <label class="field">Google Books API key (optional)
-      <input value={s.googleBooksKey ?? ''} autocomplete="off" spellcheck="false" placeholder="AIza…"
-        onchange={(e) => update({ googleBooksKey: e.currentTarget.value.trim() || undefined })} />
-    </label>
+    {#if BUILT_IN.googleBooksKey}
+      <p class="muted small">Book details come from Open Library, the German National Library, Wikidata and Google Books (key built in ✓).</p>
+    {:else}
+      <p class="muted small">
+        Book details come from Open Library and Wikidata (no limits) and Google Books. Without a key, Google’s shared free
+        quota is often used up; with your own free key you get 1,000 Google lookups per day.
+        <a href="https://github.com/nzumbusch/booked#google-books-api-key-optional" target="_blank" rel="noopener">How to get a key ↗</a>
+      </p>
+    {/if}
+    {#snippet keyField()}
+      <label class="field">Google Books API key {BUILT_IN.googleBooksKey ? '(leave empty to use the built-in one)' : '(optional)'}
+        <input value={s.googleBooksKey ?? ''} autocomplete="off" spellcheck="false" placeholder={BUILT_IN.googleBooksKey ? 'Built in' : 'AIza…'}
+          onchange={(e) => update({ googleBooksKey: e.currentTarget.value.trim() || undefined })} />
+      </label>
+    {/snippet}
+    {#if BUILT_IN.googleBooksKey}
+      <details><summary class="small muted">Advanced: use your own key</summary>{@render keyField()}</details>
+    {:else}{@render keyField()}{/if}
   </section>
 
   <CoverCacheSettings />
@@ -139,7 +149,7 @@
     {/if}
   </section>
 
-  <p class="muted small center">Booked {__APP_VERSION__} · works offline · your data stays on your devices unless you turn on sync or sharing</p>
+  <p class="muted small center">Booked {__APP_VERSION__} · works offline · your data stays on your devices unless you turn on sync or sharing · <a href="privacy.html" target="_blank" rel="noopener">Privacy policy</a></p>
 </div>
 
 <Confirm bind:open={restoreOpen} title="Replace your library?" confirmLabel="Replace"

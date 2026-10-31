@@ -101,7 +101,13 @@ Google requires an OAuth *client ID* to identify the app. It's free, and because
 4. Go to **Credentials → Create credentials → OAuth client ID**, with application type **Web application**.
    - Under **Authorized JavaScript origins**, add `https://<user>.github.io`. Add `http://localhost:5173` too if you develop locally.
    - No redirect URI is needed.
-5. Copy the client ID (`…apps.googleusercontent.com`) into **Settings → Sync with Google Drive**, then tap **Connect Google Drive**. Do the same on every device.
+5. **Build it into the app** (once, so no device needs to paste anything):
+   - On GitHub, open the repository → **Settings → Secrets and variables → Actions → Variables** tab → **New repository variable**.
+   - Add `GOOGLE_CLIENT_ID` = your client ID. Optionally also `GOOGLE_BOOKS_KEY` (your Books API key) and, after the Worker is deployed, `SYNC_HELPER_URL` (its address).
+   - Re-run the deploy: **Actions → Test & deploy to GitHub Pages → Run workflow**.
+   - Every device then just shows **Connect Google Drive** in Settings.
+   - (Without variables, you can paste the client ID into **Settings → Sync with Google Drive** on each device instead.)
+6. **Privacy policy:** on the consent screen (*Branding*), use `https://<user>.github.io/<repo>/` as the home page and `https://<user>.github.io/<repo>/privacy.html` as the privacy policy. The app only uses the non-sensitive `drive.appdata` scope, so publishing it needs no review.
 
 How it behaves:
 - **Automatic syncing:** when the app opens, about 15 s after changes, when you come back online, and every 5 minutes.
@@ -133,7 +139,7 @@ A website can only get one-hour Google tokens on its own. Staying signed in need
    npx wrangler secret put GOOGLE_CLIENT_SECRET    # paste the secret from step 1
    npx wrangler deploy                             # prints https://booked-auth.<you>.workers.dev
    ```
-5. **Connect the app.** In the app, open **Settings → Sync with Google Drive → Stay signed in**. Paste the Worker URL, tap **Save**, then **Connect / Reconnect** once. Do this on each device.
+5. **Connect the app.** Add the Worker address as the repository variable `SYNC_HELPER_URL` (see step 5 of the Drive setup) and re-run the deploy; then tap **Reconnect** once on each device. (Or paste it under **Settings → Sync with Google Drive → Stay signed in** on each device.)
 
 The free plan allows 100,000 requests a day. Booked uses a handful.
 

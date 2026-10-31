@@ -28,6 +28,12 @@ jobs:
       - run: npm run check
       - run: npm test
       - run: npm run build
+        env:
+          # Built-in connection details (none of them is secret). Set them once under
+          # GitHub → Settings → Secrets and variables → Actions → Variables. Empty = paste in the app instead.
+          VITE_GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID }}
+          VITE_SYNC_HELPER_URL: ${{ vars.SYNC_HELPER_URL }}
+          VITE_GOOGLE_BOOKS_KEY: ${{ vars.GOOGLE_BOOKS_KEY }}
       - uses: actions/upload-pages-artifact@v3
         if: github.event_name != 'pull_request'
         with:

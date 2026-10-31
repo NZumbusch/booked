@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { booksKeyOf } from '../config';
   import type { Book } from '../domain/types';
   import { fileToCoverDataUrl } from '../images';
   import { alternativeCovers, type CoverOption } from '../metadata/covers';
@@ -25,7 +26,7 @@
     loading = true;
     error = '';
     try {
-      options = await alternativeCovers(book, fetch.bind(globalThis), lib.state.settings.googleBooksKey);
+      options = await alternativeCovers(book, fetch.bind(globalThis), booksKeyOf(lib.state.settings));
     } catch {
       error = navigator.onLine ? 'Couldn’t reach the catalogues. Try again in a moment.' : 'You’re offline. Covers can be searched once you’re online.';
       loadedFor = '';

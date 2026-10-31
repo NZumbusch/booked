@@ -34,6 +34,8 @@ export default defineConfig({
         // The barcode decoder (WASM, ~1 MB) is precached so scanning works offline on iOS too.
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
         navigateFallback: 'index.html',
+        // The privacy policy is its own page (linked from Google's sign-in screen).
+        navigateFallbackDenylist: [/privacy\.html$/],
         // Covers are not cached here: the app keeps resized copies in its own cover cache, and an
         // opaque service-worker copy would block reading their colours.
         runtimeCaching: [
