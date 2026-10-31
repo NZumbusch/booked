@@ -104,7 +104,7 @@ describe('lookupIsbn', () => {
   });
 
   it('reports offline separately from not found', async () => {
-    const r = await lookupIsbn('9780441172719', world({ 'openlibrary.org': 'offline', 'googleapis.com': 'offline' }), allLoad);
+    const r = await lookupIsbn('9780441172719', world({ 'openlibrary.org': 'offline', 'googleapis.com': 'offline', 'services.dnb.de': 'offline' }), allLoad);
     expect(r.status).toBe('error');
     expect(r.draft.isbn13).toBe('9780441172719');
   });
@@ -153,7 +153,7 @@ describe('quickLookupIsbn', () => {
     const r = await quickLookupIsbn('9780441172719', f);
     expect(r.status).toBe('found');
     expect(r.draft).toMatchObject({ title: 'Dune', authors: ['Frank Herbert'], isbn13: '9780441172719' });
-    expect(calls).toHaveLength(2); // OL search + Google, in parallel; no follow-up requests
+    expect(calls).toHaveLength(3); // OL search + Google + DNB, in parallel; no follow-up requests
   });
 
   it('takes Google when Open Library does not know the book', async () => {

@@ -6,6 +6,7 @@ const API = 'https://www.googleapis.com/books/v1/volumes';
 
 interface Volume {
   id: string;
+  saleInfo?: { isEbook?: boolean; listPrice?: { amount?: number; currencyCode?: string } };
   volumeInfo: {
     title?: string;
     subtitle?: string;
@@ -54,6 +55,10 @@ function toResult(v: Volume): ProviderResult {
       isbn13: id('ISBN_13'),
       genres: splitCategories(i.categories),
       cover: cover(v),
+      // Google's prices are mostly for its e-books; only a print price is a meaningful list price.
+      listPrice: v.saleInfo?.isEbook === false && v.saleInfo.listPrice?.amount && v.saleInfo.listPrice.currencyCode
+        ? { amount: v.saleInfo.listPrice.amount, currency: v.saleInfo.listPrice.currencyCode, source: 'googlebooks' }
+        : undefined,
       identifiers: { gbid: v.id }
     }
   };

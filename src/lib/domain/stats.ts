@@ -1,6 +1,7 @@
 import { isOverdue } from './book';
 import { facet } from './filters';
 import { childrenOf } from './locations';
+import { collectionValue } from './price';
 import type { Book, IsoDate, Location, ReadingStatus } from './types';
 
 export interface Count {
@@ -19,6 +20,8 @@ export interface LibraryStats {
   lent: number;
   overdue: number;
   value: number;
+  /** Paid price where known, else list price; per currency. */
+  valueByCurrency: { currency: string; amount: number; books: number }[];
   authors: number;
   byStatus: Record<ReadingStatus, number>;
   byPlace: (Count & { rooms: Count[] })[];
@@ -33,7 +36,7 @@ export interface LibraryStats {
   byDecade: Count[];
 }
 
-export function computeStats(books: Book[], locations: Location[], today: IsoDate): LibraryStats {
+export function computeStats(books: Book[], locations: Location[], today: IsoDate, homeCurrency = 'EUR'): LibraryStats {
   const owned = books.filter((b) => b.ownership === 'owned');
   const byStatus = { unread: 0, reading: 0, read: 0, abandoned: 0 } satisfies Record<ReadingStatus, number>;
   for (const b of owned) byStatus[b.status]++;
@@ -94,6 +97,7 @@ export function computeStats(books: Book[], locations: Location[], today: IsoDat
     lent: owned.filter((b) => b.lending).length,
     overdue: owned.filter((b) => isOverdue(b, today)).length,
     value: owned.reduce((n, b) => n + (b.price ?? 0), 0),
+    valueByCurrency: collectionValue(owned, homeCurrency),
     authors: facet(owned, (b) => b.authors).length,
     byStatus,
     byPlace,

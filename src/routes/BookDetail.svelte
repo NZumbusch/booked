@@ -152,7 +152,8 @@
     ['Copies', book.copies > 1 ? book.copies : ''],
     ['Signed', book.signed ? 'Yes' : ''],
     ['Purchased', formatDate(book.purchasedOn, s.dateFormat)],
-    ['Price', formatPrice(book.price, s.currency)],
+    ['Price paid', formatPrice(book.price, s.currency)],
+    ['List price', book.listPrice ? `${formatPrice(book.listPrice.amount, book.listPrice.currency)}${book.listPrice.source === 'manual' ? '' : ` (${{ dnb: 'DNB', barcode: 'from barcode', googlebooks: 'Google Books' }[book.listPrice.source]})`}` : ''],
     ['Added', `${formatDate(book.createdAt, s.dateFormat)}${book.addedBy ? ` by ${book.addedBy}` : ''}`],
     ['Last modified', formatDate(book.updatedAt, s.dateFormat)]
   ] as const).filter(([, v]) => v !== undefined && v !== '') : []);

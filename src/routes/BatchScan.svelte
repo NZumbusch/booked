@@ -2,7 +2,7 @@
   import { hasPlaceholderTitle, placeholderTitle } from '../lib/domain/book';
   import { normalizeIsbn } from '../lib/domain/isbn';
   import { classifyScan } from '../lib/domain/scan';
-  import type { Book, Id } from '../lib/domain/types';
+  import type { Book, Id, ListPrice } from '../lib/domain/types';
   import { plural } from '../lib/format';
   import { feedback } from '../lib/scanner/camera';
   import { enricher, library, toast } from '../lib/stores/app';
@@ -55,6 +55,16 @@
     add(item.n);
   }
 
+  const prices = new Map<string, ListPrice>();
+  /** A price from the add-on barcode: attach it to the book scanned with that ISBN. */
+  function priced(isbn: string, price: ListPrice) {
+    prices.set(isbn, price);
+    for (const item of items.filter((i) => i.isbn === isbn && i.bookId)) {
+      const b = lib.book(item.bookId!);
+      if (b && !b.listPrice) lib.enrichBook(b.id, { listPrice: price });
+    }
+  }
+
   function update(itemN: number, patch: Partial<Item>) {
     const i = items.findIndex((x) => x.n === itemN);
     if (i >= 0) items[i] = { ...items[i], ...patch };
@@ -70,6 +80,7 @@
         isbn10: isbn.isbn10,
         title: placeholderTitle(isbn.isbn13),
         locationId: target,
+        listPrice: prices.get(isbn.isbn13),
         pendingLookup: online || undefined
       });
       update(itemN, { bookId: added.id, state: 'added' });
@@ -141,7 +152,7 @@
     <button class="chip target" onclick={() => (started = false)}>
       <Icon name="pin" size={16} /> {lib.label(target)} <span class="muted">· change</span>
     </button>
-    <Scanner onscan={scanned} compact />
+    <Scanner onscan={scanned} onprice={priced} compact />
     <form class="row manual" onsubmit={typed}>
       <input bind:value={manual} inputmode="numeric" placeholder="Type an ISBN" aria-label="Type an ISBN" />
       <button type="submit" disabled={!manual.trim()}>Add</button>

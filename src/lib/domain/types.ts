@@ -44,6 +44,13 @@ export type BookFormat = 'hardcover' | 'paperback' | 'ebook' | 'audiobook' | 'ot
 export type ReadingStatus = 'unread' | 'reading' | 'read' | 'abandoned';
 export type Ownership = 'owned' | 'wishlist';
 
+/** Publisher's list price (e.g. the fixed German book price), not what you paid. */
+export interface ListPrice {
+  amount: number;
+  currency: string;
+  source: 'dnb' | 'googlebooks' | 'barcode' | 'manual';
+}
+
 export interface Lending {
   to: string;
   lentOn: IsoDate;
@@ -66,7 +73,7 @@ export interface WritingInfo {
   placeBasis?: PlaceBasis;
 }
 
-export type SourceId = 'openlibrary' | 'googlebooks' | 'wikidata' | 'manual';
+export type SourceId = 'openlibrary' | 'googlebooks' | 'dnb' | 'wikidata' | 'manual';
 
 /** Where a piece of metadata came from, shown behind a "?" next to the field. */
 export interface SourceRef {
@@ -131,6 +138,8 @@ export interface Book {
   purchasedOn?: IsoDate;
   /** Price in the user's currency (see settings). */
   price?: number;
+  /** Publisher's list price (DNB, add-on barcode, Google Books). */
+  listPrice?: ListPrice;
   signed: boolean;
   copies: number;
   lending?: Lending;

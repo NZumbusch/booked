@@ -2,12 +2,12 @@
   import { todayIso } from '../lib/domain/book';
   import { filterToQuery } from '../lib/domain/filters';
   import { computeStats, type Count } from '../lib/domain/stats';
-  import { STATUS_LABEL, formatPrice } from '../lib/format';
+  import { STATUS_LABEL, formatPrice, plural } from '../lib/format';
   import { library } from '../lib/stores/app';
   import BarList from '../lib/ui/BarList.svelte';
 
   const lib = library();
-  const s = $derived(computeStats($lib.books, $lib.locations, todayIso()));
+  const s = $derived(computeStats($lib.books, $lib.locations, todayIso(), $lib.settings.currency));
   const q = (f: Parameters<typeof filterToQuery>[0]) => `#/books?${new URLSearchParams(filterToQuery(f))}`;
 
   const places = $derived<(Count & { depth?: number })[]>([
@@ -36,7 +36,9 @@
       <div class="tile"><span class="v">{s.byStatus.read.toLocaleString()}</span><span class="k">read ({s.owned ? Math.round((s.byStatus.read / s.owned) * 100) : 0}%)</span></div>
       <a class="tile" href={q({ lending: 'lent' })}><span class="v">{s.lent}</span><span class="k">lent out{#if s.overdue} · <strong class="danger">{s.overdue} overdue</strong>{/if}</span></a>
       <a class="tile" href={q({ ownership: 'wishlist' })}><span class="v">{s.wishlist}</span><span class="k">on wishlist</span></a>
-      {#if s.value}<div class="tile"><span class="v">{formatPrice(s.value, $lib.settings.currency)}</span><span class="k">spent (where recorded)</span></div>{/if}
+      {#each s.valueByCurrency.slice(0, 2) as v (v.currency)}
+        <div class="tile"><span class="v">{formatPrice(v.amount, v.currency)}</span><span class="k">collection value ({plural(v.books, 'book')} with a price)</span></div>
+      {/each}
       {#if s.copies !== s.owned}<div class="tile"><span class="v">{s.copies.toLocaleString()}</span><span class="k">copies incl. duplicates</span></div>{/if}
     </section>
 

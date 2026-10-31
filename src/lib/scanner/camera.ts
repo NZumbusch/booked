@@ -47,6 +47,34 @@ export function getDetector(): Promise<Detector> {
   return detectorPromise;
 }
 
+/** The 5-digit price add-on next to `isbn` in zxing results ("<isbn><addon>", 18 digits), if any. */
+export function addOnFrom(texts: string[], isbn: string): string | undefined {
+  const hit = texts.map((t) => t.replace(/\D/g, '')).find((t) => t.length === 18 && t.startsWith(isbn));
+  return hit?.slice(13);
+}
+
+let addOnCanvas: HTMLCanvasElement | undefined;
+
+/**
+ * Look for the small price barcode beside the ISBN in the current video frame (WASM decoder,
+ * also on Android, since native detectors ignore add-ons). Best effort; undefined if not found.
+ */
+export async function readAddOn(video: HTMLVideoElement, isbn: string): Promise<string | undefined> {
+  if (!video.videoWidth) return undefined;
+  const { readBarcodes, prepareZXingModule } = await import('zxing-wasm/reader');
+  const { default: wasmUrl } = await import('zxing-wasm/reader/zxing_reader.wasm?url');
+  prepareZXingModule({ overrides: { locateFile: (path: string, prefix: string) => (path.endsWith('.wasm') ? wasmUrl : prefix + path) } });
+  addOnCanvas ??= document.createElement('canvas');
+  addOnCanvas.width = video.videoWidth;
+  addOnCanvas.height = video.videoHeight;
+  const ctx = addOnCanvas.getContext('2d', { willReadFrequently: true })!;
+  ctx.drawImage(video, 0, 0);
+  const results = await readBarcodes(ctx.getImageData(0, 0, addOnCanvas.width, addOnCanvas.height), {
+    formats: ['EAN13'], eanAddOnSymbol: 'Read', tryHarder: true
+  });
+  return addOnFrom(results.map((r) => r.text), isbn);
+}
+
 export async function openCamera(): Promise<MediaStream> {
   if (!navigator.mediaDevices?.getUserMedia) {
     throw new Error('This browser cannot use the camera. Open the app via https in Safari or Chrome.');

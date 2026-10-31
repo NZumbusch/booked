@@ -1,6 +1,6 @@
 <script lang="ts">
   import { normalizeIsbn } from '../lib/domain/isbn';
-  import type { Book, BookDraft } from '../lib/domain/types';
+  import type { Book, BookDraft, ListPrice } from '../lib/domain/types';
   import { mergeResults, quickLookupIsbn, searchBooks, type LookupResult } from '../lib/metadata/lookup';
   import type { Candidate } from '../lib/metadata/types';
   import { plural } from '../lib/format';
@@ -41,7 +41,10 @@
   /** ISBN the user already confirmed as "another copy", so the form doesn't ask again. */
   let confirmedIsbn = $state<string>();
 
-  const SOURCE_NAMES: Record<string, string> = { openlibrary: 'Open Library', googlebooks: 'Google Books', wikidata: 'Wikidata' };
+  /** Prices read from the add-on barcode while scanning, by ISBN-13. */
+  const scannedPrices = new Map<string, ListPrice>();
+
+  const SOURCE_NAMES: Record<string, string> = { openlibrary: 'Open Library', googlebooks: 'Google Books', dnb: 'DNB', wikidata: 'Wikidata' };
 
   function openForm(prefill: Partial<Book>, result?: LookupResult) {
     initial = { locationId: $lib.settings.defaultLocationId, status: 'unread', ownership: 'owned', copies: 1, ...prefill };
@@ -85,6 +88,8 @@
     retryIsbn = isbn13;
     try {
       const result = await quickLookupIsbn(isbn13);
+      const scanned = scannedPrices.get(isbn13);
+      if (scanned && !result.draft.listPrice) result.draft.listPrice = scanned;
       openForm(result.draft as Partial<Book>, result);
     } finally {
       busy = '';
@@ -134,6 +139,8 @@
   async function add(draft: BookDraft) {
     // Anything we can look up online gets completed in the background.
     const pendingLookup = !!(draft.isbn13 || draft.isbn10 || draft.identifiers?.olwork) || undefined;
+    const scanned = draft.isbn13 ? scannedPrices.get(draft.isbn13) : undefined;
+    if (scanned && !draft.listPrice) draft = { ...draft, listPrice: scanned };
     const book = await attempt(() => lib.addBook({ ...draft, pendingLookup }), `Added “${draft.title}”`, { undo: true });
     if (!book) return;
     if (pendingLookup) enricher().enqueue(book.id);
@@ -182,7 +189,7 @@
     </div>
 
     {#if mode === 'scan'}
-      <Scanner onscan={handleIsbn} paused={dupOpen} />
+      <Scanner onscan={handleIsbn} onprice={(isbn, price) => scannedPrices.set(isbn, price)} paused={dupOpen} />
       <p class="muted small center">Point the camera at the barcode on the back cover.</p>
     {/if}
 
