@@ -82,9 +82,11 @@
       ox = width / 2 - (period.cols * geometry.cellW * scale) / 2;
       oy = height / 2 - (period.rows * geometry.cellH * scale) / 2;
     } else {
-      scale = Math.min(width / (box.x1 - box.x0), height / (box.y1 - box.y0)) * 0.94;
+      // Keep the round field clear of the floating top bar.
+      const top = 60;
+      scale = Math.min(width / (box.x1 - box.x0), (height - top) / (box.y1 - box.y0)) * 0.94;
       ox = width / 2 - ((box.x0 + box.x1) / 2) * scale;
-      oy = height / 2 - ((box.y0 + box.y1) / 2) * scale;
+      oy = top + (height - top) / 2 - ((box.y0 + box.y1) / 2) * scale;
     }
     dirty = true;
   }
@@ -397,6 +399,19 @@
   }
 
   let ro: ResizeObserver | undefined;
+  // The gesture hint is shown on the first few visits only.
+  const HINT_KEY = 'booked.wallHint';
+  let showHint = $state(false);
+  onMount(() => {
+    try {
+      const seen = Number(localStorage.getItem(HINT_KEY) ?? 0);
+      showHint = seen < 3;
+      localStorage.setItem(HINT_KEY, String(seen + 1));
+    } catch {
+      showHint = true;
+    }
+  });
+
   onMount(() => {
     resize();
     ro = new ResizeObserver(() => resize());
@@ -477,8 +492,8 @@
 </script>
 
 <div class="wall">
-  <header class="bar">
-    <a class="btn btn-ghost btn-icon" href="#/books" aria-label="Back to library"><Icon name="back" /></a>
+  <header class="bar float">
+    <a class="back" href="#/books" aria-label="Back to library"><Icon name="back" /></a>
     <select value={order} aria-label="Arrange by" onchange={(e) => setQuery({ order: e.currentTarget.value === 'color' ? undefined : e.currentTarget.value })}>
       {#each Object.entries(FIELD_ORDERS) as [k, l]}<option value={k}>{l}</option>{/each}
     </select>
@@ -487,12 +502,10 @@
       {#each topics as t (t.name)}<option value={t.name}>{t.name} ({t.count})</option>{/each}
     </select>
   </header>
-  {#if chips.length || hiddenCount || uncached}
-    <div class="info small">
+  {#if chips.length || uncached}
+    <div class="info float small">
       {plural(items.length, 'cover')}
       {#each chips as c}<span class="chip">{c.label}</span>{/each}
-      {#if niceOnly && hiddenCount}<button class="linkish" onclick={() => setQuery({ all: '1' })}>{hiddenCount} without a good cover hidden</button>
-      {:else if !niceOnly}<button class="linkish" onclick={() => setQuery({ all: undefined })}>only good covers</button>{/if}
       {#if uncached && $cacheStatus.decision !== 'yes'}
         <button class="linkish" onclick={() => cache.run(true)}>{uncached} covers not saved yet: download</button>
       {:else if uncached}<span class="muted">saving {uncached} covers…</span>{/if}
@@ -506,7 +519,7 @@
         <a class="btn" href="#/settings">Cover settings</a>
       </div>
     {/if}
-    <div class="tools" role="toolbar" aria-label="Wall options">
+    <div class="tools float" role="toolbar" aria-label="Wall options">
       <button class:on={shape === 'endless'} aria-pressed={shape === 'endless'} title="Endless: scroll forever in every direction"
         aria-label="Endless scrolling" onclick={() => setQuery({ shape: shape === 'endless' ? 'disc' : undefined })}>∞</button>
       {#if layout.labels.length}
@@ -514,6 +527,15 @@
           onclick={() => setQuery({ labels: showLabels ? 'off' : undefined })}>
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M3 12V4a1 1 0 0 1 1-1h8l9 9-9 9-9-9z" /><circle cx="7.5" cy="7.5" r="1.5" />
+          </svg>
+        </button>
+      {/if}
+      {#if hiddenCount || !niceOnly}
+        <button class:on={!niceOnly} aria-pressed={!niceOnly}
+          title={niceOnly ? `Show ${hiddenCount} books without a good cover` : 'Show only good covers'} aria-label="Show books without a good cover"
+          onclick={() => setQuery({ all: niceOnly ? '1' : undefined })}>
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" /><circle cx="12" cy="12" r="3" />
           </svg>
         </button>
       {/if}
@@ -532,27 +554,35 @@
       </div>
       <a class="btn btn-sm btn-primary" href="#/book/{selected.id}">Open</a>
     </div>
-  {:else}
+  {:else if showHint}
     <p class="hint muted small">Pinch or scroll to zoom · drag to move · tap a cover</p>
   {/if}
 </div>
 
 <style>
-  .wall { position: fixed; inset: 0 0 calc(var(--nav-h) + env(safe-area-inset-bottom)) 0; display: flex; flex-direction: column; background: var(--bg); }
-  .bar { display: flex; gap: 6px; align-items: center; padding: 8px 10px 4px; }
-  .bar select { width: auto; min-height: 40px; border-radius: 999px; flex: 1; min-width: 0; max-width: 220px; padding: 0 10px; font-size: 0.95rem; }
-  /* One frosted pill for all wall controls: white icons, a soft halo marks what's switched on. */
-  .tools { position: absolute; right: 10px; top: 10px; z-index: 2; display: grid; gap: 2px; padding: 5px; border-radius: 999px;
-    background: rgba(24, 22, 20, 0.93); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.28); border: 1px solid rgba(255, 255, 255, 0.12); }
+  /* Covers fill the whole screen; the controls float above them in dark frosted pills with white icons. */
+  .wall { position: fixed; inset: 0 0 calc(var(--nav-h) + env(safe-area-inset-bottom)) 0; background: var(--bg); }
+  .float { position: absolute; z-index: 3; color: #fff; background: rgba(24, 22, 20, 0.93); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.28); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 999px; }
+  .bar { top: 10px; left: 10px; right: 10px; display: flex; gap: 2px; align-items: center; padding: 4px; max-width: 460px; }
+  .back { width: 40px; height: 40px; flex: none; display: grid; place-items: center; border-radius: 50%; color: #fff; }
+  .back:hover { background: rgba(255, 255, 255, 0.1); }
+  .bar select { width: auto; min-height: 40px; flex: 1; min-width: 0; padding: 0 28px 0 12px; font-size: 0.95rem; font-weight: 600; border: none; border-radius: 999px;
+    color: #fff; background-color: rgba(255, 255, 255, 0.1);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 10px center; appearance: none; -webkit-appearance: none; }
+  .bar select option { color: #222; background: #fff; }
+  .tools { position: absolute; z-index: 3; right: 10px; top: 66px; display: grid; gap: 2px; padding: 5px; }
   .tools button { width: 44px; min-height: 44px; padding: 0; border: none; border-radius: 50%; font-size: 1.15rem;
     background: transparent; color: #fff; box-shadow: none; display: grid; place-items: center; }
   .tools button:hover:not(:disabled) { background: rgba(255, 255, 255, 0.1); }
   .tools button:disabled { opacity: 0.5; }
   .tools .on { background: rgba(255, 255, 255, 0.2); }
-  .info { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; padding: 0 12px 6px; color: var(--muted); }
-  .linkish { min-height: 28px; padding: 0 8px; border: none; background: transparent; color: var(--text); text-decoration: underline; font-size: 0.85rem; }
-  .stage { position: relative; flex: 1; min-height: 0; }
+  .info { top: 66px; left: 10px; max-width: calc(100% - 90px); display: flex; gap: 6px; flex-wrap: wrap; align-items: center; padding: 6px 12px; border-radius: 18px; }
+  .info .chip { background: rgba(255, 255, 255, 0.14); color: #fff; border-color: transparent; }
+  .info .muted { color: rgba(255, 255, 255, 0.7); }
+  .linkish { min-height: 28px; padding: 0 4px; border: none; background: transparent; color: #fff; text-decoration: underline; font-size: 0.85rem; }
+  .stage { position: absolute; inset: 0; }
   canvas { display: block; touch-action: none; cursor: grab; outline: none; }
   canvas:active { cursor: grabbing; }
   .empty { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; gap: 8px; color: var(--muted); }

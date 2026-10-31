@@ -34,6 +34,7 @@ All data stays on your device (IndexedDB). The app needs no backend and no API k
     - Title, author › title, century › decade, place › room
   - **Topic dropdown:** narrows the field to one topic, clustered by its subtopics
   - **Topic tags** float over the clusters (broad topics zoomed out, subtopics closer in); the tag button hides them
+  - Full screen: the arrangement/topic bar and the control pill float over the covers; status (filter, downloads) only appears when relevant
   - **Zoomed out,** every cover becomes its colour block, so the library turns into a colour graphic
   - Follows your library filter; "Show on wall" from any book; export as a poster image
 - **Reading and analysis**
