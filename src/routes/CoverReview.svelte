@@ -247,7 +247,7 @@
 
     <section class="card stack">
       <div class="head">
-        <Cover book={book} size="md" />
+        <div class="thumb"><Cover book={book} size="md" /></div>
         <div class="stack">
           <label class="field">Title<input bind:value={title} /></label>
           {#if cleanTitle(book.title) !== book.title}<p class="muted small">Shown as “{displayTitle({ title, volume })}”.</p>{/if}
@@ -321,6 +321,9 @@
   .progress span { display: block; height: 100%; background: var(--brand); transition: width 0.2s; }
   .head { display: flex; gap: 14px; align-items: flex-start; }
   .head > .stack { flex: 1; min-width: 0; }
+  /* The cover has no width of its own: give it a fixed one so the fields get the rest. */
+  .thumb { flex: none; width: min(96px, 26vw); }
+  .head .field input { width: 100%; min-width: 0; }
   .three { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
   .three label:first-child { grid-column: 1 / -1; }
   .mates { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
@@ -335,6 +338,8 @@
   .opt img { display: block; width: 100%; aspect-ratio: 2 / 3; object-fit: cover; }
   .upload { position: relative; overflow: hidden; justify-self: start; }
   .upload input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
-  .actions { position: sticky; bottom: calc(var(--nav-h) + 8px); display: grid; grid-template-columns: auto 1fr 1.4fr; gap: 8px; background: var(--bg, #fff); padding: 8px 0; }
+  .stack > * { min-width: 0; }
+  .actions { position: sticky; bottom: calc(var(--nav-h) + 8px); display: grid; grid-template-columns: auto minmax(0, 1fr) minmax(0, 1.4fr); gap: 8px; background: var(--bg, #fff); padding: 8px 0; }
+  .actions button { min-width: 0; padding-inline: 12px; }
   p { margin: 0; }
 </style>
