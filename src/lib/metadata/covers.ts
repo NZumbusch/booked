@@ -107,11 +107,13 @@ export function isbnCoverUrls(book: Pick<Book, 'isbn13' | 'isbn10'>): { early: s
   const isbn = book.isbn13 ?? book.isbn10;
   if (!isbn) return { early: [], last: [] };
   return {
-    early: [
-      `https://covers.openlibrary.org/b/isbn/${isbn}-L.jpg?default=false`,
+    early: [`https://covers.openlibrary.org/b/isbn/${isbn}-L.jpg?default=false`],
+    // Google by ISBN (checked: returns the real scan, small, even for books the API search doesn't list; zoom=0 would
+    // only give a blank tile for many of them), then the DNB cover service (not checked: unreachable from where this was built).
+    last: [
+      `https://books.google.com/books/content?vid=ISBN${isbn}&printsec=frontcover&img=1&zoom=1`,
       ...(book.isbn13 ? [`https://portal.dnb.de/opac/mvb/cover?isbn=${book.isbn13}`] : [])
-    ],
-    last: [`https://books.google.com/books/content?vid=ISBN${isbn}&printsec=frontcover&img=1&zoom=1`]
+    ]
   };
 }
 

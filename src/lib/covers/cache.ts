@@ -22,6 +22,8 @@ export interface CoverEntry {
   nice?: boolean;
   /** Failed downloads are retried after a day. */
   failedAt?: number;
+  /** The source only had a blank "image not available" tile. */
+  placeholder?: boolean;
   at: number;
 }
 export type CoverMeta = Omit<CoverEntry, 'data'>;
@@ -178,7 +180,7 @@ export class CoverCache {
   /** The source gave us nothing usable (download failed or only a "not available" tile). */
   isBroken(url: string | undefined): boolean {
     const e = url && !url.startsWith('data:') ? this.index.get(url) : undefined;
-    return !!e && !e.px && !!e.failedAt;
+    return !!e && !e.px && !!e.placeholder;
   }
 
   /** Forget a failed download so it is tried again on the next run. */
@@ -240,7 +242,6 @@ export class CoverCache {
         const stored = kind === 'shrink' ? await this.db.covers.get(url) : undefined;
         try {
           const p = await this.process({ url, size: this.size, proxy, stored: stored?.data, storedType: stored?.type });
-          if (kind === 'download' && !url.startsWith('data:') && looksLikePlaceholder(p.analysis)) throw new Error('placeholder image');
           // A local shrink keeps knowing how big the source was (to grow again later).
           const sourcePx = kind === 'shrink' ? Math.max(this.index.get(url)?.sourcePx ?? 0, p.sourcePx) : p.sourcePx;
           const entry: CoverEntry = {
@@ -252,8 +253,10 @@ export class CoverCache {
           this.index.set(url, meta);
           this.urls.delete(url);
           this.bitmaps.delete(url);
-        } catch {
-          const failed: CoverEntry = { ...(this.index.get(url) ?? { url }), failedAt: Date.now(), at: Date.now() };
+        } catch (e) {
+          const failed: CoverEntry = {
+            ...(this.index.get(url) ?? { url }), failedAt: Date.now(), at: Date.now(), ...(e instanceof PlaceholderError ? { placeholder: true } : {})
+          };
           if (!failed.px) {
             await this.db.covers.put(failed);
             this.index.set(url, failed);
@@ -309,6 +312,18 @@ export class CoverCache {
 
 // ------------------------------------------------------------- browser image processing
 
+/** The source answered, but only with a blank "image not available" tile. */
+export class PlaceholderError extends Error {
+  constructor() {
+    super('placeholder image');
+  }
+}
+
+/** Where to get the image: the size we want, then the URL as stored (Google has no large image for many books but a small real one). */
+export function sourceCandidates(url: string, size: CoverSize): string[] {
+  return [...new Set([sourceUrl(url, size), url])];
+}
+
 async function fetchImage(url: string, proxy?: string): Promise<Blob> {
   try {
     const res = await fetch(url, { mode: 'cors' });
@@ -332,7 +347,24 @@ function canvas(w: number, h: number): HTMLCanvasElement {
 
 /** The real processor: fetch, never upscale, resize to the chosen size, JPEG, analyse colours. */
 export const browserProcessor: Processor = async ({ url, size, proxy, stored, storedType }) => {
-  const blob = stored ? new Blob([stored], { type: storedType ?? 'image/jpeg' }) : await fetchImage(sourceUrl(url, size), proxy);
+  if (stored) return processBlob(new Blob([stored], { type: storedType ?? 'image/jpeg' }), size, true);
+  let last: unknown = new Error('no image');
+  for (const candidate of sourceCandidates(url, size)) {
+    try {
+      const done = await processBlob(await fetchImage(candidate, proxy), size, false);
+      if (looksLikePlaceholder(done.analysis) && !url.startsWith('data:')) {
+        last = new PlaceholderError();
+        continue; // try the smaller rendition before giving up
+      }
+      return done;
+    } catch (e) {
+      last = e;
+    }
+  }
+  throw last;
+};
+
+async function processBlob(blob: Blob, size: CoverSize, fromStored: boolean): Promise<Processed> {
   const bmp = await createImageBitmap(blob);
   try {
     const sourcePx = Math.max(bmp.width, bmp.height);
@@ -347,8 +379,8 @@ export const browserProcessor: Processor = async ({ url, size, proxy, stored, st
     const sample = canvas(24, 36).getContext('2d', { willReadFrequently: true })!;
     sample.drawImage(bmp, 0, 0, 24, 36);
     const analysis = analyzePixels(sample.getImageData(0, 0, 24, 36).data);
-    return { data: await jpeg.arrayBuffer(), type: 'image/jpeg', w, h, sourcePx: stored ? Math.max(sourcePx, 0) : sourcePx, analysis };
+    return { data: await jpeg.arrayBuffer(), type: 'image/jpeg', w, h, sourcePx: fromStored ? Math.max(sourcePx, 0) : sourcePx, analysis };
   } finally {
     bmp.close?.();
   }
-};
+}

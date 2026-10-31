@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="UTF-8"?><searchRetrieveResponse xmlns="http://www.loc.gov/zing/srw/"><records><record xmlns="http://www.loc.gov/MARC21/slim" type="Bibliographic">
+    <leader>00000pam a2200000 cc4500</leader>
+    <controlfield tag="001">931675901</controlfield>
+    <controlfield tag="003">DE-101</controlfield>
+    <controlfield tag="005">20241204173459.0</controlfield>
+    <controlfield tag="007">tu</controlfield>
+    <controlfield tag="008">931102s1993    gw ||||| |||| 00||||ger  </controlfield>
+    <datafield tag="015" ind1=" " ind2=" ">
+      <subfield code="a">94,A10,0141</subfield>
+      <subfield code="z">93,N47,0024</subfield>
+      <subfield code="2">dnb</subfield>
+    </datafield>
+    <datafield tag="016" ind1="7" ind2=" ">
+      <subfield code="2">DE-101</subfield>
+      <subfield code="a">931675901</subfield>
+    </datafield>
+    <datafield tag="020" ind1=" " ind2=" ">
+      <subfield code="a">9783518099490</subfield>
+      <subfield code="9">978-3-518-09949-0</subfield>
+    </datafield>
+    <datafield tag="020" ind1=" " ind2=" ">
+      <subfield code="a">9783518281543</subfield>
+      <subfield code="c">kart. : DM 48.00, sfr 48.00, S 375.00 (Bd. 5,1 - 5,3)</subfield>
+      <subfield code="9">978-3-518-28154-3</subfield>
+    </datafield>
+    <datafield tag="020" ind1=" " ind2=" ">
+      <subfield code="a">3518281542</subfield>
+      <subfield code="c">kart. : DM 48.00, sfr 48.00, S 375.00 (Bd. 5,1 - 5,3)</subfield>
+      <subfield code="9">3-518-28154-2</subfield>
+    </datafield>
+    <datafield tag="035" ind1=" " ind2=" ">
+      <subfield code="a">(DE-599)DNB931675901</subfield>
+    </datafield>
+    <datafield tag="035" ind1=" " ind2=" ">
+      <subfield code="a">(OCoLC)75434582</subfield>
+    </datafield>
+    <datafield tag="040" ind1=" " ind2=" ">
+      <subfield code="a">1200</subfield>
+      <subfield code="b">ger</subfield>
+      <subfield code="c">DE-101</subfield>
+      <subfield code="d">9999</subfield>
+    </datafield>
+    <datafield tag="041" ind1=" " ind2=" ">
+      <subfield code="a">ger</subfield>
+    </datafield>
+    <datafield tag="044" ind1=" " ind2=" ">
+      <subfield code="c">XA-DE-BE</subfield>
+    </datafield>
+    <datafield tag="082" ind1="7" ind2="4">
+      <subfield code="a">100</subfield>
+      <subfield code="q">DE-101</subfield>
+      <subfield code="2">22sdnb</subfield>
+    </datafield>
+    <datafield tag="100" ind1="1" ind2=" ">
+      <subfield code="0">(DE-588)118511742</subfield>
+      <subfield code="0">https://d-nb.info/gnd/118511742</subfield>
+      <subfield code="0">(DE-101)118511742</subfield>
+      <subfield code="a">Bloch, Ernst</subfield>
+      <subfield code="d">1885-1977</subfield>
+      <subfield code="e">Verfasser</subfield>
+      <subfield code="4">aut</subfield>
+      <subfield code="2">gnd</subfield>
+    </datafield>
+    <datafield tag="245" ind1="1" ind2="0">
+      <subfield code="a">Werkausgabe</subfield>
+      <subfield code="n">Bd. 5.</subfield>
+      <subfield code="p">Das Prinzip Hoffnung : in 5 Teilen</subfield>
+      <subfield code="n">Kap. 33 - 42.</subfield>
+      <subfield code="c">Ernst Bloch</subfield>
+    </datafield>
+    <datafield tag="250" ind1=" " ind2=" ">
+      <subfield code="a">4. Aufl.</subfield>
+    </datafield>
+    <datafield tag="264" ind1="3" ind2="1">
+      <subfield code="a">Berlin</subfield>
+      <subfield code="b">Suhrkamp</subfield>
+      <subfield code="c">1993</subfield>
+    </datafield>
+    <datafield tag="300" ind1=" " ind2=" ">
+      <subfield code="a">S. 523 - 1085</subfield>
+    </datafield>
+    <datafield tag="336" ind1=" " ind2=" ">
+      <subfield code="a">Text</subfield>
+      <subfield code="b">txt</subfield>
+      <subfield code="2">rdacontent</subfield>
+    </datafield>
+    <datafield tag="337" ind1=" " ind2=" ">
+      <subfield code="a">ohne Hilfsmittel zu benutzen</subfield>
+      <subfield code="b">n</subfield>
+      <subfield code="2">rdamedia</subfield>
+    </datafield>
+    <datafield tag="338" ind1=" " ind2=" ">
+      <subfield code="a">Band</subfield>
+      <subfield code="b">nc</subfield>
+      <subfield code="2">rdacarrier</subfield>
+    </datafield>
+    <datafield tag="366" ind1=" " ind2=" ">
+      <subfield code="c">CS 20241204</subfield>
+      <subfield code="2">onixas</subfield>
+    </datafield>
+    <datafield tag="490" ind1="1" ind2=" ">
+      <subfield code="a">Suhrkamp-Taschenbuch Wissenschaft</subfield>
+      <subfield code="v">554</subfield>
+    </datafield>
+    <datafield tag="773" ind1="0" ind2="8">
+      <subfield code="q">15 ka233</subfield>
+      <subfield code="w">(DE-101)551038527</subfield>
+    </datafield>
+    <datafield tag="830" ind1=" " ind2="0">
+      <subfield code="a">Suhrkamp-Taschenbuch Wissenschaft</subfield>
+      <subfield code="v">554</subfield>
+      <subfield code="w">(DE-101)015103676</subfield>
+      <subfield code="w">(DE-600)968234-X</subfield>
+      <subfield code="9">3554</subfield>
+      <subfield code="7">as</subfield>
+    </datafield>
+    <datafield tag="850" ind1=" " ind2=" ">
+      <subfield code="a">DE-101a</subfield>
+      <subfield code="a">DE-101b</subfield>
+    </datafield>
+    <datafield tag="925" ind1="r" ind2=" ">
+      <subfield code="a">ra</subfield>
+    </datafield>
+  </record></records></searchRetrieveResponse>

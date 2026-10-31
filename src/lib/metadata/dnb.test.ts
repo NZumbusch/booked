@@ -3,6 +3,7 @@ import { dnbByIsbn, parseDnbRecord, publisherSeries, uninvert } from './dnb';
 import goldmann from './fixtures/dnb-9783442478415.xml?raw';
 import vorleser from './fixtures/dnb-9783257229530.xml?raw';
 import dtv from './fixtures/dnb-9783423130578.xml?raw';
+import bloch from './fixtures/dnb-bloch-stw554.xml?raw';
 import walser from './fixtures/dnb-9783518188354.xml?raw';
 import { fakeFetch } from './testing';
 
@@ -87,5 +88,15 @@ describe('DNB', () => {
     expect(publisherSeries('Fischer Taschenbuch', '12', 'S. Fischer')).toBe(true);
     expect(publisherSeries('Die Chroniken von Narnia', '3', 'Ueberreuter')).toBe(false);
     expect(publisherSeries('Suhrkamp-BasisBibliothek', '35', 'Suhrkamp')).toBe(false);
+  });
+});
+
+describe('multi-volume work in a scholarly series (Bloch, stw 554)', () => {
+  it('uses the part title, keeps the set and volume, and keeps the stw series', () => {
+    const r = parseDnbRecord(bloch)!;
+    expect(r.fields.title).toBe('Das Prinzip Hoffnung');
+    expect(r.fields.subtitle).toBe('Werkausgabe, Bd. 5, Kap. 33 - 42');
+    expect(r.fields.series).toBe('Suhrkamp-Taschenbuch Wissenschaft');
+    expect(r.fields.seriesNumber).toBe('554');
   });
 });
