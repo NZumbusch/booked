@@ -8,8 +8,9 @@ import type { ListPrice } from './types';
 export function parsePriceNote(note: string | undefined): { amount: number; currency: string; country?: string }[] {
   if (!note) return [];
   const out: { amount: number; currency: string; country?: string }[] = [];
-  const CUR: Record<string, string> = { eur: 'EUR', '€': 'EUR', sfr: 'CHF', chf: 'CHF', fr: 'CHF', gbp: 'GBP', '£': 'GBP', usd: 'USD', '$': 'USD', us$: 'USD' };
-  const re = /(EUR|€|sfr|CHF|GBP|£|USD|US\$|\$)\s*(\d{1,4}(?:[.,]\d{2})?)(?:\s*\((DE|AT|CH)\))?/gi;
+  // DM = pre-2002 German mark (older DNB records); kept as DEM rather than silently converted.
+  const CUR: Record<string, string> = { eur: 'EUR', '€': 'EUR', dm: 'DEM', sfr: 'CHF', chf: 'CHF', fr: 'CHF', gbp: 'GBP', '£': 'GBP', usd: 'USD', '$': 'USD', us$: 'USD' };
+  const re = /(EUR|€|DM|sfr|CHF|GBP|£|USD|US\$|\$)\s*(\d{1,4}(?:[.,]\d{2})?)(?:\s*\((DE|AT|CH)\))?/gi;
   for (const m of note.matchAll(re)) {
     const currency = CUR[m[1].toLowerCase()];
     const amount = Number(m[2].replace(',', '.'));
@@ -18,9 +19,9 @@ export function parsePriceNote(note: string | undefined): { amount: number; curr
   return out;
 }
 
-/** The price to use for Germany: the (DE) price if marked, else the first EUR price, else the first. */
+/** The price to use for Germany: the (DE) price if marked, else EUR, else the old DM price, else the first. */
 export function preferredPrice(prices: { amount: number; currency: string; country?: string }[]) {
-  return prices.find((p) => p.country === 'DE') ?? prices.find((p) => p.currency === 'EUR') ?? prices[0];
+  return prices.find((p) => p.country === 'DE') ?? prices.find((p) => p.currency === 'EUR') ?? prices.find((p) => p.currency === 'DEM') ?? prices[0];
 }
 
 /**

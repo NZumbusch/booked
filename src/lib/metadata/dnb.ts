@@ -18,6 +18,34 @@ export function uninvert(name: string): string {
   return first ? `${first} ${last}` : last;
 }
 
+const ROLES: Record<string, string> = {
+  trl: 'translator', edt: 'editor', ill: 'illustrator', aui: 'introduction',
+  'übersetzer': 'translator', 'übersetzerin': 'translator', herausgeber: 'editor', herausgeberin: 'editor',
+  illustrator: 'illustrator', illustratorin: 'illustrator', 'verfasser eines vorworts': 'introduction', 'verfasser eines nachworts': 'afterword'
+};
+
+/** Subject-chain form terms that describe the kind of text, not what it's about. */
+const FORM_TERMS = new Set(['Belletristische Darstellung', 'Fiktionale Darstellung', 'Aufsatzsammlung', 'Anthologie', 'Bildband', 'Einführung', 'Lehrbuch', 'Ratgeber', 'Quelle', 'Biografie']);
+
+/** DNB abbreviates publishers ("Dt. Taschenbuch-Verl"); spell the common abbreviations out. */
+export function expandPublisher(p: string | undefined): string | undefined {
+  if (!p) return p;
+  return p.replace(/\bDt\.\s*/g, 'Deutscher ').replace(/\bVerl\b\.?$/, 'Verlag').replace(/-Verl\b\.?/, '-Verlag');
+}
+
+/**
+ * Paperback lines number every title ("Goldmann ; 47841", "dtv ; 13057", "Diogenes-Taschenbuch ; 22953"):
+ * that's the publisher's catalogue number, not a series worth completing.
+ */
+export function publisherSeries(series: string | undefined, number: string | undefined, publisher: string | undefined): boolean {
+  if (!series) return false;
+  if (Number(number?.match(/\d+/)?.[0] ?? 0) >= 1000) return true;
+  const norm = (s: string) => s.toLowerCase().replace(/[^a-zäöüß]/g, '');
+  const a = norm(series);
+  const b = norm(publisher ?? '');
+  return /taschenb/.test(a) || (!!b && b.startsWith(a));
+}
+
 export function parseDnbRecord(xml: string): ProviderResult | undefined {
   const doc = new DOMParser().parseFromString(xml, 'application/xml');
   const record = doc.getElementsByTagNameNS('*', 'record');
@@ -26,7 +54,8 @@ export function parseDnbRecord(xml: string): ProviderResult | undefined {
   if (!marc) return undefined;
   const fields = (tag: string) => [...marc.getElementsByTagNameNS('*', 'datafield')].filter((f) => f.getAttribute('tag') === tag);
   const sub = (f: Element | undefined, code: string) =>
-    f ? [...f.getElementsByTagNameNS('*', 'subfield')].filter((s) => s.getAttribute('code') === code).map((s) => s.textContent ?? '') : [];
+    f ? [...f.getElementsByTagNameNS('*', 'subfield')].filter((s) => s.getAttribute('code') === code).map((s) => (s.textContent ?? '').normalize('NFC')) : [];
+  // ↑ DNB writes umlauts decomposed (o + combining ¨); NFC makes "Röhl" searchable and comparable.
   const first = (tag: string, code: string) => sub(fields(tag)[0], code)[0];
   const control = (tag: string) => [...marc.getElementsByTagNameNS('*', 'controlfield')].find((f) => f.getAttribute('tag') === tag)?.textContent ?? undefined;
 
@@ -35,17 +64,20 @@ export function parseDnbRecord(xml: string): ProviderResult | undefined {
   const authors = [...fields('100'), ...fields('700').filter((f) => sub(f, '4').includes('aut'))]
     .map((f) => sub(f, 'a')[0]).filter(Boolean).map((n) => uninvert(clean(n)!));
   const contributors = fields('700')
-    .filter((f) => !sub(f, '4').includes('aut'))
+    // $t = a work (e.g. the original of a translation), not a person who worked on this book.
+    .filter((f) => !sub(f, '4').includes('aut') && !sub(f, 't').length)
     .map((f) => {
-      const role = { trl: 'translator', edt: 'editor', ill: 'illustrator', aui: 'introduction' }[sub(f, '4')[0] ?? ''];
+      const role = ROLES[sub(f, '4')[0] ?? ''] ?? ROLES[(sub(f, 'e')[0] ?? '').toLowerCase()];
       const name = uninvert(clean(sub(f, 'a')[0]) ?? '');
       return name && role ? `${name} (${role})` : name;
-    }).filter(Boolean);
+    }).filter((c) => c && !authors.includes(c));
   const prices = fields('020').flatMap((f) => parsePriceNote(sub(f, 'c').join(' ')));
   const price = preferredPrice(prices);
   const pages = first('300', 'a')?.match(/(\d+)\s*(?:S\.|Seiten|pages|p\.)/)?.[1];
   const year = (first('264', 'c') ?? first('260', 'c'))?.match(/\d{4}/)?.[0];
-  const subjects = [...new Set([...fields('689'), ...fields('650')].map((f) => clean(sub(f, 'a')[0])).filter((s): s is string => !!s))];
+  const subjects = [...new Set([...fields('689'), ...fields('650')].map((f) => clean(sub(f, 'a')[0])).filter((s): s is string => !!s && !FORM_TERMS.has(s)))];
+  const publisher = expandPublisher(clean(first('264', 'b') ?? first('260', 'b')));
+  const series = publisherSeries(clean(first('490', 'a')), clean(first('490', 'v')), publisher) ? undefined : clean(first('490', 'a'));
   const idn = control('001');
 
   return {
@@ -56,13 +88,13 @@ export function parseDnbRecord(xml: string): ProviderResult | undefined {
       subtitle: clean(first('245', 'b')),
       authors: authors.length ? authors : undefined,
       contributors: contributors.length ? contributors : undefined,
-      publisher: clean(first('264', 'b') ?? first('260', 'b')),
+      publisher,
       publishedYear: year ? Number(year) : undefined,
       edition: clean(first('250', 'a')),
       language: first('041', 'a') ? marcToIso(first('041', 'a')) : undefined,
       pageCount: pages ? Number(pages) : undefined,
-      series: clean(first('490', 'a')),
-      seriesNumber: clean(first('490', 'v')),
+      series,
+      seriesNumber: series ? clean(first('490', 'v')) : undefined,
       subjects: subjects.length ? subjects.slice(0, 12) : undefined,
       listPrice: price ? { amount: price.amount, currency: price.currency, source: 'dnb' } : undefined,
       identifiers: idn ? { dnb: idn } : undefined
