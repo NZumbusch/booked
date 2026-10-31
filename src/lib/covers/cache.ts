@@ -110,7 +110,8 @@ export class CoverCache {
   });
   private loaded: Promise<void>;
   private running: Promise<void> | undefined;
-  private urls = new Lru<string>(300, (u) => URL.revokeObjectURL(u));
+  // Object URLs may still be in use by covers on screen: give them time before they are released.
+  private urls = new Lru<string>(300, (u) => void setTimeout(() => URL.revokeObjectURL(u), 60_000));
   private bitmaps = new Lru<ImageBitmap>(500, (b) => b.close?.());
   /** Bumped whenever covers change, so views can redraw. */
   version = writable(0);
@@ -271,6 +272,11 @@ export class CoverCache {
     };
     await Promise.all([worker(), worker(), worker(), worker()]);
     this.version.update((v) => v + 1);
+  }
+
+  /** Forget the object URL of a cover (e.g. the browser says it can't load it), so the next `objectUrl` makes a fresh one. */
+  dropUrl(url: string | undefined): void {
+    if (url) this.urls.delete(url);
   }
 
   /** An object URL for a cached cover (or undefined → use the network URL). */

@@ -4,41 +4,68 @@
 
   import { isCoverShape } from '../covers/colors';
   import { covers } from '../stores/app';
+  import { coverRetry } from './coverRetry';
 
   let { book, size = 'md' }: { book: Pick<Book, 'title' | 'authors' | 'cover'>; size?: 'sm' | 'md' | 'lg' } = $props();
   let failed = $state(false);
-  let retried = false;
+  let tries = 0;
 
   // Prefer the copy cached on this device (offline, no network); fall back to the URL.
   let local = $state<string>();
   let broken = $state(false);
   let tick = $state(0);
-  $effect(() => {
-    const url = book.cover;
-    local = undefined;
-    failed = false;
-    retried = false;
-    broken = false;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+
+  /** Look in the cache again: a cover that wasn't saved yet may be now. */
+  function refresh(url: string | undefined) {
     let cache;
     try {
       cache = covers();
     } catch {
       return; // e.g. in component tests without the app
     }
-    // Re-check whenever the cache changes (a new cover finished downloading), so a cover that
-    // was missing when first shown appears without reloading the page.
-    const stop = cache.version.subscribe((v) => {
-      if (v === undefined) return;
-      broken = cache.isBroken(url);
-      cache.objectUrl(url).then((u) => {
-        if (url === book.cover && u) local = u;
-      });
+    broken = cache.isBroken(url);
+    cache.objectUrl(url).then((u) => {
+      if (url !== book.cover || !u || u === local) return;
+      local = u;
+      failed = false; // the saved copy works even if the network image didn't
+      tries = 0;
     });
-    return stop;
+  }
+
+  $effect(() => {
+    const url = book.cover;
+    local = undefined;
+    failed = false;
+    tries = 0;
+    broken = false;
+    clearTimeout(timer);
+    let cache;
+    try {
+      cache = covers();
+    } catch {
+      return;
+    }
+    // Re-check whenever the cache changes (a cover finished downloading), so a cover that was
+    // missing when first shown appears without reloading the page.
+    const stopCache = cache.version.subscribe(() => refresh(url));
+    // Back online / back in the app: try again what failed.
+    const stopRetry = coverRetry.subscribe((n) => {
+      if (n && failed && !broken) {
+        failed = false;
+        tries = 0;
+        tick += 1;
+      }
+    });
+    return () => {
+      stopCache();
+      stopRetry();
+      clearTimeout(timer);
+    };
   });
   const src = $derived(broken ? undefined : (local ?? (book.cover ? withRetry(book.cover, tick) : undefined)));
 
-  /** Reload once if the network image failed (e.g. a flaky request); bypass a cached error. */
+  /** A different address makes the browser load the image again instead of reusing a failed one. */
   function withRetry(url: string, n: number): string {
     if (!n || url.startsWith('data:')) return url;
     return url + (url.includes('?') ? '&' : '?') + `r=${n}`;
@@ -49,9 +76,22 @@
     if (!book.cover?.startsWith('data:') && !isCoverShape(img.naturalWidth, img.naturalHeight)) failed = true;
   }
   function onError() {
-    if (!retried) {
-      retried = true;
-      setTimeout(() => (tick += 1), 1500);
+    if (local) {
+      // The saved copy can't be shown (its temporary address was released): make a fresh one, else use the network image.
+      const url = book.cover;
+      local = undefined;
+      try {
+        covers().dropUrl(url);
+      } catch {
+        /* no app */
+      }
+      refresh(url);
+      return;
+    }
+    if (tries < 3) {
+      tries++;
+      clearTimeout(timer);
+      timer = setTimeout(() => (tick += 1), 1500 * tries * tries); // 1.5 s, 6 s, 13.5 s
     } else failed = true;
   }
 
