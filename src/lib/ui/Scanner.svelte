@@ -4,7 +4,7 @@
   import { priceFromEan5 } from '../domain/price';
   import type { ListPrice } from '../domain/types';
   import { readIsbnText, stopOcr } from '../scanner/ocr';
-  import { canTorch, getDetector, openCamera, readAddOn, setTorch, type Detector } from '../scanner/camera';
+  import { canFocus, canTorch, focusAt, getDetector, openCamera, readAddOn, setTorch, tapToImagePoint, useContinuousFocus, type Detector } from '../scanner/camera';
 
   let { onscan, onprice, paused = false, compact = false }: {
     /** Called once per fresh sighting of a valid ISBN barcode. */
@@ -22,6 +22,8 @@
   let ready = $state(false);
   let torch = $state(false);
   let torchAvailable = $state(false);
+  let focusAvailable = $state(false);
+  let ring = $state<{ x: number; y: number; n: number }>();
   let flash = $state(false);
   /** Read the ISBN printed as text (for old books whose barcode isn't an ISBN). */
   let textMode = $state(false);
@@ -38,6 +40,8 @@
       video!.srcObject = stream;
       await video!.play();
       torchAvailable = canTorch(stream);
+      focusAvailable = canFocus(stream);
+      useContinuousFocus(stream).catch(() => {});
       ready = true;
       loop();
     } catch (e) {
@@ -113,6 +117,17 @@
     stream?.getTracks().forEach((t) => t.stop());
   }
 
+  /** Tap the picture to focus there. */
+  function tapFocus(e: MouseEvent) {
+    if (!stream || !video?.videoWidth) return;
+    const r = video.getBoundingClientRect();
+    const x = e.clientX - r.left, y = e.clientY - r.top;
+    ring = { x, y, n: (ring?.n ?? 0) + 1 };
+    setTimeout(() => ring && (ring = undefined), 900);
+    const p = tapToImagePoint(x, y, { w: r.width, h: r.height }, { w: video.videoWidth, h: video.videoHeight });
+    focusAt(stream, p.x, p.y).catch(() => {});
+  }
+
   async function toggleTorch() {
     if (!stream) return;
     torch = !torch;
@@ -133,11 +148,13 @@
     </div>
   {:else}
     <!-- svelte-ignore a11y_media_has_caption -->
-    <video bind:this={video} playsinline muted></video>
+    <video bind:this={video} playsinline muted onclick={tapFocus}></video>
+    {#key ring?.n}{#if ring}<div class="ring" style:left="{ring.x}px" style:top="{ring.y}px"></div>{/if}{/key}
     <div class="frame" aria-hidden="true"></div>
     {#if !ready}<div class="msg">Starting camera…</div>{/if}
     {#if paused && ready}<div class="msg dim">Paused</div>{/if}
     <button class="textmode btn-sm" onclick={() => (textMode = !textMode)} aria-pressed={textMode}>{textMode ? (ocrBusy ? 'Aa Reading…' : 'Aa Text on') : 'Aa Read text'}</button>
+    {#if focusAvailable && !textMode && !ocrError}<div class="hint soft">Tap the picture to focus</div>{/if}
     {#if textMode}<div class="hint">Hold the printed ISBN (e.g. “ISBN 0-553-28058-9”) inside the frame</div>{/if}
     {#if ocrError}<div class="hint err">{ocrError}</div>{/if}
     {#if torchAvailable}
@@ -165,6 +182,12 @@
   .msg.dim { background: rgb(0 0 0 / 0.5); font-weight: 600; }
   .textmode { position: absolute; left: 10px; bottom: 10px; background: rgb(0 0 0 / 0.5); color: #fff; border-color: transparent; }
   .textmode[aria-pressed='true'] { background: var(--ok); }
+  .ring {
+    position: absolute; width: 64px; height: 64px; margin: -32px 0 0 -32px; border: 2px solid #fff; border-radius: 50%;
+    pointer-events: none; animation: focus-ring 0.9s ease-out forwards;
+  }
+  @keyframes focus-ring { from { transform: scale(1.5); opacity: 1; } to { transform: scale(0.8); opacity: 0; } }
+  .hint.soft { opacity: 0.8; pointer-events: none; }
   .hint { position: absolute; left: 10px; right: 10px; top: 8px; text-align: center; color: #fff; font-size: 0.8rem; text-shadow: 0 1px 3px #000; }
   .torch { position: absolute; right: 10px; bottom: 10px; background: rgb(0 0 0 / 0.5); color: #fff; border-color: transparent; }
 </style>

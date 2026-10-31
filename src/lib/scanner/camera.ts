@@ -82,7 +82,7 @@ export async function openCamera(): Promise<MediaStream> {
   try {
     return await navigator.mediaDevices.getUserMedia({
       audio: false,
-      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } }
     });
   } catch (e) {
     const name = (e as DOMException)?.name;
@@ -90,6 +90,55 @@ export async function openCamera(): Promise<MediaStream> {
     if (name === 'NotFoundError' || name === 'OverconstrainedError') throw new Error('No camera found on this device.');
     throw e;
   }
+}
+
+type FocusCaps = { focusMode?: string[]; pointsOfInterest?: unknown };
+type FocusConstraint = { focusMode?: string; pointsOfInterest?: { x: number; y: number }[] };
+
+const focusCaps = (stream: MediaStream) => stream.getVideoTracks()[0]?.getCapabilities?.() as FocusCaps | undefined;
+const applyFocus = (stream: MediaStream, c: FocusConstraint) =>
+  stream.getVideoTracks()[0]?.applyConstraints({ advanced: [c as MediaTrackConstraintSet] });
+
+/** Whether the camera lets the page control focus at all (Android Chrome yes; iOS Safari mostly no). */
+export function canFocus(stream: MediaStream): boolean {
+  return !!focusCaps(stream)?.focusMode?.length;
+}
+
+/** Ask for continuous autofocus (some phones default to a fixed or one-shot focus). */
+export async function useContinuousFocus(stream: MediaStream): Promise<void> {
+  if (focusCaps(stream)?.focusMode?.includes('continuous')) await applyFocus(stream, { focusMode: 'continuous' });
+}
+
+/**
+ * Focus on a point (x, y in 0–1 of the camera image). Uses the point of interest where the
+ * camera supports it; otherwise kicks the autofocus by switching modes, which makes it search again.
+ */
+export async function focusAt(stream: MediaStream, x: number, y: number): Promise<void> {
+  const caps = focusCaps(stream);
+  const modes = caps?.focusMode ?? [];
+  if (!modes.length) return;
+  try {
+    if (caps?.pointsOfInterest) {
+      await applyFocus(stream, { focusMode: modes.includes('single-shot') ? 'single-shot' : 'continuous', pointsOfInterest: [{ x, y }] });
+    } else if (modes.includes('single-shot')) {
+      await applyFocus(stream, { focusMode: 'single-shot' });
+    } else if (modes.includes('manual')) {
+      await applyFocus(stream, { focusMode: 'manual' });
+    }
+  } catch {
+    // fall through to restoring continuous focus
+  }
+  // Hold the new focus briefly, then go back to following the book.
+  if (modes.includes('continuous')) setTimeout(() => applyFocus(stream, { focusMode: 'continuous' })?.catch(() => {}), 1500);
+}
+
+/** Map a tap on the (object-fit: cover) video element to a point on the camera image. */
+export function tapToImagePoint(tapX: number, tapY: number, box: { w: number; h: number }, video: { w: number; h: number }): { x: number; y: number } {
+  const scale = Math.max(box.w / video.w, box.h / video.h);
+  const shownW = video.w * scale, shownH = video.h * scale;
+  const x = (tapX + (shownW - box.w) / 2) / shownW;
+  const y = (tapY + (shownH - box.h) / 2) / shownH;
+  return { x: Math.min(1, Math.max(0, x)), y: Math.min(1, Math.max(0, y)) };
 }
 
 export function canTorch(stream: MediaStream): boolean {
