@@ -3,10 +3,13 @@
   import type { Id, Location, LocationKind } from '../lib/domain/types';
   import { plural } from '../lib/format';
   import { navigate } from '../lib/router';
-  import { attempt, library } from '../lib/stores/app';
+  import { attempt, library, spaces, toast } from '../lib/stores/app';
+  import ShareDialog from '../lib/ui/ShareDialog.svelte';
   import Dialog from '../lib/ui/Dialog.svelte';
   import Icon from '../lib/ui/Icon.svelte';
   import LocationPicker from '../lib/ui/LocationPicker.svelte';
+  import { geocode } from '../lib/metadata/geocode';
+  import type { GeoPoint } from '../lib/domain/types';
 
   let { id = null }: { id?: Id | null } = $props();
 
@@ -18,6 +21,15 @@
   const kidKind = $derived<LocationKind | null>(current ? childKind(current.kind) : 'place');
 
   let newName = $state('');
+  const ctl = spaces();
+  const sharedRoots = $derived(new Set(($lib.settings.spaces ?? []).map((sp) => sp.rootLocationId)));
+  let shareOpen = $state(false);
+  let shareTarget = $state<Location>();
+  function openShare(loc: Location) {
+    editOpen = false;
+    shareTarget = loc;
+    shareOpen = true;
+  }
   // Shelves are optional: their add form stays hidden until asked for.
   let showShelfForm = $state(false);
   const showAddForm = $derived(kidKind !== 'shelf' || kids.length > 0 || showShelfForm);
@@ -42,7 +54,33 @@
   function manage(loc: Location) {
     editing = loc;
     renameTo = loc.name;
+    geoQuery = loc.name;
+    geoHits = undefined;
     editOpen = true;
+  }
+
+  // Map position for places (for "where are my books" on the map).
+  let geoQuery = $state('');
+  let geoHits = $state<GeoPoint[]>();
+  let geoBusy = $state(false);
+  async function findGeo(e: SubmitEvent) {
+    e.preventDefault();
+    if (!geoQuery.trim()) return;
+    geoBusy = true;
+    try {
+      geoHits = await geocode(geoQuery.trim());
+    } catch {
+      geoHits = [];
+      toast('Place search needs an internet connection');
+    } finally {
+      geoBusy = false;
+    }
+  }
+  async function setGeo(geo: GeoPoint | undefined) {
+    if (!editing) return;
+    await attempt(() => lib.updateLocation(editing!.id, { geo }), geo ? `Map position set to ${geo.label}` : 'Map position removed');
+    editing = lib.location(editing.id);
+    geoHits = undefined;
   }
 
   async function rename() {
@@ -111,7 +149,7 @@
       <h1>Location not found</h1>
     {:else}
       <div class="spread">
-        <h1>{current?.name ?? 'Places'}</h1>
+        <h1>{current?.name ?? 'Places'}{#if current && ctl.spaceOf(current.id)} <span class="badge">👥 shared</span>{/if}</h1>
         {#if current}<button class="btn-sm" onclick={() => manage(current)}><Icon name="edit" size={18} /> Edit</button>{/if}
       </div>
       {#if current}
@@ -127,10 +165,11 @@
         {#each kids as loc, i (loc.id)}
           <li class="card item">
             <a class="main" href="#/locations/{loc.id}">
-              <strong>{loc.name}</strong>
+              <strong>{loc.name}{#if sharedRoots.has(loc.id)} <span class="badge" title="Shared with family">👥 shared</span>{/if}</strong>
               <span class="muted small">
                 {plural(counts.get(loc.id) ?? 0, 'book')}
-                {#if childKind(loc.kind)}· {plural(lib.children(loc.id).length, KIND_LABEL[childKind(loc.kind)!].toLowerCase())}{/if}
+                {#if childKind(loc.kind) === 'room'}· {plural(lib.children(loc.id).length, 'room')}
+                {:else if childKind(loc.kind) === 'shelf' && lib.children(loc.id).length}· {plural(lib.children(loc.id).length, 'shelf', 'shelves')}{/if}
               </span>
             </a>
             <div class="tools">
@@ -173,13 +212,32 @@
     <input bind:value={renameTo} aria-label="Name" />
     <button class="btn-primary" type="submit" disabled={!renameTo.trim()}>Rename</button>
   </form>
+  {#if editing?.kind === 'place'}
+    <div class="geo stack">
+      <span class="muted small">Map position{editing.geo ? `: ${editing.geo.label ?? `${editing.geo.lat.toFixed(3)}, ${editing.geo.lon.toFixed(3)}`}` : ' (for the map of where your books are)'}</span>
+      <form class="add" onsubmit={findGeo}>
+        <input bind:value={geoQuery} placeholder="Town or address" aria-label="Search a town or address" />
+        <button type="submit" disabled={geoBusy || !geoQuery.trim()}>{geoBusy ? '…' : 'Find'}</button>
+      </form>
+      {#if geoHits?.length === 0}<span class="muted small">No match. Try just the town name.</span>{/if}
+      {#each geoHits ?? [] as hit}
+        <button class="btn-sm hit" onclick={() => setGeo(hit)}>{hit.label}</button>
+      {/each}
+      {#if editing.geo}<button class="btn-sm btn-ghost" onclick={() => setGeo(undefined)}>Remove map position</button>{/if}
+    </div>
+  {/if}
   {#if editing && editing.kind !== 'place'}
     <button onclick={openMove} disabled={!parentOptions.length}>
       <Icon name="move" /> Move whole {KIND_LABEL[editing.kind].toLowerCase()} to another {editing.kind === 'room' ? 'place' : 'room'}
     </button>
   {/if}
+  {#if editing && editing.kind !== 'shelf'}
+    <button onclick={() => openShare(editing!)}>👥 {sharedRoots.has(editing.id) ? 'Shared with family: link & status' : 'Share with family…'}</button>
+  {/if}
   <button class="btn-danger" onclick={openDelete}><Icon name="trash" /> Delete</button>
 </Dialog>
+
+{#if shareTarget}<ShareDialog bind:open={shareOpen} location={shareTarget} />{/if}
 
 <Dialog bind:open={moveOpen} title="Move “{editing?.name}”">
   <p class="muted small">Everything inside moves along, and each book’s history records the move.</p>
@@ -226,4 +284,6 @@
   .add { display: flex; gap: 8px; }
   .empty-hint { margin: 0; }
   .optional { color: var(--muted); justify-self: start; }
+  .geo { gap: 6px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 10px 0; }
+  .hit { justify-content: flex-start; white-space: normal; text-align: left; }
 </style>

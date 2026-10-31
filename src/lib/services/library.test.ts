@@ -36,6 +36,8 @@ describe('books', () => {
     expect(book.locationId).toBe(study.id);
     const explicit = await lib.addBook({ title: 'Y', locationId: null });
     expect(explicit.locationId).toBeNull();
+    const unset = await lib.addBook({ title: 'Z', locationId: undefined });
+    expect(unset.locationId).toBe(study.id);
   });
 
   it('notifies subscribers on change', async () => {
@@ -55,6 +57,15 @@ describe('books', () => {
     const history = await lib.history(book.id);
     expect(history).toHaveLength(1);
     expect(history[0]).toMatchObject({ fromLabel: 'Flat A › Study', toLabel: 'Flat A › Living room › Top shelf' });
+  });
+
+  it('enriches in the background without hijacking undo', async () => {
+    const a = await lib.addBook({ title: 'A' });
+    await lib.enrichBook(a.id, { publisher: 'P' });
+    expect(lib.book(a.id)?.publisher).toBe('P');
+    expect(await lib.undo()).toMatch(/Added/);
+    expect(lib.state.books).toEqual([]);
+    expect(await lib.enrichBook(a.id, { publisher: 'Q' })).toBeUndefined();
   });
 
   it('deletes books and can undo it', async () => {
@@ -190,12 +201,164 @@ describe('backup', () => {
     const other = new DexieRepository(`test-${n++}`);
     const lib2 = await Library.open(other);
     await lib2.importSnapshot(snap);
-    expect(lib2.state.books).toEqual(lib.state.books);
+    // Restored records get a fresh timestamp (so sync propagates the restore); content is identical.
+    const strip = (bs: typeof lib.state.books) => bs.map(({ updatedAt: _u, ...rest }) => rest);
+    expect(strip(lib2.state.books)).toEqual(strip(lib.state.books));
     expect(lib2.state.locations).toHaveLength(5);
     await other.destroy();
   });
 
+  it('records when a backup was made', async () => {
+    await lib.addBook({ title: 'A' });
+    const snap = await lib.createBackup();
+    expect(lib.state.settings.lastBackupAt).toBe(snap.exportedAt);
+    expect(snap.settings.lastBackupAt).toBe(snap.exportedAt);
+  });
+
+  it('keeps a safety copy so a restore can be undone', async () => {
+    await lib.addBook({ title: 'Before' });
+    const other = new DexieRepository(`test-${n++}`);
+    const lib2 = await Library.open(other);
+    await lib2.addBook({ title: 'From backup' });
+    const backup = await lib2.exportSnapshot();
+    await other.destroy();
+
+    await lib.importSnapshot(backup);
+    expect(lib.state.books.map((b) => b.title)).toEqual(['From backup']);
+    expect(await lib.hasSafetyCopy()).toBe(true);
+
+    expect(await lib.undoRestore()).toBe(true);
+    expect(lib.state.books.map((b) => b.title)).toEqual(['Before']);
+    expect(await lib.hasSafetyCopy()).toBe(false);
+    expect(await lib.undoRestore()).toBe(false);
+  });
+
   it('rejects foreign files', async () => {
     await expect(lib.importSnapshot({} as never)).rejects.toThrow(/backup/i);
+  });
+});
+
+describe('persistence of proxied input', () => {
+  it('stores drafts that arrive as Proxies (e.g. from reactive UI state)', async () => {
+    const reactive = <T extends object>(o: T): T => new Proxy(o, {});
+    const book = await lib.addBook(reactive({ title: 'A', authors: reactive(['X']) }));
+    const reopened = await Library.open(repo);
+    expect(reopened.book(book.id)?.authors).toEqual(['X']);
+  });
+});
+
+describe('bulk updates', () => {
+  it('changes many books in one undoable step and logs moves', async () => {
+    const { study } = await setupFlats();
+    const a = await lib.addBook({ title: 'A', tags: ['x'] });
+    const b = await lib.addBook({ title: 'B' });
+    const n = await lib.bulkUpdate([a.id, b.id], (bk) => ({ tags: [...bk.tags, 'new'], locationId: study.id }), 'Tagged');
+    expect(n).toBe(2);
+    expect(lib.book(a.id)?.tags).toEqual(['x', 'new']);
+    expect((await lib.history(b.id))[0].toLabel).toBe('Flat A › Study');
+    expect(await lib.undo()).toBe('Tagged');
+    expect(lib.book(a.id)?.tags).toEqual(['x']);
+    expect(lib.book(b.id)?.locationId).toBeNull();
+  });
+
+  it('skips books that would not change', async () => {
+    const a = await lib.addBook({ title: 'A', status: 'read' });
+    expect(await lib.bulkUpdate([a.id], () => ({ status: 'read' }), 'x')).toBe(0);
+    expect(await lib.bulkUpdate([a.id], () => undefined, 'x')).toBe(0);
+  });
+});
+
+describe('tags, collections and genres', () => {
+  it('renames everywhere, case-insensitively', async () => {
+    await lib.addBook({ title: 'A', tags: ['Scifi'] });
+    await lib.addBook({ title: 'B', tags: ['scifi', 'other'] });
+    expect(await lib.renameTerm('tags', 'SCIFI', 'Science fiction')).toBe(2);
+    expect(lib.state.books.map((b) => b.tags)).toEqual([['Science fiction'], ['Science fiction', 'other']]);
+  });
+
+  it('merges into an existing name without duplicates', async () => {
+    const a = await lib.addBook({ title: 'A', collections: ['Classics', 'Klassiker'] });
+    expect(await lib.lastActionLabel()).toMatch(/Added/);
+    await lib.renameTerm('collections', 'Klassiker', 'Classics');
+    expect(lib.book(a.id)?.collections).toEqual(['Classics']);
+    expect(await lib.lastActionLabel()).toMatch(/Merged/);
+  });
+
+  it('deletes a term from all books', async () => {
+    const a = await lib.addBook({ title: 'A', genres: ['Fantasy', 'Horror'] });
+    expect(await lib.deleteTerm('genres', 'fantasy')).toBe(1);
+    expect(lib.book(a.id)?.genres).toEqual(['Horror']);
+  });
+});
+
+describe('saved filters', () => {
+  it('saves and deletes named filters', async () => {
+    const f = await lib.saveFilter(' Unread in A ', { status: 'unread' });
+    expect(lib.state.settings.savedFilters).toEqual([{ id: f.id, name: 'Unread in A', query: { status: 'unread' } }]);
+    await lib.deleteSavedFilter(f.id);
+    expect(lib.state.settings.savedFilters).toEqual([]);
+  });
+});
+
+describe('importBooks', () => {
+  it('creates missing locations, reuses existing ones and is one undo step', async () => {
+    const { flatA, living } = await setupFlats();
+    const r = await lib.importBooks([
+      { draft: { title: 'A', isbn13: '9780441172719' }, locationPath: ['flat a', 'Living room'] },
+      { draft: { title: 'B' }, locationPath: ['Flat C', 'Hall'] },
+      { draft: { title: 'C' }, locationPath: [] }
+    ], { lookup: true });
+    expect(r.added).toHaveLength(3);
+    expect(r.createdLocations).toBe(2);
+    expect(r.added[0].locationId).toBe(living.id);
+    expect(r.added[0].pendingLookup).toBe(true);
+    expect(r.added[1].pendingLookup).toBeUndefined();
+    expect(lib.label(r.added[1].locationId)).toBe('Flat C › Hall');
+    expect(r.added[2].locationId).toBeNull();
+    expect(lib.location(flatA.id)).toBeDefined();
+
+    await lib.undo();
+    expect(lib.state.books).toHaveLength(0);
+    expect(lib.state.locations).toHaveLength(5);
+  });
+
+  it('can skip ISBNs already in the library (also within the file)', async () => {
+    await lib.addBook({ title: 'A', isbn13: '9780441172719' });
+    const r = await lib.importBooks([
+      { draft: { title: 'A', isbn10: '0441172717' }, locationPath: [] },
+      { draft: { title: 'B', isbn13: '9780306406157' }, locationPath: [] },
+      { draft: { title: 'B again', isbn13: '9780306406157' }, locationPath: [] }
+    ], { skipDuplicates: true });
+    expect(r.added.map((b) => b.title)).toEqual(['B']);
+    expect(r.skipped).toBe(2);
+  });
+});
+
+describe('sync bookkeeping', () => {
+  it('records deletion markers for deleted books and locations', async () => {
+    const { study } = await setupFlats();
+    const a = await lib.addBook({ title: 'A' });
+    await lib.deleteBooks([a.id]);
+    await lib.deleteLocation(study.id, null);
+    const data = await lib.exportSyncData();
+    expect(data.deleted.map((t) => [t.kind, t.id]).sort()).toEqual([['book', a.id], ['location', study.id]].sort());
+  });
+
+  it('undo of a delete makes the book newer than its deletion marker', async () => {
+    const a = await lib.addBook({ title: 'A' });
+    await lib.deleteBooks([a.id]);
+    await lib.undo();
+    const data = await lib.exportSyncData();
+    const tomb = data.deleted.find((t) => t.id === a.id)!;
+    expect(data.books[0].updatedAt > tomb.at).toBe(true);
+  });
+
+  it('applies merged data but keeps local settings', async () => {
+    await lib.updateSettings({ theme: 'dark' });
+    const other = await lib.addBook({ title: 'Keep me?' });
+    await lib.applySyncData({ books: [], locations: [], moves: [], deleted: [{ id: other.id, kind: 'book', at: new Date().toISOString() }] });
+    expect(lib.state.books).toEqual([]);
+    expect(lib.state.settings.theme).toBe('dark');
+    expect(await lib.undo()).toBeUndefined();
   });
 });

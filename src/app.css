@@ -11,6 +11,8 @@
   --danger: #b3261e;
   --ok: #2e7d5b;
   --warn: #b26a00;
+  --chart-bar: #b5752c;
+  --chart-grid: #e6e2d8;
   --radius: 14px;
   --shadow: 0 1px 2px rgb(0 0 0 / 0.05), 0 4px 16px rgb(0 0 0 / 0.06);
   --tap: 48px;
@@ -35,6 +37,8 @@
   --ok: #6cc59b;
   --warn: #f0a640;
   --shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 4px 16px rgb(0 0 0 / 0.3);
+  --chart-bar: #c07f35;
+  --chart-grid: #2e333b;
   color-scheme: dark;
 }
 
@@ -100,3 +104,9 @@ dialog {
   width: min(560px, calc(100vw - 24px)); max-height: calc(100dvh - 48px); box-shadow: var(--shadow);
 }
 dialog::backdrop { background: rgb(0 0 0 / 0.4); }
+
+@media print {
+  .no-print, .toasts { display: none !important; }
+  body, html { background: #fff; }
+  .page { padding: 0; max-width: none; }
+}

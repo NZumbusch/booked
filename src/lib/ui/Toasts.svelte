@@ -2,7 +2,7 @@
   import { dismissToast, toasts, undoLast } from '../stores/app';
 </script>
 
-<div class="toasts" aria-live="polite">
+<div class="toasts no-print" aria-live="polite">
   {#each $toasts as t (t.id)}
     <div class="toast">
       <span>{t.message}</span>
@@ -15,7 +15,7 @@
 
 <style>
   .toasts {
-    position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(var(--nav-h) + 16px + env(safe-area-inset-bottom));
+    position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(var(--nav-h) + var(--toast-offset, 0px) + 16px + env(safe-area-inset-bottom));
     display: grid; gap: 8px; z-index: 50; width: min(520px, calc(100vw - 24px));
   }
   .toast {

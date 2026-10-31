@@ -1,12 +1,12 @@
 <script lang="ts">
   import { normalizeIsbn } from '../lib/domain/isbn';
-  import type { Book, BookDraft } from '../lib/domain/types';
-  import { lookupCandidate, lookupIsbn, searchBooks, type LookupResult } from '../lib/metadata/lookup';
+  import type { Book, BookDraft, ListPrice } from '../lib/domain/types';
+  import { mergeResults, quickLookupIsbn, searchBooks, type LookupResult } from '../lib/metadata/lookup';
   import type { Candidate } from '../lib/metadata/types';
   import { plural } from '../lib/format';
   import { navigate } from '../lib/router';
   import { feedback } from '../lib/scanner/camera';
-  import { attempt, library } from '../lib/stores/app';
+  import { attempt, enricher, library } from '../lib/stores/app';
   import BookForm from '../lib/ui/BookForm.svelte';
   import Cover from '../lib/ui/Cover.svelte';
   import Dialog from '../lib/ui/Dialog.svelte';
@@ -36,23 +36,27 @@
   // Duplicate confirmation
   let dupOpen = $state(false);
   let dups = $state<Book[]>([]);
-  let pendingDraft = $state<BookDraft>();
+  let pendingDraft = $state.raw<BookDraft>();
   let pendingAfterLookup = $state<string>();
   /** ISBN the user already confirmed as "another copy", so the form doesn't ask again. */
   let confirmedIsbn = $state<string>();
 
-  const SOURCE_NAMES: Record<string, string> = { openlibrary: 'Open Library', googlebooks: 'Google Books', wikidata: 'Wikidata' };
+  /** Prices read from the add-on barcode while scanning, by ISBN-13. */
+  const scannedPrices = new Map<string, ListPrice>();
+
+  const SOURCE_NAMES: Record<string, string> = { openlibrary: 'Open Library', googlebooks: 'Google Books', dnb: 'DNB', wikidata: 'Wikidata' };
 
   function openForm(prefill: Partial<Book>, result?: LookupResult) {
     initial = { locationId: $lib.settings.defaultLocationId, status: 'unread', ownership: 'owned', copies: 1, ...prefill };
     formKey++;
+    const later = 'More details (description, genres, where it was written…) are added automatically after you save.';
     if (!result) notice = undefined;
     else if (result.status === 'found') {
-      notice = { kind: 'found', text: `Filled in from ${(result.draft.sources ?? []).map((s) => SOURCE_NAMES[s] ?? s).join(', ')}. Check and adjust anything.` };
+      notice = { kind: 'found', text: `Found via ${(result.draft.sources ?? []).map((s) => SOURCE_NAMES[s] ?? s).join(', ')}. ${later}` };
     } else if (result.status === 'notfound') {
-      notice = { kind: 'notfound', text: 'Nothing found online for this ISBN. Fill in what you know.' };
+      notice = { kind: 'notfound', text: 'Nothing found right away. Fill in the title; the full catalogues are searched again after you save.' };
     } else {
-      notice = { kind: 'error', text: 'Couldn’t reach the online catalogues (offline?). Fill in by hand or try again.' };
+      notice = { kind: 'error', text: 'The catalogues are slow or unreachable. Save now; details are fetched automatically once they answer.' };
     }
   }
 
@@ -78,11 +82,14 @@
     lookup(isbn.isbn13);
   }
 
+  /** One quick request (≤3 s); everything else is filled in after saving. */
   async function lookup(isbn13: string) {
     busy = 'Looking up the book…';
     retryIsbn = isbn13;
     try {
-      const result = await lookupIsbn(isbn13);
+      const result = await quickLookupIsbn(isbn13);
+      const scanned = scannedPrices.get(isbn13);
+      if (scanned && !result.draft.listPrice) result.draft.listPrice = scanned;
       openForm(result.draft as Partial<Book>, result);
     } finally {
       busy = '';
@@ -104,14 +111,16 @@
     }
   }
 
-  async function pick(c: Candidate) {
-    busy = 'Fetching details…';
-    try {
-      const result = await lookupCandidate(c);
-      openForm(result.draft as Partial<Book>, result);
-    } finally {
-      busy = '';
-    }
+  /** Open the form right away with what the search hit already has; details follow after saving. */
+  function pick(c: Candidate) {
+    const draft = c.gb
+      ? mergeResults([c.gb])
+      : {
+          title: c.title, subtitle: c.subtitle, authors: c.authors, firstPublishedYear: c.year,
+          cover: c.cover?.replace('-M.jpg', '-L.jpg'), identifiers: c.olWorkId ? { olwork: c.olWorkId } : undefined,
+          sources: [c.source], provenance: { title: { source: c.source } }
+        };
+    openForm(draft as Partial<Book>, { status: 'found', draft, warnings: [] });
   }
 
   async function submit(draft: BookDraft) {
@@ -128,8 +137,14 @@
   }
 
   async function add(draft: BookDraft) {
-    const book = await attempt(() => lib.addBook(draft), `Added “${draft.title}”`, { undo: true });
-    if (book) navigate(`/book/${book.id}`);
+    // Anything we can look up online gets completed in the background.
+    const pendingLookup = !!(draft.isbn13 || draft.isbn10 || draft.identifiers?.olwork) || undefined;
+    const scanned = draft.isbn13 ? scannedPrices.get(draft.isbn13) : undefined;
+    if (scanned && !draft.listPrice) draft = { ...draft, listPrice: scanned };
+    const book = await attempt(() => lib.addBook({ ...draft, pendingLookup }), `Added “${draft.title}”`, { undo: true });
+    if (!book) return;
+    if (pendingLookup) enricher().enqueue(book.id);
+    navigate(`/book/${book.id}`);
   }
 
   /** The user confirmed it's really another copy: always a separate entry. */
@@ -174,7 +189,7 @@
     </div>
 
     {#if mode === 'scan'}
-      <Scanner onscan={handleIsbn} paused={dupOpen} />
+      <Scanner onscan={handleIsbn} onprice={(isbn, price) => scannedPrices.set(isbn, price)} paused={dupOpen} />
       <p class="muted small center">Point the camera at the barcode on the back cover.</p>
     {/if}
 

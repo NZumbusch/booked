@@ -6,6 +6,7 @@ const API = 'https://www.googleapis.com/books/v1/volumes';
 
 interface Volume {
   id: string;
+  saleInfo?: { isEbook?: boolean; listPrice?: { amount?: number; currencyCode?: string } };
   volumeInfo: {
     title?: string;
     subtitle?: string;
@@ -54,19 +55,26 @@ function toResult(v: Volume): ProviderResult {
       isbn13: id('ISBN_13'),
       genres: splitCategories(i.categories),
       cover: cover(v),
+      // Google's prices are mostly for its e-books; only a print price is a meaningful list price.
+      listPrice: v.saleInfo?.isEbook === false && v.saleInfo.listPrice?.amount && v.saleInfo.listPrice.currencyCode
+        ? { amount: v.saleInfo.listPrice.amount, currency: v.saleInfo.listPrice.currencyCode, source: 'googlebooks' }
+        : undefined,
       identifiers: { gbid: v.id }
     }
   };
 }
 
-export async function gbByIsbn(isbn: string, f: Fetcher): Promise<ProviderResult | undefined> {
-  const res = await getJson<Volumes>(f, `${API}?q=isbn:${isbn}`);
+/** Optional API key: without one Google's shared anonymous quota applies (often exhausted). */
+const withKey = (url: string, key?: string) => (key?.trim() ? `${url}&key=${encodeURIComponent(key.trim())}` : url);
+
+export async function gbByIsbn(isbn: string, f: Fetcher, key?: string): Promise<ProviderResult | undefined> {
+  const res = await getJson<Volumes>(f, withKey(`${API}?q=isbn:${isbn}`, key));
   const v = res?.items?.[0];
   return v ? toResult(v) : undefined;
 }
 
-export async function gbSearch(query: string, f: Fetcher, limit = 20): Promise<Candidate[]> {
-  const res = await getJson<Volumes>(f, `${API}?q=${encodeURIComponent(query)}&maxResults=${limit}`);
+export async function gbSearch(query: string, f: Fetcher, key?: string, limit = 20): Promise<Candidate[]> {
+  const res = await getJson<Volumes>(f, withKey(`${API}?q=${encodeURIComponent(query)}&maxResults=${limit}`, key));
   return (res?.items ?? []).map((v) => {
     const r = toResult(v);
     return {

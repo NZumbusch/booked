@@ -24,6 +24,8 @@ describe('text search', () => {
     expect(ids('mum')).toEqual(['2']);
     expect(ids('')).toEqual(['1', '2', '3']);
     expect(ids('zzz')).toEqual([]);
+    const translated = createBook({ title: 'X', contributors: ['Anna Translator (translator)'], subjects: ['Ecology'] }, { id: 't', now });
+    expect(matchesText(translated, 'translator ecology')).toBe(true);
   });
 });
 

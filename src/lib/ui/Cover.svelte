@@ -1,16 +1,36 @@
 <script lang="ts">
   import type { Book } from '../domain/types';
 
+  import { covers } from '../stores/app';
+
   let { book, size = 'md' }: { book: Pick<Book, 'title' | 'authors' | 'cover'>; size?: 'sm' | 'md' | 'lg' } = $props();
   let failed = $state(false);
+
+  // Prefer the copy cached on this device (offline, no network); fall back to the URL.
+  let local = $state<string>();
+  $effect(() => {
+    const url = book.cover;
+    local = undefined;
+    failed = false;
+    let cache;
+    try {
+      cache = covers();
+    } catch {
+      return; // e.g. in component tests without the app
+    }
+    cache.objectUrl(url).then((u) => {
+      if (url === book.cover) local = u;
+    });
+  });
+  const src = $derived(local ?? book.cover);
 
   // Stable pastel colour per title for placeholder covers.
   const hue = $derived([...book.title].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 7));
 </script>
 
 <div class="cover {size}" style:--hue={hue}>
-  {#if book.cover && !failed}
-    <img src={book.cover} alt="" loading="lazy" decoding="async" onerror={() => (failed = true)} />
+  {#if src && !failed}
+    <img {src} alt="" loading="lazy" decoding="async" onerror={() => (failed = true)} />
   {:else}
     <div class="placeholder">
       <span class="t">{book.title}</span>

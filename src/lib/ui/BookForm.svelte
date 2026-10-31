@@ -25,6 +25,10 @@
     collections: joined(initial.collections), subjects: joined(initial.subjects), contributors: joined(initial.contributors)
   });
   // svelte-ignore state_referenced_locally
+  let listAmount = $state<number | undefined>(initial.listPrice?.amount);
+  // svelte-ignore state_referenced_locally
+  let listCurrency = $state(initial.listPrice?.currency ?? 'EUR');
+  // svelte-ignore state_referenced_locally
   let lending = $state({ to: initial.lending?.to ?? '', lentOn: initial.lending?.lentOn ?? '', dueOn: initial.lending?.dueOn ?? '' });
 
   const num = (v: unknown) => (v === '' || v === null || v === undefined || Number.isNaN(Number(v)) ? undefined : Number(v));
@@ -46,6 +50,11 @@
       pageCount: num(b.pageCount),
       price: num(b.price),
       copies: num(b.copies) ?? 1,
+      listPrice: num(listAmount) !== undefined
+        ? (num(listAmount) === initial.listPrice?.amount && listCurrency === initial.listPrice?.currency
+          ? initial.listPrice
+          : { amount: num(listAmount)!, currency: listCurrency, source: 'manual' })
+        : undefined,
       lending: lending.to.trim()
         ? { to: lending.to.trim(), lentOn: lending.lentOn || new Date().toISOString().slice(0, 10), dueOn: str(lending.dueOn) }
         : undefined
@@ -139,7 +148,11 @@
         <label class="field">Condition<input bind:value={b.condition} placeholder="e.g. Very good" /></label>
         <label class="field">Copies<input type="number" min="1" bind:value={b.copies} /></label>
         <label class="field">Purchased<input type="date" bind:value={b.purchasedOn} /></label>
-        <label class="field">Price<input type="number" min="0" step="0.01" bind:value={b.price} /></label>
+        <label class="field">Price paid<input type="number" min="0" step="0.01" bind:value={b.price} /></label>
+        <label class="field">List price<input type="number" min="0" step="0.01" bind:value={listAmount} /></label>
+        <label class="field">List price currency
+          <select bind:value={listCurrency}>{#each ['EUR', 'CHF', 'GBP', 'USD', 'CAD', 'AUD', 'NZD'] as c}<option>{c}</option>{/each}</select>
+        </label>
       </div>
       <label class="check"><input type="checkbox" bind:checked={b.signed} /> Signed copy</label>
       <label class="field">Notes<textarea bind:value={b.notes} rows="4"></textarea></label>

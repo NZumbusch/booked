@@ -25,7 +25,8 @@ function haystack(book: Book): string {
     h = fold(
       [
         book.title, book.subtitle, ...book.authors, book.isbn10, book.isbn13, ...book.tags,
-        ...book.collections, ...book.genres, book.notes, book.publisher, book.series
+        ...book.collections, ...book.genres, ...(book.subjects ?? []), ...(book.contributors ?? []),
+        book.notes, book.publisher, book.series
       ].filter(Boolean).join('\n')
     );
     haystacks.set(book, h);

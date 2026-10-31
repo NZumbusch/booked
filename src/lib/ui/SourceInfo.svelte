@@ -4,7 +4,7 @@
   let { ref }: { ref: SourceRef | undefined } = $props();
   let open = $state(false);
 
-  const NAMES = { openlibrary: 'Open Library', googlebooks: 'Google Books', wikidata: 'Wikidata', manual: 'you' };
+  const NAMES = { openlibrary: 'Open Library', googlebooks: 'Google Books', dnb: 'Deutsche Nationalbibliothek', wikidata: 'Wikidata', manual: 'you' };
 </script>
 
 {#if ref}

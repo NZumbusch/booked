@@ -1,11 +1,15 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
   import { isbnFromBarcode, ScanGuard } from '../domain/scan';
-  import { canTorch, getDetector, openCamera, setTorch, type Detector } from '../scanner/camera';
+  import { priceFromEan5 } from '../domain/price';
+  import type { ListPrice } from '../domain/types';
+  import { canTorch, getDetector, openCamera, readAddOn, setTorch, type Detector } from '../scanner/camera';
 
-  let { onscan, paused = false, compact = false }: {
+  let { onscan, onprice, paused = false, compact = false }: {
     /** Called once per fresh sighting of a valid ISBN barcode. */
     onscan: (isbn: string) => void;
+    /** Called shortly after, if the small price barcode next to the ISBN could be read. */
+    onprice?: (isbn: string, price: ListPrice) => void;
     paused?: boolean;
     compact?: boolean;
   } = $props();
@@ -45,6 +49,7 @@
               flash = true;
               setTimeout(() => (flash = false), 250);
               onscan(isbn);
+              if (onprice) lookForPrice(isbn);
             }
           }
         } catch {
@@ -53,6 +58,28 @@
       }
       await new Promise((r) => setTimeout(r, 120));
     }
+  }
+
+  let priceSearch: string | undefined;
+  /** Try a few frames for the price add-on; never delays the scan itself. */
+  async function lookForPrice(isbn: string) {
+    if (priceSearch === isbn) return;
+    priceSearch = isbn;
+    for (let i = 0; i < 4 && !stopped && priceSearch === isbn; i++) {
+      try {
+        const addon = video && (await readAddOn(video, isbn));
+        const price = addon && priceFromEan5(addon);
+        if (price) {
+          onprice?.(isbn, price);
+          break;
+        }
+        if (addon) break; // e.g. 90000 = no price printed
+      } catch {
+        break;
+      }
+      await new Promise((r) => setTimeout(r, 150));
+    }
+    if (priceSearch === isbn) priceSearch = undefined;
   }
 
   function stop() {

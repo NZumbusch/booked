@@ -1,0 +1,25 @@
+{
+ "title": "Hermann Hesse",
+ "thumbnail": {
+  "source": "https://upload.wikimedia.org/wikipedia/commons/c/cb/Hermann_Hesse_1946.jpg?utm_source=de.wikipedia.org&utm_campaign=api&utm_content=thumbnail_unscaled",
+  "width": 280,
+  "height": 396
+ },
+ "lang": "de",
+ "description": "deutsch-schweizerischer Schriftsteller und Literatur-Nobelpreisträger (1877-1962)",
+ "content_urls": {
+  "desktop": {
+   "page": "https://de.wikipedia.org/wiki/Hermann_Hesse",
+   "revisions": "https://de.wikipedia.org/wiki/Hermann_Hesse?action=history",
+   "edit": "https://de.wikipedia.org/wiki/Hermann_Hesse?action=edit",
+   "talk": "https://de.wikipedia.org/wiki/Diskussion:Hermann_Hesse"
+  },
+  "mobile": {
+   "page": "https://de.wikipedia.org/wiki/Hermann_Hesse",
+   "revisions": "https://de.wikipedia.org/wiki/Special:History/Hermann_Hesse",
+   "edit": "https://de.wikipedia.org/wiki/Hermann_Hesse?action=edit",
+   "talk": "https://de.wikipedia.org/wiki/Diskussion:Hermann_Hesse"
+  }
+ },
+ "extract": "Hermann Karl Hesse, Pseudonym: Emil Sinclair, war ein deutsch-schweizerischer Schriftsteller, Dichter und Maler."
+}

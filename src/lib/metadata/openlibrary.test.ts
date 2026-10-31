@@ -70,7 +70,8 @@ describe('Open Library search', () => {
 describe('cleanSubjects', () => {
   it('drops machine tags and bestseller noise, keeps order, limits count', () => {
     expect(cleanSubjects(['Fiction', 'nyt:foo=1', 'award:x', 'New York Times bestseller', 'fiction', 'Science fiction',
-      'Science-fiction', 'Large type books', 'Hugo Award Winner', 'Long Now Manual for Civilization', 'Ecology']))
+      'Science-fiction', 'Large type books', 'Hugo Award Winner', 'Long Now Manual for Civilization', 'Ecology',
+      'Translations into Russian', 'Anglais (langue)', 'Lectures et morceaux choisis']))
       .toEqual(['Fiction', 'Science fiction', 'Ecology']);
   });
 });

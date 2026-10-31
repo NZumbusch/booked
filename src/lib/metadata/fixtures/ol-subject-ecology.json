@@ -1,0 +1,297 @@
+{
+ "key": "/subjects/ecology",
+ "name": "Ecology",
+ "subject_type": "subject",
+ "solr_query": "subject_key:\"ecology\"",
+ "work_count": 24900,
+ "works": [
+  {
+   "key": "/works/OL893414W",
+   "title": "Dune",
+   "edition_count": 155,
+   "cover_id": 11481354,
+   "cover_edition_key": "OL32848840M",
+   "printdisabled": true,
+   "authors": [
+    {
+     "key": "/authors/OL79034A",
+     "name": "Frank Herbert"
+    }
+   ],
+   "first_publish_year": 1965,
+   "public_scan": false,
+   "has_fulltext": true
+  },
+  {
+   "key": "/works/OL22356W",
+   "title": "Erewhon Revisited",
+   "edition_count": 118,
+   "cover_id": 1844002,
+   "cover_edition_key": "OL9366514M",
+   "printdisabled": false,
+   "authors": [
+    {
+     "key": "/authors/OL24761A",
+     "name": "Samuel Butler"
+    },
+    {
+     "key": "/authors/OL2658787A",
+     "name": "Samuel Butler"
+    }
+   ],
+   "first_publish_year": 1901,
+   "public_scan": true,
+   "has_fulltext": true
+  },
+  {
+   "key": "/works/OL16941302W",
+   "title": "Reviews of Environmental Contamination and Toxicology",
+   "edition_count": 87,
+   "cover_id": 2412455,
+   "cover_edition_key": "OL10154652M",
+   "printdisabled": false,
+   "authors": [
+    {
+     "key": "/authors/OL4445359A",
+     "name": "George W. Ware"
+    }
+   ],
+   "first_publish_year": 1995,
+   "public_scan": false,
+   "has_fulltext": false
+  },
+  {
+   "key": "/works/OL24345892W",
+   "title": "Rigby Literacy by Design",
+   "edition_count": 69,
+   "cover_id": 10869399,
+   "cover_edition_key": "OL32234549M",
+   "printdisabled": true,
+   "authors": [
+    {
+     "key": "/authors/OL7486298A",
+     "name": "RIGBY"
+    }
+   ],
+   "first_publish_year": 2007,
+   "public_scan": false,
+   "has_fulltext": true
+  },
+  {
+   "key": "/works/OL20676935W",
+   "title": "Residue Reviews/R\u00fcckstands-Berichte",
+   "edition_count": 61,
+   "cover_id": 9347312,
+   "cover_edition_key": "OL27958970M",
+   "printdisabled": true,
+   "authors": [
+    {
+     "key": "/authors/OL2176961A",
+     "name": "Francis A. Gunther"
+    }
+   ],
+   "first_publish_year": 1963,
+   "public_scan": false,
+   "has_fulltext": true
+  },
+  {
+   "key": "/works/OL19899722W",
+   "title": "Residue Reviews",
+   "edition_count": 60,
+   "cover_id": 8715188,
+   "cover_edition_key": "OL27085437M",
+   "printdisabled": false,
+   "authors": [
+    {
+     "key": "/authors/OL2176961A",
+     "name": "Francis A. Gunther"
+    }
+   ],
+   "first_publish_year": 1972,
+   "public_scan": false,
+   "has_fulltext": false
+  }
+ ],
+ "ebook_count": 6813,
+ "subjects": [
+  {
+   "key": "/subjects/juvenile_literature",
+   "name": "Juvenile literature",
+   "count": 2344
+  },
+  {
+   "key": "/subjects/congresses",
+   "name": "Congresses",
+   "count": 2022
+  },
+  {
+   "key": "/subjects/human_ecology",
+   "name": "Human ecology",
+   "count": 1598
+  },
+  {
+   "key": "/subjects/environmental_protection",
+   "name": "Environmental protection",
+   "count": 1575
+  },
+  {
+   "key": "/subjects/environmental_conditions",
+   "name": "Environmental conditions",
+   "count": 1551
+  },
+  {
+   "key": "/subjects/environmental_sciences",
+   "name": "Environmental sciences",
+   "count": 1308
+  },
+  {
+   "key": "/subjects/adaptation_(biology)",
+   "name": "Adaptation (Biology)",
+   "count": 1259
+  },
+  {
+   "key": "/subjects/nature_and_nurture",
+   "name": "Nature and nurture",
+   "count": 1202
+  },
+  {
+   "key": "/subjects/nature",
+   "name": "Nature",
+   "count": 1196
+  },
+  {
+   "key": "/subjects/euthenics",
+   "name": "Euthenics",
+   "count": 1190
+  }
+ ],
+ "authors": [
+  {
+   "name": "Organisation for Economic Co-operation and Development",
+   "key": "/authors/OL13230407A",
+   "count": 231
+  },
+  {
+   "name": "Organisation for Economic Co-operation and Development",
+   "key": "/authors/OL2139510A",
+   "count": 73
+  },
+  {
+   "name": "Office of the Federal Register (U.S.)",
+   "key": "/authors/OL2661622A",
+   "count": 56
+  },
+  {
+   "name": "Office of the Federal Register (U.S.) Staff",
+   "key": "/authors/OL10846318A",
+   "count": 40
+  },
+  {
+   "name": "Louise Spilsbury",
+   "key": "/authors/OL1394428A",
+   "count": 39
+  }
+ ],
+ "languages": [
+  {
+   "name": "eng",
+   "count": 17312
+  },
+  {
+   "name": "rus",
+   "count": 1523
+  },
+  {
+   "name": "spa",
+   "count": 969
+  },
+  {
+   "name": "ger",
+   "count": 859
+  },
+  {
+   "name": "fre",
+   "count": 732
+  },
+  {
+   "name": "chi",
+   "count": 579
+  },
+  {
+   "name": "jpn",
+   "count": 317
+  },
+  {
+   "name": "por",
+   "count": 304
+  },
+  {
+   "name": "ita",
+   "count": 245
+  },
+  {
+   "name": "heb",
+   "count": 146
+  },
+  {
+   "name": "kor",
+   "count": 117
+  },
+  {
+   "name": "und",
+   "count": 117
+  },
+  {
+   "name": "pol",
+   "count": 115
+  },
+  {
+   "name": "ara",
+   "count": 112
+  },
+  {
+   "name": "ukr",
+   "count": 75
+  },
+  {
+   "name": "dut",
+   "count": 66
+  },
+  {
+   "name": "ind",
+   "count": 64
+  },
+  {
+   "name": "cmn",
+   "count": 60
+  },
+  {
+   "name": "tur",
+   "count": 59
+  },
+  {
+   "name": "cze",
+   "count": 50
+  },
+  {
+   "name": "swe",
+   "count": 42
+  },
+  {
+   "name": "gre",
+   "count": 39
+  },
+  {
+   "name": "rum",
+   "count": 33
+  },
+  {
+   "name": "hin",
+   "count": 29
+  },
+  {
+   "name": "hun",
+   "count": 29
+  }
+ ]
+}

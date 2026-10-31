@@ -1,0 +1,17 @@
+# Booked token helper — deploy with: npx wrangler deploy  (see README › "Stay signed in")
+name = "booked-auth"
+main = "index.ts"
+compatibility_date = "2025-01-01"
+
+[vars]
+GOOGLE_CLIENT_ID = "PASTE-YOUR-CLIENT-ID.apps.googleusercontent.com"
+ALLOWED_ORIGIN = "https://YOUR-USER.github.io"
+# GOOGLE_CLIENT_SECRET is a secret, not a var:  npx wrangler secret put GOOGLE_CLIENT_SECRET
+
+# Optional: shared places (family can add/edit books in a shared room). Create once with
+#   npx wrangler d1 create booked-spaces
+# then paste the printed database_id below, uncomment, and apply schema.sql (see README).
+# [[d1_databases]]
+# binding = "DB"
+# database_name = "booked-spaces"
+# database_id = "PASTE-DATABASE-ID"

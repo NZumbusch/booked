@@ -1,9 +1,15 @@
-import { applyPatch, createBook, findDuplicates } from '../domain/book';
+import { applyPatch, cleanList, createBook, findDuplicates } from '../domain/book';
+import { fold } from '../domain/query';
 import { newId } from '../domain/ids';
 import { bookCounts, canParent, childrenOf, descendantIds, labelOf, nextOrder, reorder } from '../domain/locations';
 import type {
-  Book, BookDraft, Id, Location, LocationKind, MoveRecord, Settings, Snapshot, Timestamp, UndoEntry
+  Book, BookDraft, Id, Location, LocationKind, MoveRecord, SavedFilter, Settings, Snapshot, Timestamp, UndoEntry
 } from '../domain/types';
+
+/** Free-form list fields that can be renamed, merged and deleted library-wide. */
+export type TermKind = 'tags' | 'collections' | 'genres';
+const TERM_LABEL: Record<TermKind, string> = { tags: 'tag', collections: 'collection', genres: 'genre' };
+import type { SyncData, Tombstone } from '../domain/sync';
 import type { ChangeSet, LoadedState, Repository } from '../storage/repository';
 
 type Listener = (state: LoadedState) => void;
@@ -27,6 +33,7 @@ export class Library {
   private locations = new Map<Id, Location>();
   private countsCache?: Map<Id | null, number>;
   private lastTime = 0;
+  private lock: Promise<unknown> = Promise.resolve();
 
   private constructor(private repo: Repository, public state: LoadedState) {
     this.index();
@@ -76,7 +83,12 @@ export class Library {
 
   async addBook(draft: BookDraft): Promise<Book> {
     const book = createBook(
-      { locationId: this.state.settings.defaultLocationId, ...draft },
+      // An explicitly undefined location means "not chosen", so the default applies.
+      {
+        addedBy: this.state.settings.userName,
+        ...draft,
+        locationId: draft.locationId === undefined ? this.state.settings.defaultLocationId : draft.locationId
+      },
       { id: newId(), now: this.now() }
     );
     await this.run(`Added “${book.title}”`, { putBooks: [book] });
@@ -93,10 +105,126 @@ export class Library {
     return after;
   }
 
+  /**
+   * Background update (online details arriving later). Not an undoable user action, so it
+   * doesn't push an undo entry and can't hijack "Undo". No-op if the book is gone.
+   */
+  async enrichBook(id: Id, patch: Partial<Book>): Promise<Book | undefined> {
+    const before = this.books.get(id);
+    if (!before) return undefined;
+    const after = applyPatch(before, patch, this.now());
+    await this.commit({ putBooks: [after] });
+    return after;
+  }
+
   async deleteBooks(ids: Id[]): Promise<void> {
     const books = ids.map((id) => this.mustBook(id));
     const label = books.length === 1 ? `Deleted “${books[0].title}”` : `Deleted ${books.length} books`;
     await this.run(label, { deleteBookIds: books.map((b) => b.id) });
+  }
+
+  /**
+   * Change many books in one undoable step. `change` returns a patch per book (or undefined to skip it).
+   * Location changes are recorded in each book's history. Returns how many books changed.
+   */
+  async bulkUpdate(ids: Id[], change: (book: Book) => Partial<Book> | undefined, label: string): Promise<number> {
+    const now = this.now();
+    const pairs: [Book, Book][] = [];
+    for (const id of ids) {
+      const before = this.mustBook(id);
+      const patch = change(before);
+      if (!patch) continue;
+      if ('locationId' in patch && patch.locationId !== before.locationId) this.mustLocation(patch.locationId ?? null);
+      const after = applyPatch(before, patch, now);
+      if (JSON.stringify({ ...after, updatedAt: '' }) !== JSON.stringify({ ...before, updatedAt: '' })) pairs.push([before, after]);
+    }
+    if (!pairs.length) return 0;
+    await this.run(label, { putBooks: pairs.map(([, b]) => b), putMoves: this.moveRecords(pairs, now) });
+    return pairs.length;
+  }
+
+  /**
+   * Import many books in one undoable step. Location paths (place › room › shelf names) are
+   * matched case-insensitively and created when missing. Returns the new books.
+   */
+  async importBooks(
+    items: { draft: BookDraft; locationPath: string[] }[],
+    { skipDuplicates = false, lookup = false }: { skipDuplicates?: boolean; lookup?: boolean } = {}
+  ): Promise<{ added: Book[]; skipped: number; createdLocations: number }> {
+    const now = this.now();
+    const locations = [...this.state.locations];
+    const newLocations: Location[] = [];
+    const kinds: LocationKind[] = ['place', 'room', 'shelf'];
+    const resolve = (path: string[]): Id | null => {
+      let parentId: Id | null = null;
+      path.slice(0, 3).forEach((name, depth) => {
+        const existing = locations.find((l) => l.parentId === parentId && fold(l.name) === fold(name));
+        if (existing) {
+          parentId = existing.id;
+          return;
+        }
+        const loc: Location = {
+          id: newId(), kind: kinds[depth], name: name.trim(), parentId,
+          order: nextOrder(locations, parentId), createdAt: now, updatedAt: now
+        };
+        locations.push(loc);
+        newLocations.push(loc);
+        parentId = loc.id;
+      });
+      return parentId;
+    };
+
+    const added: Book[] = [];
+    let skipped = 0;
+    const seen = [...this.state.books];
+    for (const { draft, locationPath } of items) {
+      if (skipDuplicates && findDuplicates(seen, draft).length) {
+        skipped++;
+        continue;
+      }
+      const locationId = locationPath.length ? resolve(locationPath) : (draft.locationId ?? null);
+      const pendingLookup = lookup && !!(draft.isbn13 || draft.isbn10) ? true : undefined;
+      const book = createBook({ ...draft, locationId, pendingLookup }, { id: newId(), now });
+      added.push(book);
+      seen.push(book);
+    }
+    if (added.length || newLocations.length) {
+      await this.run(`Imported ${added.length} book${added.length === 1 ? '' : 's'}`, { putBooks: added, putLocations: newLocations });
+    }
+    return { added, skipped, createdLocations: newLocations.length };
+  }
+
+  /** Rename a tag/collection/genre everywhere. Renaming onto an existing name merges them. */
+  async renameTerm(kind: TermKind, from: string, to: string): Promise<number> {
+    const target = to.trim();
+    if (!target) throw new Error('Name cannot be empty');
+    const key = fold(from);
+    const exists = this.state.books.some((b) => b[kind].some((v) => fold(v) === fold(target) && fold(v) !== key));
+    return this.bulkUpdate(
+      this.state.books.filter((b) => b[kind].some((v) => fold(v) === key)).map((b) => b.id),
+      (b) => ({ [kind]: cleanList(b[kind].map((v) => (fold(v) === key ? target : v))) }),
+      exists ? `Merged ${TERM_LABEL[kind]} “${from}” into “${target}”` : `Renamed ${TERM_LABEL[kind]} “${from}” to “${target}”`
+    );
+  }
+
+  /** Remove a tag/collection/genre from every book. */
+  async deleteTerm(kind: TermKind, name: string): Promise<number> {
+    const key = fold(name);
+    return this.bulkUpdate(
+      this.state.books.filter((b) => b[kind].some((v) => fold(v) === key)).map((b) => b.id),
+      (b) => ({ [kind]: b[kind].filter((v) => fold(v) !== key) }),
+      `Removed ${TERM_LABEL[kind]} “${name}”`
+    );
+  }
+
+  async saveFilter(name: string, query: Record<string, string>): Promise<SavedFilter> {
+    const filter: SavedFilter = { id: newId(), name: name.trim() || 'My filter', query };
+    await this.updateSettings({ savedFilters: [...(this.state.settings.savedFilters ?? []), filter] });
+    return filter;
+  }
+
+  async deleteSavedFilter(id: Id): Promise<void> {
+    await this.updateSettings({ savedFilters: (this.state.settings.savedFilters ?? []).filter((f) => f.id !== id) });
   }
 
   /** Move books to a location (null = no location). Returns how many actually moved. */
@@ -200,16 +328,22 @@ export class Library {
   async undo(): Promise<string | undefined> {
     const entry = await this.repo.latestUndo();
     if (!entry) return undefined;
-    await this.commit(
-      {
-        putBooks: entry.booksBefore,
-        deleteBookIds: entry.createdBookIds,
-        putLocations: entry.locationsBefore,
-        deleteLocationIds: entry.createdLocationIds,
-        deleteMoveIds: entry.moveIds,
-        deleteUndoIds: [entry.id]
-      }
-    );
+    // Undo is a new change as far as other devices are concerned: restored records get a fresh
+    // timestamp and removed ones a deletion marker, so sync carries the undo everywhere.
+    const now = this.now();
+    await this.commit({
+      putBooks: entry.booksBefore.map((b) => ({ ...b, updatedAt: now })),
+      deleteBookIds: entry.createdBookIds,
+      putLocations: entry.locationsBefore.map((l) => ({ ...l, updatedAt: now })),
+      deleteLocationIds: entry.createdLocationIds,
+      deleteMoveIds: entry.moveIds,
+      deleteUndoIds: [entry.id],
+      putTombstones: [
+        ...entry.createdBookIds.map((id): Tombstone => ({ id, kind: 'book', at: now })),
+        ...entry.createdLocationIds.map((id): Tombstone => ({ id, kind: 'location', at: now })),
+        ...entry.moveIds.map((id): Tombstone => ({ id, kind: 'move', at: now }))
+      ]
+    });
     return entry.label;
   }
 
@@ -217,16 +351,98 @@ export class Library {
     return (await this.repo.latestUndo())?.label;
   }
 
+  /** Run `fn` after any other exclusive task finished (used to keep syncs from overlapping). */
+  exclusive<T>(fn: () => Promise<T>): Promise<T> {
+    const run = this.lock.then(fn, fn);
+    this.lock = run.catch(() => {});
+    return run;
+  }
+
+  /**
+   * Apply changes that came from elsewhere (a shared place). Not an undoable user action;
+   * deletions get markers so the user's own Drive sync carries them to their other devices.
+   */
+  async applyExternal(c: Pick<ChangeSet, 'putBooks' | 'deleteBookIds' | 'putLocations' | 'deleteLocationIds' | 'putMoves' | 'putTombstones'>): Promise<void> {
+    if (!c.putBooks?.length && !c.deleteBookIds?.length && !c.putLocations?.length && !c.deleteLocationIds?.length && !c.putMoves?.length) return;
+    await this.commit(plain(c));
+  }
+
+  getMeta<T>(key: string): Promise<T | undefined> {
+    return this.repo.getMeta<T>(key);
+  }
+
+  setMeta(key: string, value: unknown): Promise<void> {
+    return this.repo.setMeta(key, plain(value));
+  }
+
+  exportSyncData(): Promise<SyncData> {
+    return this.repo.exportSyncData();
+  }
+
+  /** Replace books/locations/moves with merged sync data (settings stay; undo history resets). */
+  async applySyncData(data: SyncData): Promise<void> {
+    await this.repo.replaceSyncData(plain(data));
+    const loaded = await this.repo.load();
+    this.set({ ...loaded, settings: this.state.settings });
+  }
+
   exportSnapshot(): Promise<Snapshot> {
     return this.repo.exportSnapshot();
   }
 
+  /** Take a snapshot for a backup file and remember when, for backup reminders. */
+  async createBackup(): Promise<Snapshot> {
+    const snapshot = await this.repo.exportSnapshot();
+    await this.markBackedUp(snapshot.exportedAt);
+    return { ...snapshot, settings: { ...snapshot.settings, lastBackupAt: snapshot.exportedAt } };
+  }
+
+  /** Record that a snapshot taken at `at` was saved somewhere safe. */
+  async markBackedUp(at: Timestamp): Promise<void> {
+    await this.updateSettings({ lastBackupAt: at });
+  }
+
+  /** Replace the library with a backup. The current library is kept as a safety copy (see undoRestore). */
   async importSnapshot(snapshot: Snapshot): Promise<void> {
     if (snapshot?.app !== 'booked' || !Array.isArray(snapshot.books) || !Array.isArray(snapshot.locations)) {
       throw new Error('This file is not a Booked backup');
     }
-    await this.repo.importSnapshot(snapshot);
+    await this.repo.saveSafetyCopy(await this.repo.exportSnapshot());
+    await this.replaceWith(plain(snapshot));
+  }
+
+  async hasSafetyCopy(): Promise<boolean> {
+    return !!(await this.repo.loadSafetyCopy());
+  }
+
+  /** Go back to the library as it was before the last restore. */
+  async undoRestore(): Promise<boolean> {
+    const copy = await this.repo.loadSafetyCopy();
+    if (!copy) return false;
+    await this.replaceWith(copy);
+    await this.repo.saveSafetyCopy(undefined);
+    return true;
+  }
+
+  private async replaceWith(snapshot: Snapshot): Promise<void> {
+    // A restore is "make it like this" everywhere: restored records get a fresh timestamp and
+    // records missing from the backup get deletion markers, so sync propagates the restore.
+    const now = this.now();
+    const keepBooks = new Set(snapshot.books.map((b) => b.id));
+    const keepLocs = new Set(snapshot.locations.map((l) => l.id));
+    const tombstones: Tombstone[] = [
+      ...this.state.books.filter((b) => !keepBooks.has(b.id)).map((b): Tombstone => ({ id: b.id, kind: 'book', at: now })),
+      ...this.state.locations.filter((l) => !keepLocs.has(l.id)).map((l): Tombstone => ({ id: l.id, kind: 'location', at: now }))
+    ];
+    await this.repo.importSnapshot({
+      ...snapshot,
+      books: snapshot.books.map((b) => ({ ...b, updatedAt: now })),
+      locations: snapshot.locations.map((l) => ({ ...l, updatedAt: now }))
+    });
+    if (tombstones.length) await this.repo.commit({ putTombstones: tombstones });
     this.set(await this.repo.load());
+    // The data now matches a backup file, so nothing is "unsaved".
+    await this.updateSettings({ lastBackupAt: this.now() });
   }
 
   // ------------------------------------------------------------- internals
@@ -277,11 +493,16 @@ export class Library {
       createdLocationIds: putLocIds.filter((id) => !this.locations.has(id)),
       moveIds: action.putMoves?.map((m) => m.id) ?? []
     };
-    await this.commit({ ...action, pushUndo: undo });
+    const at = undo.at;
+    const putTombstones: Tombstone[] = [
+      ...(action.deleteBookIds ?? []).map((id): Tombstone => ({ id, kind: 'book', at })),
+      ...(action.deleteLocationIds ?? []).map((id): Tombstone => ({ id, kind: 'location', at }))
+    ];
+    await this.commit({ ...action, pushUndo: undo, putTombstones });
   }
 
   private async commit(changes: ChangeSet): Promise<void> {
-    await this.repo.commit(changes);
+    await this.repo.commit(plain(changes));
     const books = new Map(this.books);
     changes.deleteBookIds?.forEach((id) => books.delete(id));
     changes.putBooks?.forEach((b) => books.set(b.id, b));
@@ -308,6 +529,14 @@ function cleanName(name: string): string {
   const n = name.trim();
   if (!n) throw new Error('Name cannot be empty');
   return n;
+}
+
+/**
+ * Deep plain copy. UI frameworks may hand us reactive proxies, which IndexedDB cannot store
+ * ("could not be cloned"); everything we persist is JSON, so a JSON round-trip is safe.
+ */
+function plain<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value));
 }
 
 function unique<T>(items: T[]): T[] {

@@ -22,3 +22,10 @@ describe('languageName', () => {
     expect(languageName('not a code!')).toBe('not a code!');
   });
 });
+
+describe('ordinal', () => {
+  it('handles teens and units', async () => {
+    const { ordinal } = await import('./format');
+    expect([1, 2, 3, 4, 11, 12, 13, 19, 20, 21, 22, 23, 111].map(ordinal)).toEqual(['1st', '2nd', '3rd', '4th', '11th', '12th', '13th', '19th', '20th', '21st', '22nd', '23rd', '111th']);
+  });
+});

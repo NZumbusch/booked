@@ -1,13 +1,20 @@
 import { cleanList } from '../domain/book';
 import { normalizeIsbn } from '../domain/isbn';
 import type { BookDraft, SourceId, SourceRef } from '../domain/types';
+import { dnbByIsbn } from './dnb';
 import { gbByIsbn, gbSearch } from './googlebooks';
 import { HttpError, type Fetcher } from './http';
-import { olByIsbn, olSearch, olWork } from './openlibrary';
+import { olByIsbn, olQuickIsbn, olSearch, olWork } from './openlibrary';
 import type { Candidate, MetaFields, ProviderResult } from './types';
 import { wdEnrich } from './wikidata';
 
 export type LookupDraft = Partial<BookDraft>;
+
+/** App-wide lookup settings (set from the user's settings). */
+const config: { googleApiKey?: string } = {};
+export function setGoogleApiKey(key: string | undefined) {
+  config.googleApiKey = key?.trim() || undefined;
+}
 
 export interface LookupResult {
   /** found = at least one source knew the book; notfound = all answered "unknown"; error = couldn't ask (offline…). */
@@ -18,14 +25,16 @@ export interface LookupResult {
 }
 
 const NAMES: Record<SourceId, string> = {
-  openlibrary: 'Open Library', googlebooks: 'Google Books', wikidata: 'Wikidata', manual: 'Manual'
+  openlibrary: 'Open Library', googlebooks: 'Google Books', dnb: 'Deutsche Nationalbibliothek', wikidata: 'Wikidata', manual: 'Manual'
 };
 
 /** Fields where a later source is more trustworthy than the default order (Open Library › Google › Wikidata). */
 const PREFER: Partial<Record<keyof MetaFields, SourceId[]>> = {
   firstPublishedYear: ['wikidata', 'openlibrary', 'googlebooks'],
   // Google's publisher/description are often marketing copy, but its genres are cleaner than OL subjects.
-  genres: ['googlebooks', 'wikidata', 'openlibrary']
+  genres: ['googlebooks', 'wikidata', 'openlibrary'],
+  // The DNB carries the fixed German book price; Google only sometimes has one.
+  listPrice: ['dnb', 'googlebooks']
 };
 const UNION: (keyof MetaFields)[] = ['genres'];
 
@@ -100,23 +109,26 @@ export async function lookupIsbn(input: string, f: Fetcher = fetch.bind(globalTh
   const warnings: string[] = [];
   const base: LookupDraft = { isbn13: isbn.isbn13, isbn10: isbn.isbn10 };
 
-  const [ol, gb] = await Promise.all([
+  const [ol, gb, dnb] = await Promise.all([
     attempt('openlibrary', olByIsbn(isbn.isbn13, f), warnings),
-    attempt('googlebooks', gbByIsbn(isbn.isbn13, f), warnings)
+    attempt('googlebooks', gbByIsbn(isbn.isbn13, f, config.googleApiKey), warnings),
+    attempt('dnb', dnbByIsbn(isbn.isbn13, f), warnings)
   ]);
   const olValue = ol.ok ? ol.value : undefined;
   const gbValue = gb.ok ? gb.value : undefined;
-  if (!olValue && !gbValue) {
-    return { status: !ol.ok && !gb.ok ? 'error' : 'notfound', draft: base, warnings };
+  const dnbValue = dnb.ok ? dnb.value : undefined;
+  if (!olValue && !gbValue && !dnbValue) {
+    return { status: !ol.ok && !gb.ok && !dnb.ok ? 'error' : 'notfound', draft: base, warnings };
   }
 
   const results: ProviderResult[] = [];
   if (olValue) results.push(olValue.result);
   if (gbValue) results.push(gbValue);
+  if (dnbValue) results.push(dnbValue);
   const wd = await attempt('wikidata', wdEnrich({
     olWorkId: olValue?.workId,
     authorQids: olValue?.authorQids ?? [],
-    title: olValue?.result.fields.title ?? gbValue?.fields.title
+    title: olValue?.result.fields.title ?? gbValue?.fields.title ?? dnbValue?.fields.title
   }, f), warnings);
   if (wd.ok && wd.value) results.push(wd.value);
 
@@ -132,6 +144,45 @@ export async function lookupIsbn(input: string, f: Fetcher = fetch.bind(globalTh
   return { status: 'found', draft, warnings };
 }
 
+/**
+ * Fast first answer for the add form: one request each to Open Library's search index and
+ * Google Books, whichever finds the book first, capped at `timeoutMs`. Full details are filled
+ * in later in the background (see services/enrich).
+ */
+export async function quickLookupIsbn(input: string, f: Fetcher = fetch.bind(globalThis), timeoutMs = 3000): Promise<LookupResult> {
+  const isbn = normalizeIsbn(input);
+  if (!isbn) throw new Error(`Not a valid ISBN: ${input}`);
+  const base: LookupDraft = { isbn13: isbn.isbn13, isbn10: isbn.isbn10 };
+  const warnings: string[] = [];
+  let failures = 0;
+  const names: SourceId[] = ['openlibrary', 'googlebooks', 'dnb'];
+  const providers: Promise<ProviderResult | undefined>[] = [
+    olQuickIsbn(isbn.isbn13, f),
+    gbByIsbn(isbn.isbn13, f, config.googleApiKey),
+    dnbByIsbn(isbn.isbn13, f)
+  ].map((p, i) =>
+    p.catch((e) => {
+      failures++;
+      warnings.push(describe(names[i], e));
+      return undefined;
+    })
+  );
+  const firstFound = new Promise<ProviderResult | undefined>((resolve) => {
+    let pending = providers.length;
+    for (const p of providers) {
+      p.then((r) => {
+        if (r) resolve(r);
+        else if (--pending === 0) resolve(undefined);
+      });
+    }
+  });
+  const timeout = new Promise<'timeout'>((resolve) => setTimeout(() => resolve('timeout'), timeoutMs));
+  const winner = await Promise.race([firstFound, timeout]);
+  if (winner === 'timeout') return { status: 'error', draft: base, warnings: [...warnings, 'Lookup is slow; details will be added in the background'] };
+  if (!winner) return { status: failures === providers.length ? 'error' : 'notfound', draft: base, warnings };
+  return { status: 'found', draft: { ...mergeResults([winner]), ...base }, warnings };
+}
+
 /** Free-text search (title, author…): Open Library first, Google Books as fallback. */
 export async function searchBooks(query: string, f: Fetcher = fetch.bind(globalThis)): Promise<Candidate[]> {
   try {
@@ -140,7 +191,7 @@ export async function searchBooks(query: string, f: Fetcher = fetch.bind(globalT
   } catch {
     // fall through to Google Books
   }
-  return gbSearch(query, f);
+  return gbSearch(query, f, config.googleApiKey);
 }
 
 /** Full details for a chosen search hit (work-level; no edition-specific ISBN). */

@@ -1,0 +1,756 @@
+{
+  "head" : {
+    "vars" : [ "work", "prop", "val", "valLabel", "coord", "ord" ]
+  },
+  "results" : {
+    "bindings" : [ {
+      "work" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q6511"
+      },
+      "val" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q40734"
+      },
+      "prop" : {
+        "type" : "literal",
+        "value" : "award"
+      },
+      "valLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Die 100 Bücher des Jahrhunderts von Le Monde"
+      }
+    }, {
+      "work" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q6511"
+      },
+      "val" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q671613"
+      },
+      "prop" : {
+        "type" : "literal",
+        "value" : "award"
+      },
+      "valLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Modern Library 100 Best Novels"
+      }
+    }, {
+      "work" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q6511"
+      },
+      "val" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q4630676"
+      },
+      "prop" : {
+        "type" : "literal",
+        "value" : "award"
+      },
+      "valLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "20th Century's Greatest Hits: 100 English-Language Books of Fiction"
+      }
+    }, {
+      "work" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q190192"
+      },
+      "val" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q255032"
+      },
+      "prop" : {
+        "type" : "literal",
+        "value" : "award"
+      },
+      "valLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Hugo Award for Best Novel"
+      }
+    }, {
+      "work" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q190192"
+      },
+      "val" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q266012"
+      },
+      "prop" : {
+        "type" : "literal",
+        "value" : "award"
+      },
+      "valLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Nebula Award for Best Novel"
+      }
+    }, {
+      "work" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q190192"
+      },
+      "val" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q27496509"
+      },
+      "prop" : {
+        "type" : "literal",
+        "value" : "award"
+      },
+      "valLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Seiun Award for Best Translated Long Work"
+      }
+    }, {
+      "work" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q6511"
+      },
+      "val" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q27"
+      },
+      "prop" : {
+        "type" : "literal",
+        "value" : "subject"
+      },
+      "valLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Irland"
+      }
+    }, {
+      "work" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q6511"
+      },
+      "val" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q1761"
+      },
+      "prop" : {
+        "type" : "literal",
+        "value" : "subject"
+      },
+      "valLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Dublin"
+      }
+    }, {
+      "work" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q6511"
+      },
+      "val" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q7325"
+      },
+      "prop" : {
+        "type" : "literal",
+        "value" : "subject"
+      },
+      "valLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Juden"
+      }
+    }, {
+      "work" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q190192"
+      },
+      "val" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q4169"
+      },
+      "prop" : {
+        "type" : "literal",
+        "value" : "subject"
+      },
+      "valLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Weltraum"
+      }
+    }, {
+      "work" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q190192"
+      },
+      "val" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q7150"
+      },
+      "prop" : {
+        "type" : "literal",
+        "value" : "subject"
+      },
+      "valLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Ökologie"
+      }
+    }, {
+      "work" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q190192"
+      },
+      "val" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q8425"
+      },
+      "prop" : {
+        "type" : "literal",
+        "value" : "subject"
+      },
+      "valLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Gesellschaft"
+      }
+    }, {
+      "work" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q190192"
+      },
+      "val" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q8432"
+      },
+      "prop" : {
+        "type" : "literal",
+        "value" : "subject"
+      },
+      "valLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Zivilisation"
+      }
+    }, {
+      "work" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q190192"
+      },
+      "val" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q9174"
+      },
+      "prop" : {
+        "type" : "literal",
+        "value" : "subject"
+      },
+      "valLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Religion"
+      }
+    }, {
+      "work" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q190192"
+      },
+      "val" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q11042"
+      },
+      "prop" : {
+        "type" : "literal",
+        "value" : "subject"
+      },
+      "valLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Kultur"
+      }
+    }, {
+      "work" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q190192"
+      },
+      "val" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q25107"
+      },
+      "prop" : {
+        "type" : "literal",
+        "value" : "subject"
+      },
+      "valLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Macht"
+      }
+    }, {
+      "work" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q217073"
+      },
+      "val" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q2254571"
+      },
+      "prop" : {
+        "type" : "literal",
+        "value" : "subject"
+      },
+      "valLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "personale Identität"
+      }
+    }, {
+      "work" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q217073"
+      },
+      "val" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q110404737"
+      },
+      "prop" : {
+        "type" : "literal",
+        "value" : "movement"
+      },
+      "valLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "existentialism"
+      }
+    }, {
+      "work" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q6511"
+      },
+      "val" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q35160"
+      },
+      "prop" : {
+        "type" : "literal",
+        "value" : "basedOn"
+      },
+      "valLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Odyssee"
+      }
+    }, {
+      "work" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q6511"
+      },
+      "val" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q6882"
+      },
+      "prop" : {
+        "type" : "literal",
+        "value" : "author"
+      },
+      "valLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "James Joyce"
+      }
+    }, {
+      "work" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q190192"
+      },
+      "val" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q7934"
+      },
+      "prop" : {
+        "type" : "literal",
+        "value" : "author"
+      },
+      "valLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Frank Herbert"
+      }
+    }, {
+      "work" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q217073"
+      },
+      "val" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q25973"
+      },
+      "prop" : {
+        "type" : "literal",
+        "value" : "author"
+      },
+      "valLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Hermann Hesse"
+      }
+    }, {
+      "work" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q190192"
+      },
+      "val" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q6095696"
+      },
+      "prop" : {
+        "type" : "literal",
+        "value" : "series"
+      },
+      "valLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Der Wüstenplanet"
+      },
+      "ord" : {
+        "type" : "literal",
+        "value" : "1"
+      }
+    }, {
+      "work" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q6511"
+      },
+      "val" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q1761"
+      },
+      "prop" : {
+        "type" : "literal",
+        "value" : "setting"
+      },
+      "valLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Dublin"
+      },
+      "coord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-6.260277777 53.349722222)"
+      }
+    }, {
+      "work" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q6511"
+      },
+      "val" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q135501"
+      },
+      "prop" : {
+        "type" : "literal",
+        "value" : "setting"
+      },
+      "valLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Grafton Street"
+      },
+      "coord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-6.260277777 53.341388888)"
+      }
+    }, {
+      "work" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q6511"
+      },
+      "val" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q659895"
+      },
+      "prop" : {
+        "type" : "literal",
+        "value" : "setting"
+      },
+      "valLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Dalkey"
+      },
+      "coord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-6.1137 53.2651)"
+      }
+    }, {
+      "work" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q190192"
+      },
+      "val" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q940030"
+      },
+      "prop" : {
+        "type" : "literal",
+        "value" : "setting"
+      },
+      "valLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Arrakis"
+      }
+    }, {
+      "work" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q6511"
+      },
+      "val" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q1263215"
+      },
+      "prop" : {
+        "type" : "literal",
+        "value" : "setting"
+      },
+      "valLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Glasnevin Cemetery"
+      },
+      "coord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-6.277777777 53.372222222)"
+      }
+    }, {
+      "work" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q6511"
+      },
+      "val" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q1672830"
+      },
+      "prop" : {
+        "type" : "literal",
+        "value" : "setting"
+      },
+      "valLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Irische Nationalbibliothek"
+      },
+      "coord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-6.254444444 53.341111111)"
+      }
+    }, {
+      "work" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q6511"
+      },
+      "val" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q1766409"
+      },
+      "prop" : {
+        "type" : "literal",
+        "value" : "setting"
+      },
+      "valLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "O’Connell Bridge"
+      },
+      "coord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-6.259101 53.34727)"
+      }
+    }, {
+      "work" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q6511"
+      },
+      "val" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q2062702"
+      },
+      "prop" : {
+        "type" : "literal",
+        "value" : "setting"
+      },
+      "valLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "James Joyce Tower and Museum"
+      },
+      "coord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-6.11376111 53.2887)"
+      }
+    }, {
+      "work" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q6511"
+      },
+      "val" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q2088319"
+      },
+      "prop" : {
+        "type" : "literal",
+        "value" : "setting"
+      },
+      "valLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Cabra"
+      },
+      "coord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-6.290789 53.365714)"
+      }
+    }, {
+      "work" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q6511"
+      },
+      "val" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q2350741"
+      },
+      "prop" : {
+        "type" : "literal",
+        "value" : "setting"
+      },
+      "valLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Nelsonsäule"
+      },
+      "coord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-6.26025 53.349805555)"
+      }
+    }, {
+      "work" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q6511"
+      },
+      "val" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q5242183"
+      },
+      "prop" : {
+        "type" : "literal",
+        "value" : "setting"
+      },
+      "valLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Davy Byrne's pub"
+      },
+      "coord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-6.25934 53.34185)"
+      }
+    }, {
+      "work" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q6511"
+      },
+      "val" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q5500969"
+      },
+      "prop" : {
+        "type" : "literal",
+        "value" : "setting"
+      },
+      "valLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Freeman's Journal"
+      }
+    }, {
+      "work" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q6511"
+      },
+      "val" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q7417543"
+      },
+      "prop" : {
+        "type" : "literal",
+        "value" : "setting"
+      },
+      "valLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Sandymount Strand"
+      },
+      "coord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-6.205833333 53.323611111)"
+      }
+    }, {
+      "work" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q6511"
+      },
+      "val" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q13156901"
+      },
+      "prop" : {
+        "type" : "literal",
+        "value" : "setting"
+      },
+      "valLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "National Maternity Hospital, Dublin"
+      },
+      "coord" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-6.2482 53.3402)"
+      }
+    }, {
+      "work" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q6511"
+      },
+      "val" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q28601860"
+      },
+      "prop" : {
+        "type" : "literal",
+        "value" : "setting"
+      },
+      "valLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "#7 Eccles street"
+      }
+    } ]
+  }
+}

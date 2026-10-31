@@ -34,15 +34,16 @@ export default defineConfig({
         // The barcode decoder (WASM, ~1 MB) is precached so scanning works offline on iOS too.
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
         navigateFallback: 'index.html',
+        // Covers are not cached here: the app keeps resized copies in its own cover cache, and an
+        // opaque service-worker copy would block reading their colours.
         runtimeCaching: [
           {
-            // Cover images from metadata providers: cache once, serve offline.
-            urlPattern: ({ url }) =>
-              /covers\.openlibrary\.org|archive\.org|books\.google|googleusercontent/.test(url.hostname),
+            // Map tiles: keep what you've looked at for offline use (bounded, per OSM tile policy).
+            urlPattern: ({ url }) => url.hostname === 'tile.openstreetmap.org',
             handler: 'CacheFirst',
             options: {
-              cacheName: 'covers',
-              expiration: { maxEntries: 6000, maxAgeSeconds: 60 * 60 * 24 * 365 },
+              cacheName: 'map-tiles',
+              expiration: { maxEntries: 1500, maxAgeSeconds: 60 * 60 * 24 * 30 },
               cacheableResponse: { statuses: [0, 200] }
             }
           }
@@ -53,7 +54,7 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     setupFiles: ['./tests/setup.ts'],
-    include: ['src/**/*.test.ts', 'tests/**/*.test.ts']
+    include: ['src/**/*.test.ts', 'tests/**/*.test.ts', 'worker/**/*.test.ts']
   },
   resolve: process.env.VITEST ? { conditions: ['browser'] } : undefined
 });

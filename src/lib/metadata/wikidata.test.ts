@@ -4,7 +4,7 @@ import workSteppenwolf from './fixtures/wd-work-steppenwolf.json';
 import authorHerbert from './fixtures/wd-author-herbert.json';
 import authorHesse from './fixtures/wd-author-hesse.json';
 import type { Fetcher } from './http';
-import { authorQuery, parsePoint, wdEnrich, workQuery } from './wikidata';
+import { authorQuery, parsePoint, titlesMatch, wdEnrich, workQuery } from './wikidata';
 
 /** Answers SPARQL requests: author queries (birthplace) vs. work queries. */
 function sparqlFetch(work: unknown, author: unknown): Fetcher {
@@ -85,5 +85,27 @@ describe('wdEnrich', () => {
   it('returns undefined when nothing is known', async () => {
     expect(await wdEnrich({ authorQids: ['Q1'], title: 'Nope' }, sparqlFetch(empty, empty))).toBeUndefined();
     expect(await wdEnrich({ authorQids: [] }, sparqlFetch(empty, empty))).toBeUndefined();
+  });
+});
+
+describe('titlesMatch', () => {
+  it('accepts the same work under small differences', () => {
+    expect(titlesMatch('Der Steppenwolf', 'Steppenwolf')).toBe(true);
+    expect(titlesMatch('Dune', 'DUNE')).toBe(true);
+    expect(titlesMatch('Ulysses', 'Ulysses (Penguin Modern Classics)')).toBe(true);
+    expect(titlesMatch('Der Wüstenplanet', 'Der Wuestenplanet'.replace('ue', 'ü'))).toBe(true);
+    expect(titlesMatch('Steppenwolf', 'Der Steppenwolf: Roman')).toBe(true);
+  });
+  it('rejects a different book of the same series', () => {
+    expect(titlesMatch('Dune', 'Dune Messiah')).toBe(false);
+    expect(titlesMatch('Dune', 'Children of Dune')).toBe(false);
+  });
+});
+
+describe('wdEnrich title check', () => {
+  it('ignores a work whose titles do not fit the book (mis-merged catalogue entry)', async () => {
+    const work = { results: { bindings: [{ work: { value: 'http://www.wikidata.org/entity/Q190192' }, anyLabel: { value: 'Dune' }, published: { value: '1965-01-01T00:00:00Z' } }] } };
+    const r = await wdEnrich({ olWorkId: 'OL893414W', authorQids: [], title: 'Dune Messiah' }, sparqlFetch(work, empty));
+    expect(r?.fields.identifiers).toBeUndefined();
   });
 });

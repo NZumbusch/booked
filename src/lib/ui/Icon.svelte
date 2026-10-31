@@ -19,6 +19,7 @@
     close: 'M18 6L6 18M6 6l12 12',
     undo: 'M3 7v6h6M3 13a9 9 0 1 0 3-7.7L3 8',
     sort: 'M7 4v16M3 16l4 4 4-4M17 20V4M13 8l4-4 4 4',
+    compass: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM15.5 8.5l-2 5-5 2 2-5z',
     star: 'M12 2l3.1 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.8 21l1.2-6.8-5-4.9 6.9-1z'
   } as const;
   export type IconName = keyof typeof PATHS;

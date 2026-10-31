@@ -35,11 +35,14 @@ export function workQuery(olWorkId: string | undefined, authorQids: string[], ti
   }
   if (!branches.length) return undefined;
   return `SELECT DISTINCT ?work ?workLabel ?inception ?published ?creationPlace ?creationPlaceLabel ?creationCoord
-  ?pubPlace ?pubPlaceLabel ?pubCoord ?pubIsCountry ?langCode ?genreLabel ?sitelinks WHERE {
+  ?pubPlace ?pubPlaceLabel ?pubCoord ?pubIsCountry ?langCode ?genreLabel ?sitelinks ?anyLabel WHERE {
   ${branches.join(' UNION ')}
   FILTER NOT EXISTS { ?work wdt:P31 wd:Q3331189 }            # not an edition
   FILTER NOT EXISTS { ?work wdt:P31/wdt:P279* wd:Q11424 }     # not a film
   OPTIONAL { ?work wikibase:sitelinks ?sitelinks }
+  # All titles of the work, to check it really is this book (catalogues sometimes mis-merge works).
+  OPTIONAL { { ?work rdfs:label ?anyLabel } UNION { ?work wdt:P1476 ?anyLabel }
+             FILTER(LANG(?anyLabel) IN ("en", "de", "fr", "es", "it", "nl", "sv", "pt", "mul", "")) }
   OPTIONAL { ?work wdt:P571 ?inception }
   OPTIONAL { ?work wdt:P577 ?published }
   OPTIONAL { ?work wdt:P1071 ?creationPlace . OPTIONAL { ?creationPlace wdt:P625 ?creationCoord } }
@@ -60,6 +63,22 @@ export function authorQuery(authorQids: string[]): string | undefined {
   OPTIONAL { ?author wdt:P19 ?birthPlace . OPTIONAL { ?birthPlace wdt:P625 ?birthCoord } }
   SERVICE wikibase:label { bd:serviceParam wikibase:language "${LANGS}". }
 }`;
+}
+
+const ARTICLE = /^(the|a|an|der|die|das|le|la|les|l'|el|il|lo|de|het|een)\s+/;
+const normTitle = (t: string) => t.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase().split(/[:.(]/)[0].replace(ARTICLE, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+
+/**
+ * Does a Wikidata title fit a book title? Equal after normalizing, or one is a long prefix of the
+ * other ("Steppenwolf" ≈ "Der Steppenwolf: Roman"), but "Dune" ≠ "Dune Messiah".
+ */
+export function titlesMatch(a: string, b: string): boolean {
+  const x = normTitle(a);
+  const y = normTitle(b);
+  if (!x || !y) return false;
+  if (x === y) return true;
+  const [short, long] = x.length < y.length ? [x, y] : [y, x];
+  return long.startsWith(short + ' ') && short.length / long.length >= 0.75;
 }
 
 /** "Point(lon lat)" → GeoPoint */
@@ -106,8 +125,10 @@ export async function wdEnrich(
     const id = qid(v(row, 'work'))!;
     byWork.set(id, [...(byWork.get(id) ?? []), row]);
   }
+  // Keep only works whose title fits the book (when we know the title), then the best known.
+  const fits = (rows: Binding[]) => !input.title || rows.every((r) => !v(r, 'anyLabel')) || rows.some((r) => titlesMatch(v(r, 'anyLabel')!, input.title!));
   const fame = (rows: Binding[]) => Number(v(rows[0], 'sitelinks') ?? 0);
-  const [workId, rows = []] = [...byWork.entries()].sort((a, b) => fame(b[1]) - fame(a[1]))[0] ?? [];
+  const [workId, rows = []] = [...byWork.entries()].filter(([, r]) => fits(r)).sort((a, b) => fame(b[1]) - fame(a[1]))[0] ?? [];
 
   const pick = (key: string) => rows.map((r) => v(r, key)).find(Boolean);
   const writing: WritingInfo = {};

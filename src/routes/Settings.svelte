@@ -1,26 +1,32 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
+  import { backupStatus, parseBackup } from '../lib/domain/backup';
   import type { Settings, Snapshot } from '../lib/domain/types';
+  import { formatDate, plural } from '../lib/format';
   import { attempt, library, toast } from '../lib/stores/app';
+  import BackupButton from '../lib/ui/BackupButton.svelte';
   import Confirm from '../lib/ui/Confirm.svelte';
   import LocationPicker from '../lib/ui/LocationPicker.svelte';
+  import SyncSettings from '../lib/ui/SyncSettings.svelte';
+  import SharedPlaces from '../lib/ui/SharedPlaces.svelte';
+  import CoverCacheSettings from '../lib/ui/CoverCacheSettings.svelte';
 
   const lib = library();
   const s = $derived($lib.settings);
+  const status = $derived(backupStatus(s.lastBackupAt, $lib.books));
 
   let restoreOpen = $state(false);
-  let pendingRestore = $state<Snapshot>();
+  let undoRestoreOpen = $state(false);
+  let pendingRestore = $state.raw<Snapshot>();
+  let safetyCopy = $state(false);
+  let persisted = $state<boolean>();
+
+  onMount(async () => {
+    safetyCopy = await lib.hasSafetyCopy();
+    persisted = await navigator.storage?.persisted?.();
+  });
 
   const update = (patch: Partial<Settings>) => attempt(() => lib.updateSettings(patch));
-
-  async function exportJson() {
-    const snap = await lib.exportSnapshot();
-    const blob = new Blob([JSON.stringify(snap, null, 2)], { type: 'application/json' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `booked-backup-${snap.exportedAt.slice(0, 10)}.json`;
-    a.click();
-    URL.revokeObjectURL(a.href);
-  }
 
   async function pickRestore(e: Event) {
     const input = e.currentTarget as HTMLInputElement;
@@ -28,16 +34,20 @@
     input.value = '';
     if (!file) return;
     try {
-      pendingRestore = JSON.parse(await file.text());
+      pendingRestore = parseBackup(await file.text());
       restoreOpen = true;
-    } catch {
-      toast('Could not read that file');
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Could not read that file');
     }
   }
 
   async function restore() {
     const snap = pendingRestore!;
-    await attempt(() => lib.importSnapshot(snap), `Restored ${snap.books?.length ?? 0} books`);
+    if (await attempt(() => lib.importSnapshot(snap).then(() => true), `Restored ${plural(snap.books.length, 'book')}`)) safetyCopy = true;
+  }
+
+  async function undoRestore() {
+    if (await attempt(() => lib.undoRestore(), 'Back to your library from before the restore')) safetyCopy = false;
   }
 </script>
 
@@ -77,22 +87,71 @@
   </section>
 
   <section class="card stack">
-    <h2>Backup</h2>
-    <p class="muted small">Everything is stored only on this device. Export a backup now and then.</p>
-    <div class="row">
-      <button class="btn-primary" onclick={exportJson}>Export to file (JSON)</button>
-      <label class="btn">Restore from file<input type="file" accept="application/json,.json" class="sr-only" onchange={pickRestore} /></label>
-    </div>
+    <h2>Online lookups</h2>
+    <p class="muted small">
+      Book details come from Open Library and Wikidata (no limits) and Google Books. Without a key, Google’s shared free
+      quota is often used up; with your own free key you get 1,000 Google lookups per day.
+      <a href="https://github.com/nzumbusch/booked#google-books-api-key-optional" target="_blank" rel="noopener">How to get a key ↗</a>
+    </p>
+    <label class="field">Google Books API key (optional)
+      <input value={s.googleBooksKey ?? ''} autocomplete="off" spellcheck="false" placeholder="AIza…"
+        onchange={(e) => update({ googleBooksKey: e.currentTarget.value.trim() || undefined })} />
+    </label>
   </section>
 
-  <p class="muted small center">Booked {__APP_VERSION__} · works offline · your data never leaves this device</p>
+  <CoverCacheSettings />
+
+  <SyncSettings />
+  <SharedPlaces />
+
+  <section class="card stack">
+    <h2>Import, export & print</h2>
+    <p class="muted small">CSV (Libib-compatible) for spreadsheets, Zotero/BibTeX/RIS for citations, CSV import from Libib or Goodreads, and printable lists per room.</p>
+    <div class="row"><a class="btn" href="#/export">Open import & export</a></div>
+  </section>
+
+  <section class="card stack" id="backup">
+    <h2>Backup</h2>
+    <p class="small">
+      {#if s.lastBackupAt}
+        Last backup: <strong>{formatDate(s.lastBackupAt, s.dateFormat)}</strong>
+        {#if status.changed}· <span class:warn={status.due}>{plural(status.changed, 'change')} since</span>{:else}· up to date ✓{/if}
+      {:else if $lib.books.length}
+        <span class="warn">No backup yet.</span> Your books are only stored on this device.
+      {:else}
+        No backup yet.
+      {/if}
+    </p>
+    <p class="muted small">
+      “Back up now” opens your phone’s share menu: choose <strong>Google Drive</strong> or <strong>Files</strong> to keep the
+      backup somewhere safe. Each backup is one small file (named with date and time) that contains everything.
+    </p>
+    <div class="row">
+      <BackupButton />
+      <BackupButton label="Download file" primary={false} mode="download" />
+    </div>
+    <div class="row">
+      <label class="btn">Restore from backup…<input type="file" accept="application/json,.json" class="sr-only" onchange={pickRestore} /></label>
+      {#if safetyCopy}<button class="btn-ghost" onclick={() => (undoRestoreOpen = true)}>Undo last restore</button>{/if}
+    </div>
+    {#if persisted === false}
+      <p class="muted small">ℹ️ Your browser may clear this app’s data if storage runs low. Installing the app to your home screen makes this much less likely. Regular backups keep you safe either way.</p>
+    {/if}
+  </section>
+
+  <p class="muted small center">Booked {__APP_VERSION__} · works offline · your data stays on your devices unless you turn on sync or sharing</p>
 </div>
 
 <Confirm bind:open={restoreOpen} title="Replace your library?" confirmLabel="Replace"
-  message="This replaces all books, locations and settings on this device with the {pendingRestore?.books?.length ?? 0} books in the backup. This cannot be undone."
+  message="This replaces everything on this device with the backup from {formatDate(pendingRestore?.exportedAt, s.dateFormat)} ({plural(pendingRestore?.books.length ?? 0, 'book')}). Your current library is kept as a safety copy, so you can undo this."
   onconfirm={restore} />
+
+<Confirm bind:open={undoRestoreOpen} title="Undo the restore?" confirmLabel="Undo restore" danger={false}
+  message="Your library goes back to how it was right before the last restore."
+  onconfirm={undoRestore} />
 
 <style>
   .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
   .center { text-align: center; }
+  .warn { color: var(--warn); font-weight: 600; }
 </style>

@@ -1,0 +1,49 @@
+<script lang="ts">
+  import { backupFileName } from '../domain/backup';
+  import type { Snapshot } from '../domain/types';
+  import { saveFile } from '../files';
+  import { library, toast } from '../stores/app';
+
+  let { label = 'Back up now', primary = true, mode = 'auto' }: {
+    label?: string;
+    primary?: boolean;
+    /** auto = share sheet where available (→ Google Drive, Files, mail…), else download. */
+    mode?: 'auto' | 'download';
+  } = $props();
+
+  const lib = library();
+  let prepared = $state<{ file: File; snapshot: Snapshot }>();
+
+  // Phones only open the share sheet right after a tap, so the file is prepared ahead of time
+  // (and refreshed whenever the library changes).
+  async function build() {
+    const snapshot = await lib.exportSnapshot();
+    const json = JSON.stringify({ ...snapshot, settings: { ...snapshot.settings, lastBackupAt: snapshot.exportedAt } });
+    return { snapshot, file: new File([json], backupFileName(snapshot.exportedAt), { type: 'application/json' }) };
+  }
+
+  $effect(() => {
+    void $lib;
+    prepared = undefined;
+    let cancelled = false;
+    const t = setTimeout(async () => {
+      const next = await build();
+      if (!cancelled) prepared = next;
+    }, 300);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  });
+
+  async function save() {
+    // Normally ready; if tapped within the first moments, build now (sharing may then fall back to a download).
+    const { file, snapshot } = prepared ?? (await build());
+    const result = await saveFile(file, { share: mode === 'auto' });
+    if (result === 'cancelled') return; // user closed the share sheet
+    await lib.markBackedUp(snapshot.exportedAt);
+    toast(result === 'shared' ? 'Backup saved' : `Backup downloaded: ${file.name}`);
+  }
+</script>
+
+<button class={primary ? 'btn-primary' : ''} onclick={save}>{label}</button>

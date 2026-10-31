@@ -44,6 +44,13 @@ export type BookFormat = 'hardcover' | 'paperback' | 'ebook' | 'audiobook' | 'ot
 export type ReadingStatus = 'unread' | 'reading' | 'read' | 'abandoned';
 export type Ownership = 'owned' | 'wishlist';
 
+/** Publisher's list price (e.g. the fixed German book price), not what you paid. */
+export interface ListPrice {
+  amount: number;
+  currency: string;
+  source: 'dnb' | 'googlebooks' | 'barcode' | 'manual';
+}
+
 export interface Lending {
   to: string;
   lentOn: IsoDate;
@@ -66,7 +73,7 @@ export interface WritingInfo {
   placeBasis?: PlaceBasis;
 }
 
-export type SourceId = 'openlibrary' | 'googlebooks' | 'wikidata' | 'manual';
+export type SourceId = 'openlibrary' | 'googlebooks' | 'dnb' | 'wikidata' | 'manual';
 
 /** Where a piece of metadata came from, shown behind a "?" next to the field. */
 export interface SourceRef {
@@ -110,6 +117,8 @@ export interface Book {
   writing?: WritingInfo;
   /** Which providers contributed metadata, e.g. ["openlibrary","googlebooks"]. */
   sources?: SourceId[];
+  /** Online details still to be fetched in the background (survives restarts / offline). */
+  pendingLookup?: boolean;
   /** Per-field origin of auto-filled data, keyed by field name (e.g. "description", "writing"). */
   provenance?: Record<string, SourceRef>;
 
@@ -124,14 +133,25 @@ export interface Book {
   rating?: number;
   startedOn?: IsoDate;
   finishedOn?: IsoDate;
+  /** Reading progress (page you're on). */
+  currentPage?: number;
+  /** On the "Up next" list since this time (queue order). */
+  queuedAt?: Timestamp;
   notes?: string;
   condition?: string;
   purchasedOn?: IsoDate;
   /** Price in the user's currency (see settings). */
   price?: number;
+  /** Publisher's list price (DNB, add-on barcode, Google Books). */
+  listPrice?: ListPrice;
   signed: boolean;
   copies: number;
   lending?: Lending;
+  /** Shared places: someone took this book out of the shared place (into their own room). */
+  away?: { by: string; since: Timestamp };
+
+  /** Who added it (shared places: the member's name). */
+  addedBy?: string;
 
   // --- metadata
   createdAt: Timestamp;
@@ -179,6 +199,52 @@ export interface Settings {
   dateFormat: 'iso' | 'dmy' | 'mdy';
   currency: string;
   view: 'grid' | 'list';
+  /** Named library filters, stored as URL query params. */
+  savedFilters?: SavedFilter[];
+  /** Optional free Google Books API key for a reliable 1,000 lookups/day. */
+  googleBooksKey?: string;
+  /** Local cover cache: when to download, and at what resolution. */
+  covers?: { mode?: 'wifi' | 'any' | 'off'; size?: 'small' | 'medium' | 'large' | 'xl' };
+  /** Books to read per year. */
+  readingGoal?: number;
+  /** Your name, shown to family on books you add to a shared place. */
+  userName?: string;
+  /** Places/rooms shared with family (per device; the key never leaves the share link). */
+  spaces?: SpaceConfig[];
+  /** Google Drive sync (per device). */
+  sync?: {
+    clientId?: string;
+    enabled?: boolean;
+    lastSyncAt?: Timestamp;
+    /** Optional token helper (Cloudflare Worker) that keeps you signed in. */
+    helperUrl?: string;
+    /** Without a helper: renew the sign-in on the first tap after it expired (default on). */
+    autoReconnect?: boolean;
+  };
+  /** When the last backup file was made (for reminders). */
+  lastBackupAt?: Timestamp;
+}
+
+export interface SpaceConfig {
+  /** Server-side id of the shared place. */
+  id: string;
+  /** Encryption key (from the share link). */
+  key: string;
+  /** Token helper (Cloudflare Worker) that stores the encrypted data. */
+  helperUrl: string;
+  /** The shared location (same id for every member). */
+  rootLocationId: Id;
+  name: string;
+  role: 'owner' | 'member';
+  /** Owner only: allows deleting the shared data from the server. */
+  adminToken?: string;
+  lastSyncAt?: Timestamp;
+}
+
+export interface SavedFilter {
+  id: Id;
+  name: string;
+  query: Record<string, string>;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
