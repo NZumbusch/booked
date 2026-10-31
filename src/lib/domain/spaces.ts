@@ -6,8 +6,9 @@ import type { Book, Id, Location, MoveRecord } from './types';
  * Shared places: a location (place or room) and everything in it, shared with family.
  *
  * Each member keeps the shared books in their own library; syncing exchanges just that part.
- * A book that leaves the shared location (moved to a private room, or deleted) is announced to
- * the others with a tombstone, so it disappears from the shared place for everyone.
+ * A book someone takes out of the shared location (into their own room) stays in the shared
+ * place for everyone else, marked "away with <name>", like a loan; moving it back clears that.
+ * Deleting a shared book removes it for everyone (tombstone).
  */
 
 /** What we remember per shared place between syncs. */
@@ -16,9 +17,11 @@ export interface SpaceBookkeeping {
   locationIds: Id[];
   /** Deletion markers known for this space (so they keep propagating). */
   deleted: Tombstone[];
+  /** Where each shared book belongs in the shared place (its last location there). */
+  homes?: Record<Id, Id>;
 }
 
-export const EMPTY_BOOKKEEPING: SpaceBookkeeping = { bookIds: [], locationIds: [], deleted: [] };
+export const EMPTY_BOOKKEEPING: SpaceBookkeeping = { bookIds: [], locationIds: [], deleted: [], homes: {} };
 
 export interface LocalData {
   books: Book[];
@@ -29,23 +32,26 @@ export interface LocalData {
 }
 
 /** The shared part of this library, ready to merge with the remote copy. */
-export function exportSpace(local: LocalData, rootId: Id, prev: SpaceBookkeeping): SyncData {
+export function exportSpace(local: LocalData, rootId: Id, prev: SpaceBookkeeping, me = 'someone'): SyncData {
   const rootExists = local.locations.some((l) => l.id === rootId);
   const inside = new Set(rootExists ? descendantIds(local.locations, rootId) : []);
   // The path above the root (e.g. the place of a shared room) travels along so members can show it.
   const ancestors = rootExists ? pathOf(local.locations, rootId).slice(0, -1) : [];
   const locations = [...ancestors, ...local.locations.filter((l) => inside.has(l.id))];
+  // A book that's "away" stays listed under its home in the shared place.
   const books = local.books.filter((b) => b.locationId && inside.has(b.locationId));
+  for (const b of local.books) {
+    const home = prev.homes?.[b.id];
+    if (!prev.bookIds.includes(b.id) || (b.locationId && inside.has(b.locationId)) || !home) continue;
+    books.push({ ...b, locationId: home, away: b.away ?? { by: me, since: b.updatedAt } });
+  }
   const bookIds = new Set(books.map((b) => b.id));
   const moves = local.moves.filter((m) => bookIds.has(m.bookId));
 
   const wasShared = new Set([...prev.bookIds, ...prev.locationIds]);
   const shared = new Set([...bookIds, ...locations.map((l) => l.id)]);
   const deleted: Tombstone[] = [...prev.deleted, ...local.deleted.filter((t) => wasShared.has(t.id))];
-  // Books/locations that were shared but now live elsewhere in this library: they left the space.
-  for (const b of local.books) {
-    if (prev.bookIds.includes(b.id) && !shared.has(b.id)) deleted.push({ id: b.id, kind: 'book', at: b.updatedAt });
-  }
+  // Locations that were shared but now live elsewhere in this library left the space.
   for (const l of local.locations) {
     if (prev.locationIds.includes(l.id) && !shared.has(l.id)) deleted.push({ id: l.id, kind: 'location', at: l.updatedAt });
   }
@@ -77,7 +83,10 @@ export function planSpaceApply(local: LocalData, rootId: Id, merged: SyncData): 
   });
   const putBooks = merged.books.filter((m) => {
     const b = books.get(m.id);
-    return !b || m.updatedAt > b.updatedAt;
+    if (!b) return true;
+    // I'm the one who took it out: keep it where it is in my library.
+    if (m.away && b.locationId && !inside.has(b.locationId)) return false;
+    return m.updatedAt > b.updatedAt;
   });
   const putMoves = merged.moves.filter((m) => !moveIds.has(m.id));
 
@@ -102,6 +111,16 @@ export function planSpaceApply(local: LocalData, rootId: Id, merged: SyncData): 
   }
   return {
     putBooks, deleteBookIds, putLocations, deleteLocationIds, putMoves, tombstones,
-    bookkeeping: { bookIds: merged.books.map((b) => b.id), locationIds: merged.locations.map((l) => l.id), deleted: merged.deleted }
+    bookkeeping: bookkeepingFor(merged)
   };
+}
+
+/** What to remember after a sync: shared ids, deletion markers, and each book's home in the place. */
+export function bookkeepingFor(merged: SyncData, prev?: SpaceBookkeeping): SpaceBookkeeping {
+  const homes: Record<Id, Id> = {};
+  for (const b of merged.books) {
+    const home = b.away ? (prev?.homes?.[b.id] ?? b.locationId) : b.locationId;
+    if (home) homes[b.id] = home;
+  }
+  return { bookIds: merged.books.map((b) => b.id), locationIds: merged.locations.map((l) => l.id), deleted: merged.deleted, homes };
 }

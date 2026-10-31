@@ -241,7 +241,8 @@
               <span class="cover-wrap">
                 <Cover {book} />
                 {#if selecting}<span class="check" aria-hidden="true">{selected.has(book.id) ? '✓' : ''}</span>{/if}
-                {#if book.lending}<span class="badge lent" class:danger={isOverdue(book, today)}>lent</span>{/if}
+                {#if book.lending}<span class="badge lent" class:danger={isOverdue(book, today)}>lent</span>
+                {:else if book.away}<span class="badge lent away">with {book.away.by}</span>{/if}
               </span>
               <span class="t">{book.title}</span>
               <span class="a muted">{book.authors.join(', ')}</span>
@@ -275,7 +276,8 @@
                   {/if}
                   <td class="c-cover"><Cover {book} size="sm" /></td>
                   <td class="c-title"><a href="#/book/{book.id}" onclick={(e) => { e.stopPropagation(); open(book, e); }}>{book.title}</a>
-                    {#if book.lending}<span class="badge" class:danger={isOverdue(book, today)}>lent</span>{/if}
+                    {#if book.lending}<span class="badge" class:danger={isOverdue(book, today)}>lent</span>
+                    {:else if book.away}<span class="badge away">with {book.away.by}</span>{/if}
                     <div class="muted small mobile-only">{book.authors.join(', ')}</div></td>
                   <td class="c-author">{book.authors.join(', ')}</td>
                   <td class="c-year">{book.publishedYear ?? book.firstPublishedYear ?? ''}</td>
@@ -332,7 +334,8 @@
     background: rgb(255 255 255 / 0.9); color: #000; border: 2px solid var(--brand); font-weight: 700;
   }
   .tile.sel .check { background: var(--brand); color: #fff; }
-  .lent { position: absolute; left: 4px; bottom: 4px; }
+  .lent { position: absolute; left: 4px; bottom: 4px; max-width: calc(100% - 8px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .away { background: color-mix(in srgb, var(--brand) 22%, var(--surface)); color: var(--text); }
   .tile .t { font-weight: 600; font-size: 0.85rem; line-height: 1.2; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   .tile .a { font-size: 0.75rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .table-wrap { padding: 0; overflow-x: auto; }

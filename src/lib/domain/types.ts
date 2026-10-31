@@ -134,6 +134,8 @@ export interface Book {
   signed: boolean;
   copies: number;
   lending?: Lending;
+  /** Shared places: someone took this book out of the shared place (into their own room). */
+  away?: { by: string; since: Timestamp };
 
   /** Who added it (shared places: the member's name). */
   addedBy?: string;

@@ -222,6 +222,16 @@
       </div>
     </section>
 
+    {#if book.away}
+      <section class="card lend away">
+        <div>
+          <strong>With {book.away.by}</strong>
+          <div class="small muted">Taken out of {lib.label(book.locationId)} (shared) on {formatDate(book.away.since, s.dateFormat)}</div>
+        </div>
+        <button class="btn-sm" onclick={() => quick({ away: undefined })}>It’s back</button>
+      </section>
+    {/if}
+
     {#if book.lending}
       <section class="card lend" class:overdue={isOverdue(book, todayIso())}>
         <div>
@@ -331,6 +341,7 @@
   .status { width: auto; border-radius: 999px; }
   .lend { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
   .lend.overdue { border-left: 4px solid var(--danger); }
+  .lend.away { border-left: 4px solid var(--brand); }
   .desc { white-space: pre-line; margin: 0; }
   dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 0; }
   dt { color: var(--muted); }

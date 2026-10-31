@@ -121,7 +121,11 @@ The free plan allows 100,000 requests a day. Booked uses a handful.
 
 Share a place or room, e.g. *Flat A › Living room*, so family members can see, **add, edit and move** the books there from their own phones.
 
-- **Everyone keeps their own library.** Only the shared room and its shelves are exchanged. A book moved out of the room, into someone's own room, leaves the shared place for the others. Deleting a shared book removes it for everyone.
+- **Everyone keeps their own library.** Only the shared room and its shelves are exchanged.
+- **Taking a book out:** a book someone moves from the shared room into their own room stays listed in the shared room for everyone else, marked **"with Anna"**.
+  - It shows as a badge in the library and on the book page, and in its own section on the Lending page. There's also a filter for it.
+  - When it's moved back, or anyone taps **"It's back"**, the mark disappears everywhere.
+  - Deleting a shared book removes it for everyone.
 - **Who added what:** each person sets their name once, and books show "Added … by Anna".
 - **Privacy:** data is encrypted on the phone (AES-GCM) before upload. The key exists only in the share link, after the `#`, so the server and Cloudflare only ever see unreadable data.
 - **Automatic syncing:** when the app opens, a few seconds after changes, and every 2 minutes.

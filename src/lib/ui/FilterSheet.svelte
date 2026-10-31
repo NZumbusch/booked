@@ -127,7 +127,7 @@
     </label>
     <label class="field">Lending
       <select value={f.lending ?? ''} onchange={(e) => (f = { ...f, lending: (e.currentTarget.value || undefined) as BookFilter['lending'] })}>
-        <option value="">Any</option><option value="lent">Lent out</option><option value="overdue">Overdue</option>
+        <option value="">Any</option><option value="lent">Lent out</option><option value="overdue">Overdue</option><option value="away">Taken out of a shared place</option>
       </select>
     </label>
   </section>

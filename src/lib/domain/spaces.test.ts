@@ -22,12 +22,28 @@ describe('exportSpace', () => {
     expect(d.books.map((b) => b.id)).toEqual(['shared1', 'shared2']);
   });
 
-  it('announces books that left the shared room', () => {
-    const prev = { bookIds: ['shared1', 'shared2'], locationIds: ['flat', 'living', 'shelf'], deleted: [] };
+  it('keeps a book taken out to a private room in the shared place, marked away', () => {
+    const prev = { bookIds: ['shared1', 'shared2'], locationIds: ['flat', 'living', 'shelf'], deleted: [], homes: { shared1: 'living', shared2: 'shelf' } };
     const moved = { ...book('shared2', 'bed', 5) };
-    const d = exportSpace(owner([book('shared1', 'living'), moved, book('private', 'bed')]), 'living', prev);
-    expect(d.books.map((b) => b.id)).toEqual(['shared1']);
-    expect(d.deleted).toEqual([{ id: 'shared2', kind: 'book', at: T(5) }]);
+    const d = exportSpace(owner([book('shared1', 'living'), moved, book('private', 'bed')]), 'living', prev, 'Nils');
+    expect(d.books.map((b) => [b.id, b.locationId, b.away])).toEqual([
+      ['shared1', 'living', undefined],
+      ['shared2', 'shelf', { by: 'Nils', since: T(5) }]
+    ]);
+    expect(d.deleted).toEqual([]);
+    expect(d.books.map((b) => b.id)).not.toContain('private');
+  });
+
+  it('does not move the book back into the shared room for the person who took it', () => {
+    const local = owner([book('shared2', 'bed', 5)]);
+    const merged = { books: [{ ...book('shared2', 'shelf', 9), away: { by: 'Nils', since: T(5) } }], locations: ownerLocs.slice(0, 3), moves: [], deleted: [] };
+    expect(planSpaceApply(local, 'living', merged).putBooks).toEqual([]);
+  });
+
+  it('remembers each book’s home, also while it is away', async () => {
+    const { bookkeepingFor } = await import('./spaces');
+    const merged = { books: [book('a', 'living'), { ...book('b', 'living'), away: { by: 'X', since: T(1) } }], locations: [], moves: [], deleted: [] };
+    expect(bookkeepingFor(merged, { ...EMPTY_BOOKKEEPING, homes: { b: 'shelf' } }).homes).toEqual({ a: 'living', b: 'shelf' });
   });
 
   it('passes on local deletions of shared books', () => {

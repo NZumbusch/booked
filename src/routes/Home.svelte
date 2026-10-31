@@ -17,7 +17,7 @@
   const counts = $derived($lib && lib.counts());
   const recent = $derived(sortBooks($lib.books, 'added', 'desc').slice(0, 12));
   const unplaced = $derived(counts.get(null) ?? 0);
-  const lent = $derived($lib.books.filter((b) => b.lending).length);
+  const lent = $derived($lib.books.filter((b) => b.lending || b.away).length);
   const overdue = $derived($lib.books.filter((b) => isOverdue(b, todayIso())).length);
 </script>
 

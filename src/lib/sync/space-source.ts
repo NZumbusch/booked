@@ -1,4 +1,4 @@
-import { EMPTY_BOOKKEEPING, exportSpace, planSpaceApply, type SpaceBookkeeping } from '../domain/spaces';
+import { bookkeepingFor, EMPTY_BOOKKEEPING, exportSpace, planSpaceApply, type SpaceBookkeeping } from '../domain/spaces';
 import type { Id } from '../domain/types';
 import type { Library } from '../services/library';
 import type { SyncSource } from './service';
@@ -11,7 +11,7 @@ export function spaceSource(lib: Library, spaceId: string, rootId: Id): SyncSour
     exclusive: (fn) => lib.exclusive(fn),
     async export() {
       const prev = (await lib.getMeta<SpaceBookkeeping>(metaKey(spaceId))) ?? EMPTY_BOOKKEEPING;
-      return exportSpace(await lib.exportSyncData(), rootId, prev);
+      return exportSpace(await lib.exportSyncData(), rootId, prev, lib.state.settings.userName);
     },
     async apply(merged) {
       const plan = planSpaceApply(await lib.exportSyncData(), rootId, merged);
@@ -26,10 +26,8 @@ export function spaceSource(lib: Library, spaceId: string, rootId: Id): SyncSour
     },
     async committed(merged) {
       // Remember what is shared now, so books that leave later get announced to the others.
-      const bookkeeping: SpaceBookkeeping = {
-        bookIds: merged.books.map((b) => b.id), locationIds: merged.locations.map((l) => l.id), deleted: merged.deleted
-      };
-      await lib.setMeta(metaKey(spaceId), bookkeeping);
+      const prev = await lib.getMeta<SpaceBookkeeping>(metaKey(spaceId));
+      await lib.setMeta(metaKey(spaceId), bookkeepingFor(merged, prev));
     }
   };
 }

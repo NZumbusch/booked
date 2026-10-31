@@ -48,6 +48,9 @@ describe('applyFilter', () => {
   it('filters lending and missing data', () => {
     expect(ids({ lending: 'lent' })).toEqual(['2']);
     expect(ids({ lending: 'overdue' })).toEqual(['2']);
+    const away = [{ ...books[0], away: { by: 'Anna', since: now } }, books[1]];
+    expect(applyFilter(away, { lending: 'away' }, ctx).map((b) => b.id)).toEqual(['1']);
+    expect(filterChips({ lending: 'away' }, locations)[0].label).toBe('Taken out (shared)');
     expect(ids({ missing: ['cover'] })).toEqual(['2', '3']);
     expect(ids({ missing: ['metadata'] })).toEqual(['2', '3']);
   });

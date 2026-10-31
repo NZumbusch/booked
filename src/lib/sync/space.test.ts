@@ -49,18 +49,37 @@ describe('shared places end to end (two people, one shared living room)', () => 
     expect(me.book(added.id)?.addedBy).toBe('Anna');
     expect(me.book(novel.id)?.rating).toBe(4);
 
-    // I take the novel to my room: it leaves the shared place for Anna, but stays mine.
+    // I take the novel to my room: Anna still sees it in the living room, marked "with Me".
     await me.moveBooks([novel.id], myRoom.id);
     await mine.sync();
     await hers.sync();
-    expect(titles(anna)).toEqual(['Anna’s cookbook']);
+    expect(titles(anna)).toEqual(['Anna’s cookbook', 'Shared novel']);
+    expect(anna.book(novel.id)).toMatchObject({ locationId: living.id, away: { by: 'Me' } });
     expect(me.book(novel.id)?.locationId).toBe(myRoom.id);
+    expect(await mine.sync()).toBe('unchanged'); // stays in my room, no ping-pong
+
+    // I bring it back: the mark disappears for Anna.
+    await me.moveBooks([novel.id], living.id);
+    await mine.sync();
+    await hers.sync();
+    expect(anna.book(novel.id)?.away).toBeUndefined();
+
+    // Taken out again, and Anna says "it's back" (I forgot to move it in the app): it returns for me too.
+    await me.moveBooks([novel.id], myRoom.id);
+    await mine.sync();
+    await hers.sync();
+    await anna.updateBook(novel.id, { away: undefined });
+    await hers.sync();
+    await mine.sync();
+    expect(me.book(novel.id)).toMatchObject({ locationId: living.id });
+    expect(me.book(novel.id)?.away).toBeUndefined();
 
     // Anna deletes her cookbook: gone for me too.
     await anna.deleteBooks([added.id]);
     await hers.sync();
     await mine.sync();
     expect(titles(me)).toEqual(['My diary', 'Shared novel']);
+    expect(titles(anna)).toEqual(['Shared novel']);
 
     // Nothing private ever reached the shared copy.
     expect(drive.data!.books.map((b) => b.title)).not.toContain('My diary');
