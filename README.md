@@ -36,6 +36,7 @@ All data stays on your device (IndexedDB). The app needs no backend and no API k
   - **Topic tags** float over the clusters (broad topics zoomed out, subtopics closer in); the tag button hides them
   - Full screen: the arrangement/topic bar and the control pill float over the covers; status (filter, downloads) only appears when relevant
   - **Zoomed out,** every cover becomes its colour block, so the library turns into a colour graphic
+  - Tap a cover to zoom in and see which book it is; tap it again (or the card at the bottom) to open the book
   - Follows your library filter; "Show on wall" from any book; export as a poster image
 - **Reading and analysis**
   - Up next queue, reading progress and a yearly goal
@@ -340,13 +341,21 @@ Labels are snapshots, so renaming a room later doesn't rewrite history. Moving a
 - **Collection value:** uses what you paid where you recorded it, otherwise the list price, summed per currency.
 - **No used-market value:** there's no free source for second-hand prices.
 
+### Choosing a different cover
+
+Tap the cover on a book's page to see the covers of its other editions (Open Library and Google Books): your own edition first, then the same language.
+- The covers lie in loose piles. Tap one to pull it out and see it full size, swipe sideways to flip through, swipe down to put it back, and tap **Use this cover** to take it.
+- **Use my own photo** takes a picture (or picks one from your photos) and uses that instead.
+- Changing a cover can be undone right away.
+
 ### Covers on this device
 
 - **What's saved:** every cover is downloaded once and stored on the device in its own database, separate from your backups and sync. The colours of each cover are analysed (main colour, palette, "is this a real cover?") for the cover wall.
 - **When it downloads** (Settings → Covers on this device):
   - **Only on Wi-Fi** (the default), on any connection, or off.
   - Android Chrome reports whether it's on Wi-Fi. iPhone browsers don't, so Booked asks once ("Download covers now?") instead of guessing.
-  - Data saver is always respected.
+  - Data saver is respected for automatic downloads.
+  - **Downloading on mobile data:** tapping *Download* when not on Wi-Fi asks first and shows the estimated size; confirm and it downloads anyway.
 - **Resolution:** small (360 px), medium (540 px, the default), large (900 px) or extra large (1350 px).
   - The storage estimate is based on your library. After the first downloads, it uses your real average.
   - Covers are never upscaled beyond what the catalogue has.
