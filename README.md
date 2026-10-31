@@ -3,6 +3,33 @@
 A personal book catalogue in the spirit of Libib. It's a static, offline-first PWA built with Svelte 5 and Vite, and it's hosted on GitHub Pages.
 All data stays on your device (IndexedDB). The app needs no backend and no API keys.
 
+## What it does
+
+- **Add books fast**
+  - Camera barcode scanning, plus batch scanning straight into a chosen room
+  - ISBN entry, title/author search, or a full manual form
+  - Details come from Open Library, Google Books and Wikidata, filled in the background so adding never waits
+  - Repeated ISBNs ask "another copy?" before adding
+- **Know where everything is**
+  - Place › room (› optional shelf), with counts at every level
+  - Move single books, a selection, or a whole room. Every move goes into the book's history
+- **Find and organise**
+  - Search plus combinable filters as chips, which you can save
+  - Grid or list, sorting and grouping
+  - Multi-select with bulk actions
+  - Tags/collections/genres management
+  - Undo for every action
+- **Enjoy it**
+  - Stats dashboard
+  - A map of where your books were written
+  - Lending tracker with overdue highlighting
+- **Keep it safe and portable**
+  - Backups to Google Drive/Files with reminders, and safe restore
+  - Optional Google Drive sync between devices
+  - Libib-compatible CSV export, CSV import from Libib or Goodreads
+  - Zotero export (CSL-JSON/RIS/BibTeX) and printable room lists
+- **Works offline and installs like an app.** Data stays on your devices, and nothing needs an API key
+
 ## Quick start
 
 ```bash
@@ -210,3 +237,12 @@ Labels are snapshots, so renaming a room later doesn't rewrite history. Moving a
   - Works through Drive's hidden per-app folder (`appDataFolder`), and needs no backend
   - Merges per record with deletion markers (tombstones). Optimistic concurrency: if another device writes during a sync, it merges again
   - See "Google Drive sync setup" above
+
+## Testing
+
+- `npm test` runs about 200 unit and component tests. They cover the domain logic, storage, metadata adapters (with real recorded API responses in `src/lib/metadata/fixtures`), import/export, sync merge and the Drive client.
+- During development, each phase was also exercised end to end in a headless browser:
+  - Live lookups, and a fake camera feed showing printed barcodes
+  - A generated 5,000-book library
+  - Offline reload
+  - Backup/restore, and sync against a simulated Drive

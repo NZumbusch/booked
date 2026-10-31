@@ -82,7 +82,8 @@ export class Library {
 
   async addBook(draft: BookDraft): Promise<Book> {
     const book = createBook(
-      { locationId: this.state.settings.defaultLocationId, ...draft },
+      // An explicitly undefined location means "not chosen", so the default applies.
+      { ...draft, locationId: draft.locationId === undefined ? this.state.settings.defaultLocationId : draft.locationId },
       { id: newId(), now: this.now() }
     );
     await this.run(`Added “${book.title}”`, { putBooks: [book] });

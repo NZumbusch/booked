@@ -27,15 +27,27 @@
     openLibrary().then((l) => (lib = l)).catch((e) => (error = String(e?.message ?? e)));
   });
 
-  // Theme: explicit choice, or follow the system.
+  // Theme: explicit choice, or follow the system (live, also when it switches at sunset).
   $effect(() => {
     if (!lib) return;
-    return lib.subscribe((s) => {
-      setGoogleApiKey(s.settings.googleBooksKey);
-      const media = matchMedia('(prefers-color-scheme: dark)');
-      const dark = s.settings.theme === 'dark' || (s.settings.theme === 'system' && media.matches);
-      document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+    const media = matchMedia('(prefers-color-scheme: dark)');
+    const apply = () => {
+      const theme = lib!.state.settings.theme;
+      document.documentElement.dataset.theme = theme === 'dark' || (theme === 'system' && media.matches) ? 'dark' : 'light';
+    };
+    media.addEventListener('change', apply);
+    let last = { theme: '', key: undefined as string | undefined, first: true };
+    const unsubscribe = lib.subscribe((s) => {
+      const { theme, googleBooksKey: key } = s.settings;
+      if (!last.first && theme === last.theme && key === last.key) return; // book edits don't concern us
+      last = { theme, key, first: false };
+      setGoogleApiKey(key);
+      apply();
     });
+    return () => {
+      media.removeEventListener('change', apply);
+      unsubscribe();
+    };
   });
 
   // Scroll to top on page change.

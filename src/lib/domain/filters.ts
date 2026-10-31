@@ -32,7 +32,25 @@ const LISTS = {
   authors: 'author', genres: 'genre', tags: 'tag', collections: 'collection',
   status: 'status', formats: 'format', languages: 'lang', missing: 'missing'
 } as const;
-const SEP = '|'; // names may contain commas, but practically never a pipe
+/** List values are joined with "|" (names often contain commas); a literal "|" or "\\" is backslash-escaped. */
+export function joinValues(values: string[]): string {
+  return values.map((v) => v.replace(/\\/g, '\\\\').replace(/\|/g, '\\|')).join('|');
+}
+
+export function splitValues(text: string): string[] {
+  const out: string[] = [];
+  let cur = '';
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (c === '\\' && i + 1 < text.length) cur += text[++i];
+    else if (c === '|') {
+      out.push(cur);
+      cur = '';
+    } else cur += c;
+  }
+  out.push(cur);
+  return out.filter(Boolean);
+}
 
 /** Filter → URL query params (only set values). */
 export function filterToQuery(f: BookFilter): Record<string, string> {
@@ -41,7 +59,7 @@ export function filterToQuery(f: BookFilter): Record<string, string> {
   if (f.loc) q.loc = f.loc;
   for (const [key, param] of Object.entries(LISTS)) {
     const values = f[key as keyof typeof LISTS] as string[] | undefined;
-    if (values?.length) q[param] = values.join(SEP);
+    if (values?.length) q[param] = joinValues(values);
   }
   if (f.ratingMin) q.rating = String(f.ratingMin);
   if (f.yearFrom) q.from = String(f.yearFrom);
@@ -58,7 +76,7 @@ export function filterFromQuery(q: Record<string, string | undefined>): BookFilt
   if (q.loc) f.loc = q.loc;
   for (const [key, param] of Object.entries(LISTS)) {
     const v = q[param];
-    if (v) (f as Record<string, unknown>)[key] = v.split(SEP).filter(Boolean);
+    if (v) (f as Record<string, unknown>)[key] = splitValues(v);
   }
   f.ratingMin = int(q.rating);
   f.yearFrom = int(q.from);

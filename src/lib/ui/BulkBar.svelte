@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { cleanList, todayIso } from '../domain/book';
+  import { borrowers, cleanList, lendingFrom } from '../domain/book';
   import { facet } from '../domain/filters';
   import { fold } from '../domain/query';
   import type { Id, ReadingStatus } from '../domain/types';
@@ -107,10 +107,11 @@
       {/each}
     </div>
   {:else if panel === 'lend'}
-    <label class="field">Lent to<input bind:value={lendTo} placeholder="Name" /></label>
+    <label class="field">Lent to<input bind:value={lendTo} placeholder="Name" list="bulk-borrowers" /></label>
+    <datalist id="bulk-borrowers">{#each borrowers($lib.books) as name}<option value={name}></option>{/each}</datalist>
     <label class="field">Due (optional)<input type="date" bind:value={lendDue} /></label>
     <button class="btn-primary" disabled={!lendTo.trim()} onclick={() => run(
-      () => lib.bulkUpdate(ids, () => ({ lending: { to: lendTo.trim(), lentOn: todayIso(), dueOn: lendDue || undefined } }), `Lent ${what} to ${lendTo.trim()}`),
+      () => lib.bulkUpdate(ids, () => ({ lending: lendingFrom(lendTo, lendDue) }), `Lent ${what} to ${lendTo.trim()}`),
       (c) => `Lent ${plural(c, 'book')} to ${lendTo.trim()}`)}>Mark as lent</button>
   {:else if panel === 'more'}
     <div class="grid2">

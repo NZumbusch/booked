@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import { isOverdue, todayIso } from '../lib/domain/book';
   import {
     applyFilter, filterChips, filterFromQuery, filterToQuery, GROUP_LABELS, groupBooks, isEmptyFilter, removeChip,
@@ -38,9 +39,23 @@
 
   // svelte-ignore state_referenced_locally
   let q = $state(query.q ?? '');
+  // The URL can change the search too (saved filters, back/forward): keep the box in step.
+  // svelte-ignore state_referenced_locally
+  let lastUrlQ = query.q ?? '';
   $effect(() => {
-    const text = q;
-    const t = setTimeout(() => { if ((filter.q ?? '') !== text) setFilter({ ...filter, q: text || undefined }); }, 200);
+    const urlQ = query.q ?? '';
+    if (urlQ === lastUrlQ) return;
+    lastUrlQ = urlQ;
+    // Only take over external changes; the box's own (trimmed) writes must not rewrite what's being typed.
+    if (urlQ !== untrack(() => q).trim()) q = urlQ;
+  });
+  $effect(() => {
+    const text = q.trim();
+    const t = setTimeout(() => {
+      if ((filter.q ?? '') === text) return;
+      lastUrlQ = text;
+      setFilter({ ...filter, q: text || undefined });
+    }, 200);
     return () => clearTimeout(t);
   });
 

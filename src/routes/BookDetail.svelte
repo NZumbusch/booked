@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { fillMissing, isOverdue, todayIso } from '../lib/domain/book';
+  import { filterToQuery, type BookFilter } from '../lib/domain/filters';
+  import { borrowers, copyDraft, fillMissing, isOverdue, lendingFrom, todayIso } from '../lib/domain/book';
   import type { BookDraft, MoveRecord, PlaceBasis, ReadingStatus } from '../lib/domain/types';
   import { lookupIsbn, searchBooks, lookupCandidate } from '../lib/metadata/lookup';
   import { FORMAT_LABEL, STATUS_LABEL, formatDate, formatPrice, languageName } from '../lib/format';
@@ -50,6 +51,32 @@
 
   let fetching = $state(false);
 
+  // Inline notes editing
+  let notesEditing = $state(false);
+  let notesDraft = $state('');
+  async function saveNotes() {
+    notesEditing = false;
+    if ((notesDraft.trim() || undefined) === book?.notes) return; // unchanged: no edit, no undo entry, no sync
+    await attempt(() => lib.updateBook(id, { notes: notesDraft.trim() || undefined }), 'Notes saved', { undo: true });
+  }
+
+  /** Another physical copy: separate entry, same book data, goes to the default location. */
+  async function addCopy() {
+    if (!book) return;
+    const copy = await attempt(() => lib.addBook(copyDraft(book!)), `Added another copy of “${book.title}”`, { undo: true });
+    if (copy) navigate(`/book/${copy.id}`);
+  }
+
+  // Quick lend
+  let lendOpen = $state(false);
+  let lendTo = $state('');
+  let lendDue = $state('');
+  const knownBorrowers = $derived(lendOpen ? borrowers($lib.books) : []);
+  async function lend() {
+    lendOpen = false;
+    await attempt(() => lib.updateBook(id, { lending: lendingFrom(lendTo, lendDue) }), `Lent to ${lendTo.trim()}`, { undo: true });
+  }
+
   /** Fill empty fields from online sources; never overwrites what's there. */
   async function fetchDetails() {
     if (!book) return;
@@ -72,6 +99,8 @@
       fetching = false;
     }
   }
+
+  const filterLink = (f: BookFilter) => `#/books?${new URLSearchParams(filterToQuery(f))}`;
 
   const BASIS: Record<PlaceBasis, string> = {
     written: 'where it was written', published: 'place of first publication', author: 'author’s home town', country: 'country of publication'
@@ -165,7 +194,8 @@
           {#if book.pendingLookup}
             <span class="badge">{$fetchingIds.has(book.id) ? 'Fetching details…' : 'Details will be fetched when online'}</span>
           {/if}
-          {#each book.tags as tag}<a class="chip" href="#/books?q={encodeURIComponent(tag)}">#{tag}</a>{/each}
+          {#each book.tags as tag}<a class="chip" href={filterLink({ tags: [tag] })}>#{tag}</a>{/each}
+          {#each book.collections as c}<a class="chip" href={filterLink({ collections: [c] })}>▣ {c}</a>{/each}
         </div>
         <div class="loc card">
           <div class="stack tight">
@@ -180,6 +210,14 @@
             {#each Object.entries(STATUS_LABEL) as [v, l]}<option value={v}>{l}</option>{/each}
           </select>
           <Rating value={book.rating} onchange={(rating) => quick({ rating })} />
+        </div>
+        <div class="row">
+          {#if book.ownership === 'wishlist'}
+            <button class="btn-sm btn-primary" onclick={() => quick({ ownership: 'owned', purchasedOn: book.purchasedOn ?? todayIso() })}>🛍️ Bought it</button>
+          {:else if !book.lending}
+            <button class="btn-sm" onclick={() => { lendTo = ''; lendDue = ''; lendOpen = true; }}>🤝 Lend…</button>
+          {/if}
+          <button class="btn-sm" onclick={addCopy}>＋ Another copy</button>
         </div>
       </div>
     </section>
@@ -198,13 +236,29 @@
       </section>
     {/if}
 
+    <section class="card">
+      <div class="spread">
+        <h2>My notes</h2>
+        {#if !notesEditing}<button class="btn-sm btn-ghost" onclick={() => { notesDraft = book.notes ?? ''; notesEditing = true; }}>{book.notes ? 'Edit' : '+ Add'}</button>{/if}
+      </div>
+      {#if notesEditing}
+        <!-- svelte-ignore a11y_autofocus -->
+        <textarea bind:value={notesDraft} rows="5" autofocus aria-label="My notes"></textarea>
+        <div class="row end">
+          <button class="btn-sm" onclick={() => (notesEditing = false)}>Cancel</button>
+          <button class="btn-sm btn-primary" onclick={saveNotes}>Save</button>
+        </div>
+      {:else if book.notes}
+        <p class="desc">{book.notes}</p>
+      {:else}
+        <p class="muted small">Thoughts, where you got it, who gave it to you…</p>
+      {/if}
+    </section>
+
     {#if book.description}
       <section class="card"><h2>About <SourceInfo ref={book.provenance?.description} /></h2><p class="desc">{book.description}</p></section>
     {/if}
 
-    {#if book.notes}
-      <section class="card"><h2>My notes</h2><p class="desc">{book.notes}</p></section>
-    {/if}
 
     <section class="card">
       <div class="spread">
@@ -251,6 +305,15 @@
     {/snippet}
   </Dialog>
 
+  <Dialog bind:open={lendOpen} title="Lend “{book.title}”">
+    <form class="stack" onsubmit={(e) => { e.preventDefault(); if (lendTo.trim()) lend(); }}>
+      <label class="field">To<input bind:value={lendTo} placeholder="Name" list="borrowers" /></label>
+      <datalist id="borrowers">{#each knownBorrowers as name}<option value={name}></option>{/each}</datalist>
+      <label class="field">Due back (optional)<input type="date" bind:value={lendDue} /></label>
+      <button class="btn-primary" type="submit" disabled={!lendTo.trim()}>Mark as lent</button>
+    </form>
+  </Dialog>
+
   <Confirm bind:open={deleteOpen} title="Delete book?" message="“{book.title}” will be removed from your library. You can undo this right after."
     onconfirm={doDelete} />
 {/if}
@@ -273,6 +336,7 @@
   dt { color: var(--muted); }
   dd { margin: 0; overflow-wrap: anywhere; }
   .links { margin: 12px 0 0; }
+  .end { justify-content: flex-end; margin-top: 8px; }
   .history { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
   .history li { display: grid; gap: 2px; }
 </style>

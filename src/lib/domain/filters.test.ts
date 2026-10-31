@@ -63,6 +63,10 @@ describe('URL round trip', () => {
     };
     expect(filterFromQuery(filterToQuery(f))).toEqual(f);
   });
+  it('keeps names containing the separator intact', () => {
+    const f: BookFilter = { tags: ['sci-fi|fantasy', 'back\\slash', 'plain'] };
+    expect(filterFromQuery(filterToQuery(f))).toEqual(f);
+  });
   it('ignores junk', () => {
     expect(filterFromQuery({ rating: 'abc', lent: 'maybe', own: 'x', sort: 'title' })).toEqual({});
     expect(isEmptyFilter({ q: '  ' })).toBe(true);

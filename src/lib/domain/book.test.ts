@@ -25,6 +25,10 @@ describe('createBook', () => {
     expect(b.rating).toBe(5);
   });
 
+  it('treats an undefined location as "no location"', () => {
+    expect(createBook({ title: 'A', locationId: undefined }, { id: 'a', now }).locationId).toBeNull();
+  });
+
   it('rejects empty titles', () => {
     expect(() => createBook({ title: ' ' }, { id: 'x', now })).toThrow(/title/i);
   });
@@ -111,5 +115,25 @@ describe('enrichmentPatch', () => {
     const { enrichmentPatch } = await import('./book');
     const b = createBook({ title: 'Mine', isbn13: '9780306406157', pendingLookup: true }, { id: 'a', now });
     expect(enrichmentPatch(b, { title: 'Theirs' }).title).toBeUndefined();
+  });
+});
+
+describe('lending helpers', () => {
+  it('builds a loan starting today and lists borrowers once', async () => {
+    const { lendingFrom, borrowers, todayIso } = await import('./book');
+    expect(lendingFrom(' Sam ', '')).toEqual({ to: 'Sam', lentOn: todayIso(), dueOn: undefined });
+    expect(borrowers([{ lending: { to: 'anna', lentOn: '' } }, { lending: { to: 'Anna', lentOn: '' } }, {}, { lending: { to: 'Ben', lentOn: '' } }]))
+      .toEqual(['anna', 'Ben']);
+  });
+});
+
+describe('copyDraft', () => {
+  it('keeps bibliographic data and drops personal data', async () => {
+    const { copyDraft } = await import('./book');
+    const b = createBook({ title: 'Dune', authors: ['F'], isbn13: '9780441172719', notes: 'mine', rating: 5, locationId: 'x', tags: ['t'],
+      lending: { to: 'S', lentOn: '2026-01-01' }, provenance: { title: { source: 'openlibrary' } } }, { id: 'a', now });
+    const d = copyDraft(b);
+    expect(d).toMatchObject({ title: 'Dune', authors: ['F'], isbn13: '9780441172719', ownership: 'owned', provenance: { title: { source: 'openlibrary' } } });
+    for (const k of ['id', 'notes', 'rating', 'locationId', 'tags', 'lending', 'createdAt']) expect(d).not.toHaveProperty(k);
   });
 });

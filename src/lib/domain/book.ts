@@ -1,4 +1,4 @@
-import type { Book, BookDraft, Id, IsoDate, Timestamp } from './types';
+import type { Book, BookDraft, Id, IsoDate, Lending, Timestamp } from './types';
 import { isbnKeys, normalizeIsbn } from './isbn';
 
 /** Trim, drop empties, de-duplicate case-insensitively (keeps first spelling). */
@@ -32,6 +32,7 @@ function normalize(book: Book): Book {
     tags: cleanList(book.tags),
     collections: cleanList(book.collections),
     copies: Math.max(1, Math.round(book.copies || 1)),
+    locationId: book.locationId ?? null,
     rating: book.rating ? Math.min(5, Math.max(1, Math.round(book.rating))) : undefined
   };
   if (isbn) {
@@ -140,4 +141,24 @@ export function enrichmentPatch(book: Book, found: Partial<Book>): Partial<Book>
   const target = hasPlaceholderTitle(book) ? { ...book, title: '' } : book;
   const patch = fillMissing(target, found);
   return { ...patch, pendingLookup: undefined };
+}
+
+/** A loan starting today. */
+export function lendingFrom(to: string, dueOn?: IsoDate): Lending {
+  return { to: to.trim(), lentOn: todayIso(), dueOn: dueOn || undefined };
+}
+
+/** Distinct borrower names (case-insensitive), for suggestions. */
+export function borrowers(books: Pick<Book, 'lending'>[]): string[] {
+  return cleanList(books.map((b) => b.lending?.to ?? '')).sort((a, b) => a.localeCompare(b));
+}
+
+/** Draft for another physical copy of a book: same bibliographic data, fresh personal data. */
+export function copyDraft(book: Book): BookDraft {
+  const {
+    id: _id, createdAt: _c, updatedAt: _u, locationId: _l, tags: _t, collections: _co, status: _s, rating: _r, startedOn: _so,
+    finishedOn: _f, notes: _n, condition: _cd, purchasedOn: _p, price: _pr, signed: _sg, lending: _le, pendingLookup: _pl,
+    copies: _cp, ownership: _o, ...biblio
+  } = book;
+  return { ...biblio, ownership: 'owned' };
 }

@@ -36,6 +36,8 @@ describe('books', () => {
     expect(book.locationId).toBe(study.id);
     const explicit = await lib.addBook({ title: 'Y', locationId: null });
     expect(explicit.locationId).toBeNull();
+    const unset = await lib.addBook({ title: 'Z', locationId: undefined });
+    expect(unset.locationId).toBe(study.id);
   });
 
   it('notifies subscribers on change', async () => {
