@@ -25,12 +25,20 @@
       return; // e.g. in component tests without the app
     }
     broken = cache.isBroken(url);
-    cache.objectUrl(url).then((u) => {
+    (async () => {
+      // Grids and lists use the small saved image; the big view (a book's page) uses the large one,
+      // fetched now if it isn't saved yet (the small one is shown until it arrives).
+      let u: string | undefined;
+      if (size === 'lg') {
+        u = await cache.objectUrl(url, 'full');
+        if (!u) cache.ensureFull(url);
+      }
+      u ??= await cache.objectUrl(url, 'thumb');
       if (url !== book.cover || !u || u === local) return;
       local = u;
       failed = false; // the saved copy works even if the network image didn't
       tries = 0;
-    });
+    })();
   }
 
   $effect(() => {

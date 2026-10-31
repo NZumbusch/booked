@@ -63,7 +63,7 @@
   const period = $derived(layout.wrap);
   const byId = $derived(new Map(items.map((it) => [it.book.id, it])));
   const hiddenCount = $derived($lib.books.filter((b) => b.cover).length - items.length);
-  const uncached = $derived(items.filter((it) => !cache.meta(it.book.cover)?.px).length);
+  const uncached = $derived(items.filter((it) => !cache.has(it.book.cover)).length);
 
   // ---- geometry (world units: a cover is 1 wide and 1.5 high; cells add a small gap)
   const tileH = 1.5;
@@ -275,7 +275,7 @@
     drawn.push({ id, x: sx, y: sy, w, h });
     const url = it.book.cover!;
     const bmp = w >= MIN_SCALE - 2 ? ready.get(url) : undefined;
-    if (w >= MIN_SCALE - 2 && !bmp && cache.meta(url)?.px) want(url);
+    if (w >= MIN_SCALE - 2 && !bmp && cache.has(url)) want(url);
     paintCover(ctx, it, bmp, sx, sy, w, h, o.grey);
     if (id === focusId || id === selected?.id) {
       ctx.strokeStyle = o.ring;
@@ -494,7 +494,7 @@
       for (const t of layout.tiles) {
         const it = byId.get(t.id)!;
         const p = worldOf(t.col, t.row);
-        const bmp = cache.meta(it.book.cover)?.px ? await cache.bitmap(it.book.cover!) : undefined;
+        const bmp = cache.has(it.book.cover) ? await cache.bitmap(it.book.cover!) : undefined;
         paintCover(ctx, it, bmp, pad + (p.x - box.x0) * cell, pad + (p.y - box.y0) * cell, cell, cell * tileH, grey);
         if (++done % 200 === 0) await new Promise((r) => setTimeout(r));
       }

@@ -9,8 +9,14 @@ import { COVER_SIZES, DEFAULT_COVER_SIZE, sourceUrl, type CoverSize } from './si
 /** One cached cover (keyed by the URL stored on the book). */
 export interface CoverEntry {
   url: string;
+  /** The large image (resolution per setting). Optional: in "detail" mode it is only fetched when a book is opened. */
   data?: ArrayBuffer;
   type?: string;
+  /** The small image every normal view uses (grids, lists, the wall): a few KB instead of tens. */
+  thumb?: ArrayBuffer;
+  thumbType?: string;
+  tpx?: number;
+  tbytes?: number;
   /** Stored image size. */
   w?: number;
   h?: number;
@@ -26,7 +32,10 @@ export interface CoverEntry {
   placeholder?: boolean;
   at: number;
 }
-export type CoverMeta = Omit<CoverEntry, 'data'>;
+export type CoverMeta = Omit<CoverEntry, 'data' | 'thumb'>;
+
+/** Longest side of the small image. */
+export const THUMB_PX = 300;
 
 class CoverDb extends Dexie {
   covers!: Table<CoverEntry, string>;
@@ -36,17 +45,33 @@ class CoverDb extends Dexie {
   }
 }
 
-export interface Processed {
+export interface Rendered {
   data: ArrayBuffer;
   type: string;
   w: number;
   h: number;
+}
+
+export interface Processed {
+  /** The large image; absent when only the small one was asked for. */
+  full?: Rendered;
+  thumb: Rendered;
   sourcePx: number;
   analysis: CoverAnalysis;
 }
 
-/** Turns a cover URL (or a previously stored image) into a resized JPEG plus colour analysis. */
-export type Processor = (input: { url: string; size: CoverSize; proxy?: string; stored?: ArrayBuffer; storedType?: string }) => Promise<Processed>;
+/**
+ * Turns a cover URL (or a previously stored image) into resized JPEGs plus colour analysis:
+ * `want: 'thumb'` gives only the small image, `'full'` both.
+ */
+export type Processor = (input: {
+  url: string;
+  size: CoverSize;
+  want: 'thumb' | 'full';
+  proxy?: string;
+  stored?: ArrayBuffer;
+  storedType?: string;
+}) => Promise<Processed>;
 
 export interface CacheStatus {
   mode: CacheMode;
@@ -141,6 +166,17 @@ export class CoverCache {
     return this.lib.state.settings.covers?.size ?? DEFAULT_COVER_SIZE;
   }
 
+  /** 'detail': only small images are saved for everything; the large one is fetched when a book is opened. 'all': large images are saved for every book. */
+  get fullMode(): 'detail' | 'all' {
+    return this.lib.state.settings.covers?.full ?? 'detail';
+  }
+
+  /** Is there any saved image (small or large) for this cover? */
+  has(url: string | undefined): boolean {
+    const e = url ? this.index.get(url) : undefined;
+    return !!(e?.px || e?.tpx);
+  }
+
   /** Cover URLs in the library, newest books first (those are likeliest to be looked at). */
   private wanted(): string[] {
     const seen = new Set<string>();
@@ -150,11 +186,14 @@ export class CoverCache {
       .filter((u): u is string => !!u && !seen.has(u) && !!seen.add(u));
   }
 
-  /** Does this cover need (re)processing for the chosen size? */
-  private needs(url: string, now: number): 'download' | 'shrink' | false {
+  /** Does this cover need (re)processing? 'thumb' = only the small copy is missing (made on the device, no download). */
+  private needs(url: string, now: number): 'download' | 'shrink' | 'thumb' | false {
     const e = this.index.get(url);
+    if (!e || (!e.px && !e.tpx)) return e?.failedAt && now - e.failedAt < DAY ? false : 'download';
+    if (!e.tpx) return 'thumb';
+    if (this.fullMode === 'detail') return false;
     const target = COVER_SIZES[this.size].px;
-    if (!e || !e.px) return e?.failedAt && now - e.failedAt < DAY ? false : 'download';
+    if (!e.px) return 'download';
     if (e.px > target * 1.05) return 'shrink';
     if (e.px < target * 0.95 && (e.sourcePx ?? 0) > e.px * 1.05) return 'download';
     return false;
@@ -166,9 +205,9 @@ export class CoverCache {
     let cached = 0, current = 0, bytes = 0, failed = 0;
     for (const u of wanted) {
       const e = this.index.get(u);
-      if (e?.px) {
+      if (e?.px || e?.tpx) {
         cached++;
-        bytes += e.bytes ?? 0;
+        bytes += (e.bytes ?? 0) + (e.tbytes ?? 0);
         if (!this.needs(u, now)) current++;
       } else if (e?.failedAt) failed++;
     }
@@ -241,25 +280,17 @@ export class CoverCache {
         const kind = this.needs(url, Date.now());
         if (!kind) continue;
         if (kind === 'download' && !this.allowed(force)) return; // e.g. left Wi-Fi: stop quietly
-        const stored = kind === 'shrink' ? await this.db.covers.get(url) : undefined;
+        const prev = kind === 'download' && !this.index.get(url)?.px ? undefined : await this.db.covers.get(url);
+        const local = kind === 'shrink' || kind === 'thumb';
         try {
-          const p = await this.process({ url, size: this.size, proxy, stored: stored?.data, storedType: stored?.type });
-          // A local shrink keeps knowing how big the source was (to grow again later).
-          const sourcePx = kind === 'shrink' ? Math.max(this.index.get(url)?.sourcePx ?? 0, p.sourcePx) : p.sourcePx;
-          const entry: CoverEntry = {
-            url, data: p.data, type: p.type, w: p.w, h: p.h, px: Math.max(p.w, p.h), sourcePx,
-            bytes: p.data.byteLength, analysis: p.analysis, nice: isNiceCover(p.w, p.h, p.analysis.contrast), at: Date.now()
-          };
-          await this.db.covers.put(entry);
-          const { data: _d, ...meta } = entry;
-          this.index.set(url, meta);
-          this.urls.delete(url);
-          this.bitmaps.delete(url);
+          const want = this.fullMode === 'all' && kind !== 'thumb' ? 'full' : 'thumb';
+          const p = await this.process({ url, size: this.size, want, proxy, stored: local ? prev?.data : undefined, storedType: prev?.type });
+          await this.save(url, p, kind === 'download' ? undefined : prev);
         } catch (e) {
           const failed: CoverEntry = {
             ...(this.index.get(url) ?? { url }), failedAt: Date.now(), at: Date.now(), ...(e instanceof PlaceholderError ? { placeholder: true } : {})
           };
-          if (!failed.px) {
+          if (!failed.px && !failed.tpx) {
             await this.db.covers.put(failed);
             this.index.set(url, failed);
           }
@@ -274,30 +305,90 @@ export class CoverCache {
     this.version.update((v) => v + 1);
   }
 
-  /** Forget the object URL of a cover (e.g. the browser says it can't load it), so the next `objectUrl` makes a fresh one. */
-  dropUrl(url: string | undefined): void {
-    if (url) this.urls.delete(url);
+  /** Store a processed cover, keeping what was saved before for the parts that weren't redone. */
+  private async save(url: string, p: Processed, prev?: CoverEntry) {
+    const big = p.full;
+    const entry: CoverEntry = {
+      url,
+      data: big?.data ?? prev?.data, type: big?.type ?? prev?.type,
+      px: big ? Math.max(big.w, big.h) : prev?.px,
+      bytes: big ? big.data.byteLength : prev?.bytes,
+      thumb: p.thumb.data, thumbType: p.thumb.type, tpx: Math.max(p.thumb.w, p.thumb.h), tbytes: p.thumb.data.byteLength,
+      w: big?.w ?? prev?.w ?? p.thumb.w, h: big?.h ?? prev?.h ?? p.thumb.h,
+      // A local re-render keeps knowing how big the source was (to grow again later).
+      sourcePx: prev?.sourcePx ? Math.max(prev.sourcePx, p.sourcePx) : p.sourcePx,
+      analysis: p.analysis, nice: isNiceCover(big?.w ?? p.thumb.w, big?.h ?? p.thumb.h, p.analysis.contrast), at: Date.now()
+    };
+    await this.db.covers.put(entry);
+    const { data: _d, thumb: _t, ...meta } = entry;
+    this.index.set(url, meta);
+    this.dropUrl(url);
+    this.bitmaps.delete(url);
   }
 
-  /** An object URL for a cached cover (or undefined → use the network URL). */
-  async objectUrl(url: string | undefined): Promise<string | undefined> {
-    if (!url || !this.index.get(url)?.px) return undefined;
-    const hit = this.urls.get(url);
+  private fullJobs = new Map<string, Promise<void>>();
+  private fullFailed = new Set<string>();
+
+  /**
+   * The large image for one cover, fetched now (a book was opened). Quiet if it is already saved,
+   * the device is offline, or it failed before in this session.
+   */
+  ensureFull(url: string | undefined): Promise<void> {
+    if (!url || url.startsWith('data:') || this.index.get(url)?.px || this.fullFailed.has(url)) return Promise.resolve();
+    if (this.mode === 'off' || (typeof navigator !== 'undefined' && !navigator.onLine)) return Promise.resolve();
+    const running = this.fullJobs.get(url);
+    if (running) return running;
+    const job = (async () => {
+      await this.loaded;
+      const prev = await this.db.covers.get(url);
+      const proxy = this.lib.state.settings.covers?.helper === 'off' ? undefined : helperUrlOf(this.lib.state.settings);
+      try {
+        const p = await this.process({ url, size: this.size, want: 'full', proxy });
+        await this.save(url, p, prev);
+        this.publish();
+        this.version.update((v) => v + 1);
+      } catch {
+        this.fullFailed.add(url);
+      }
+    })().finally(() => this.fullJobs.delete(url));
+    this.fullJobs.set(url, job);
+    return job;
+  }
+
+  /** Forget the object URLs of a cover (e.g. the browser says it can't load it), so the next `objectUrl` makes fresh ones. */
+  dropUrl(url: string | undefined): void {
+    if (!url) return;
+    this.urls.delete(`thumb:${url}`);
+    this.urls.delete(`full:${url}`);
+  }
+
+  /**
+   * An object URL for a saved cover, or undefined (→ use the network URL).
+   * 'thumb' (default) is the small image for grids and lists; 'full' only exists once the large one is saved.
+   */
+  async objectUrl(url: string | undefined, variant: 'thumb' | 'full' = 'thumb'): Promise<string | undefined> {
+    const meta = url ? this.index.get(url) : undefined;
+    if (!url || !(meta?.px || meta?.tpx)) return undefined;
+    if (variant === 'full' && !meta.px) return undefined;
+    const key = `${variant}:${url}`;
+    const hit = this.urls.get(key);
     if (hit) return hit;
     const e = await this.db.covers.get(url);
-    if (!e?.data) return undefined;
-    const objectUrl = URL.createObjectURL(new Blob([e.data], { type: e.type ?? 'image/jpeg' }));
-    this.urls.set(url, objectUrl);
+    const [data, type] = variant === 'full' || !e?.thumb ? [e?.data, e?.type] : [e.thumb, e.thumbType];
+    if (!data) return undefined;
+    const objectUrl = URL.createObjectURL(new Blob([data], { type: type ?? 'image/jpeg' }));
+    this.urls.set(key, objectUrl);
     return objectUrl;
   }
 
-  /** A decoded bitmap for canvas drawing (cover wall). */
+  /** A decoded bitmap for canvas drawing (cover wall): the small image, which is plenty for tiles and far lighter to keep in memory. */
   async bitmap(url: string): Promise<ImageBitmap | undefined> {
     const hit = this.bitmaps.get(url);
     if (hit) return hit;
     const e = await this.db.covers.get(url);
-    if (!e?.data) return undefined;
-    const bmp = await createImageBitmap(new Blob([e.data], { type: e.type ?? 'image/jpeg' }));
+    const data = e?.thumb ?? e?.data;
+    if (!data) return undefined;
+    const bmp = await createImageBitmap(new Blob([data], { type: (e?.thumb ? e.thumbType : e?.type) ?? 'image/jpeg' }));
     this.bitmaps.set(url, bmp);
     return bmp;
   }
@@ -351,13 +442,15 @@ function canvas(w: number, h: number): HTMLCanvasElement {
 }
 
 /** The real processor: fetch, never upscale, resize to the chosen size, JPEG, analyse colours. */
-export const browserProcessor: Processor = async ({ url, size, proxy, stored, storedType }) => {
-  if (stored) return processBlob(new Blob([stored], { type: storedType ?? 'image/jpeg' }), size, true);
+export const browserProcessor: Processor = async ({ url, size, want, proxy, stored, storedType }) => {
+  if (stored) return processBlob(new Blob([stored], { type: storedType ?? 'image/jpeg' }), size, want);
+  // The small image doesn't need a big source: ask for the small rendition first.
+  const candidates = want === 'thumb' ? [...new Set([sourceUrl(url, 'small'), url])] : sourceCandidates(url, size);
   let last: unknown = new Error('no image');
   // 1. Straight from the source to this device (the helper isn't involved).
-  for (const candidate of sourceCandidates(url, size)) {
+  for (const candidate of candidates) {
     try {
-      const done = await processBlob(await fetchDirect(candidate), size, false);
+      const done = await processBlob(await fetchDirect(candidate), size, want);
       if (looksLikePlaceholder(done.analysis) && !url.startsWith('data:')) {
         last = new PlaceholderError();
         continue; // try the smaller rendition before giving up
@@ -369,29 +462,39 @@ export const browserProcessor: Processor = async ({ url, size, proxy, stored, st
   }
   // 2. The source doesn't allow that: the helper passes on the small stored image, once (never the large one).
   if (proxy && !url.startsWith('data:') && !(last instanceof PlaceholderError)) {
-    const done = await processBlob(await fetchViaHelper(url, proxy), size, false);
+    const done = await processBlob(await fetchViaHelper(url, proxy), size, want);
     if (looksLikePlaceholder(done.analysis)) throw new PlaceholderError();
     return done;
   }
   throw last;
 };
 
-async function processBlob(blob: Blob, size: CoverSize, fromStored: boolean): Promise<Processed> {
+/** Draw the image scaled so its longest side is at most `max` px (never upscaled), as a JPEG. */
+async function render(bmp: ImageBitmap, max: number): Promise<Rendered> {
+  const sourcePx = Math.max(bmp.width, bmp.height);
+  const scale = Math.min(1, max / sourcePx);
+  const w = Math.max(1, Math.round(bmp.width * scale));
+  const h = Math.max(1, Math.round(bmp.height * scale));
+  const out = canvas(w, h);
+  const ctx = out.getContext('2d')!;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(bmp, 0, 0, w, h);
+  const jpeg = await new Promise<Blob>((resolve, reject) => out.toBlob((b) => (b ? resolve(b) : reject(new Error('encode failed'))), 'image/jpeg', 0.82));
+  return { data: await jpeg.arrayBuffer(), type: 'image/jpeg', w, h };
+}
+
+async function processBlob(blob: Blob, size: CoverSize, want: 'thumb' | 'full'): Promise<Processed> {
   const bmp = await createImageBitmap(blob);
   try {
-    const sourcePx = Math.max(bmp.width, bmp.height);
-    const scale = Math.min(1, COVER_SIZES[size].px / sourcePx);
-    const w = Math.max(1, Math.round(bmp.width * scale));
-    const h = Math.max(1, Math.round(bmp.height * scale));
-    const out = canvas(w, h);
-    const ctx = out.getContext('2d')!;
-    ctx.imageSmoothingQuality = 'high';
-    ctx.drawImage(bmp, 0, 0, w, h);
-    const jpeg = await new Promise<Blob>((resolve, reject) => out.toBlob((b) => (b ? resolve(b) : reject(new Error('encode failed'))), 'image/jpeg', 0.82));
     const sample = canvas(24, 36).getContext('2d', { willReadFrequently: true })!;
     sample.drawImage(bmp, 0, 0, 24, 36);
     const analysis = analyzePixels(sample.getImageData(0, 0, 24, 36).data);
-    return { data: await jpeg.arrayBuffer(), type: 'image/jpeg', w, h, sourcePx: fromStored ? Math.max(sourcePx, 0) : sourcePx, analysis };
+    return {
+      thumb: await render(bmp, THUMB_PX),
+      full: want === 'full' ? await render(bmp, COVER_SIZES[size].px) : undefined,
+      sourcePx: Math.max(bmp.width, bmp.height),
+      analysis
+    };
   } finally {
     bmp.close?.();
   }
