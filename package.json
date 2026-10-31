@@ -29,6 +29,7 @@
   "dependencies": {
     "barcode-detector": "^3.2.3",
     "dexie": "^4.4.7",
-    "leaflet": "^1.9.4"
+    "leaflet": "^1.9.4",
+    "tesseract.js": "^6.0.1"
   }
 }

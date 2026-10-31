@@ -18,6 +18,21 @@
   // svelte-ignore state_referenced_locally
   let name = $state($lib.settings.userName ?? '');
   let busy = $state(false);
+  let confirming = $state(false);
+
+  async function unshare() {
+    if (!space) return;
+    busy = true;
+    try {
+      const owner = space.role === 'owner';
+      const id = space.id;
+      await attempt(() => (owner ? ctl.stopSharing(id) : ctl.leave(id, false)), owner ? 'Sharing stopped. The books stay in your library.' : 'Left the shared place; your copy stays.');
+      confirming = false;
+      open = false;
+    } finally {
+      busy = false;
+    }
+  }
   const count = $derived($lib && (lib.counts().get(location.id) ?? 0));
 
   async function create() {
@@ -56,6 +71,17 @@
       {st?.state === 'syncing' ? 'Syncing…' : st?.state === 'error' ? `Problem: ${st.message}` : `Synced ${space.lastSyncAt ? new Date(space.lastSyncAt).toLocaleString() : '—'}`}
       · Manage under Settings › Shared places.
     </p>
+    {#if confirming}
+      <p>{space.role === 'owner'
+        ? 'The shared copy is deleted and the link stops working for everyone. The books stay in your library; family members keep their last copy.'
+        : 'You stop receiving changes. Your copy of the books stays.'}</p>
+      <div class="row end">
+        <button onclick={() => (confirming = false)}>Cancel</button>
+        <button class="btn-danger solid" disabled={busy} onclick={unshare}>{space.role === 'owner' ? 'Stop sharing' : 'Leave'}</button>
+      </div>
+    {:else}
+      <div class="row end"><button class="btn-danger" onclick={() => (confirming = true)}>{space.role === 'owner' ? 'Stop sharing this room' : 'Leave this shared room'}</button></div>
+    {/if}
   {:else if !hasHelper}
     <p>Sharing needs the small Cloudflare helper (the same one that keeps Google Drive signed in) with its database switched on.</p>
     <p class="muted small">Set it up once (about 10 minutes): README › “Shared places”. Then paste its address under Settings › Sync › Stay signed in.</p>
