@@ -27,6 +27,18 @@ export const FIELD_ORDERS: Record<FieldOrder, string> = {
 export const CELL_W = 1.12;
 export const CELL_H = 1.62;
 
+/** Cell geometry: the world size of one grid cell. */
+export interface Geometry {
+  cellW: number;
+  cellH: number;
+}
+export const RECT: Geometry = { cellW: CELL_W, cellH: CELL_H };
+
+/** World position of a cell's top-left corner. */
+export function cellPos(col: number, row: number, g: Geometry): { x: number; y: number } {
+  return { x: col * g.cellW, y: row * g.cellH };
+}
+
 export interface FieldItem {
   book: Book;
   analysis?: CoverAnalysis;
@@ -67,16 +79,15 @@ function wobble(angle: number, seed: number): number {
  * The `n` cells of a roughly round blob around (0,0), innermost first. Each cell's distance is
  * scaled by a wobble that only depends on its angle, so the shape stays solid (star-shaped).
  */
-export function discCells(n: number, seed = 1): FieldTile[] {
+export function discCells(n: number, seed = 1, g: Geometry = RECT): FieldTile[] {
   if (n <= 0) return [];
-  const radius = Math.sqrt((n * CELL_W * CELL_H) / Math.PI) * 1.35 + 2;
-  const maxC = Math.ceil(radius / CELL_W);
-  const maxR = Math.ceil(radius / CELL_H);
+  const radius = Math.sqrt((n * g.cellW * g.cellH) / Math.PI) * 1.35 + 2;
+  const maxC = Math.ceil(radius / g.cellW) + 1;
+  const maxR = Math.ceil(radius / g.cellH) + 1;
   const cells: { col: number; row: number; d: number }[] = [];
   for (let row = -maxR; row <= maxR; row++) {
     for (let col = -maxC; col <= maxC; col++) {
-      const x = col * CELL_W;
-      const y = row * CELL_H;
+      const { x, y } = cellPos(col, row, g);
       const d = Math.hypot(x, y) / (1 + wobble(Math.atan2(y, x), seed));
       cells.push({ col, row, d });
     }
@@ -84,9 +95,9 @@ export function discCells(n: number, seed = 1): FieldTile[] {
   return cells.sort((a, b) => a.d - b.d || a.row - b.row || a.col - b.col).slice(0, n).map(({ col, row }) => ({ id: '', col, row }));
 }
 
-/** Torus size for n covers: roughly square in world units. */
-export function torusSize(n: number): { cols: number; rows: number } {
-  const cols = Math.max(1, Math.round(Math.sqrt((n * CELL_H) / CELL_W)));
+/** Torus size for n covers: roughly square in world units (an even number of rows for honeycombs, so they wrap). */
+export function torusSize(n: number, g: Geometry = RECT): { cols: number; rows: number } {
+  const cols = Math.max(1, Math.round(Math.sqrt((n * g.cellH) / g.cellW)));
   return { cols, rows: Math.max(1, Math.ceil(n / cols)) };
 }
 
@@ -201,7 +212,7 @@ function sortKeyed(list: Keyed[], order: FieldOrder): Keyed[] {
   );
 }
 
-function labelsFor(list: Keyed[], tiles: FieldTile[], wrap?: { cols: number; rows: number }): FieldLabel[] {
+function labelsFor(list: Keyed[], tiles: FieldTile[], g: Geometry, wrap?: { cols: number; rows: number }): FieldLabel[] {
   const acc = new Map<string, { text: string; level: 1 | 2; xs: number[]; ys: number[] }>();
   list.forEach((k, i) => {
     const t = tiles[i];
@@ -222,19 +233,22 @@ function labelsFor(list: Keyed[], tiles: FieldTile[], wrap?: { cols: number; row
     .filter(([key, e]) => e.level === 1 || e.xs.length < (groupSize.get(key.slice(2).split('\u0000')[0]) ?? 0))
     .map(([, e]) => e)
     .filter((e) => e.xs.length >= (e.level === 1 ? 2 : 3))
-    .map((e) => ({ text: e.text, level: e.level, count: e.xs.length, x: (median(e.xs) + 0.5) * CELL_W - 0.06, y: (median(e.ys) + 0.5) * CELL_H - 0.06 }))
+    .map((e) => {
+      const p = cellPos(median(e.xs), median(e.ys), g);
+      return { text: e.text, level: e.level, count: e.xs.length, x: p.x + g.cellW / 2, y: p.y + g.cellH / 2 };
+    })
     .filter((l) => !wrap || l.count < wrap.cols * wrap.rows);
 }
 
 // ---------------------------------------------------------------- colour wheel
 
 /** Assign each item to the free cell nearest its target point (greedy, outermost targets first). */
-function assignNearest(cells: FieldTile[], targets: { item: FieldItem; x: number; y: number; priority: number }[]): FieldTile[] {
+function assignNearest(cells: FieldTile[], targets: { item: FieldItem; x: number; y: number; priority: number }[], g: Geometry): FieldTile[] {
   const free = new Map(cells.map((c) => [`${c.col},${c.row}`, c]));
   const out: FieldTile[] = [];
   for (const t of [...targets].sort((a, b) => b.priority - a.priority)) {
-    const c0 = Math.round(t.x / CELL_W);
-    const r0 = Math.round(t.y / CELL_H);
+    const r0 = Math.round(t.y / g.cellH);
+    const c0 = Math.round((t.x - cellPos(0, r0, g).x) / g.cellW);
     let found: FieldTile | undefined;
     for (let ring = 0; !found && ring < 400; ring++) {
       let best: { cell: FieldTile; d: number } | undefined;
@@ -243,7 +257,8 @@ function assignNearest(cells: FieldTile[], targets: { item: FieldItem; x: number
           if (Math.max(Math.abs(dc), Math.abs(dr)) !== ring) continue;
           const cell = free.get(`${c0 + dc},${r0 + dr}`);
           if (!cell) continue;
-          const d = Math.hypot(cell.col * CELL_W - t.x, cell.row * CELL_H - t.y);
+          const p = cellPos(cell.col, cell.row, g);
+          const d = Math.hypot(p.x - t.x, p.y - t.y);
           if (!best || d < best.d) best = { cell, d };
         }
       }
@@ -256,8 +271,11 @@ function assignNearest(cells: FieldTile[], targets: { item: FieldItem; x: number
   return out;
 }
 
-function colorWheel(items: FieldItem[], cells: FieldTile[]): FieldTile[] {
-  const radius = Math.max(1, ...cells.map((c) => Math.hypot(c.col * CELL_W, c.row * CELL_H)));
+function colorWheel(items: FieldItem[], cells: FieldTile[], g: Geometry): FieldTile[] {
+  const radius = Math.max(1, ...cells.map((c) => {
+    const p = cellPos(c.col, c.row, g);
+    return Math.hypot(p.x, p.y);
+  }));
   // Rank by colourfulness so the wheel fills evenly from grey centre to vivid edge.
   const vivid = (it: FieldItem) => (it.analysis ? it.analysis.saturation * (1 - Math.abs(it.analysis.lightness - 0.5)) : -1);
   const ranked = [...items].sort((a, b) => vivid(a) - vivid(b));
@@ -266,7 +284,7 @@ function colorWheel(items: FieldItem[], cells: FieldTile[]): FieldTile[] {
     const angle = ((item.analysis?.hue ?? 0) / 360) * Math.PI * 2 - Math.PI / 2;
     return { item, x: Math.cos(angle) * r, y: Math.sin(angle) * r, priority: r };
   });
-  return assignNearest(cells, targets);
+  return assignNearest(cells, targets, g);
 }
 
 /** Endless colour: hue runs along x (wraps naturally), lightness goes up and back down along y (wraps too). */
@@ -288,23 +306,23 @@ function colorTorus(items: FieldItem[], cols: number, rows: number): FieldTile[]
 
 // ---------------------------------------------------------------- main
 
-export function fieldLayout(items: FieldItem[], order: FieldOrder, shape: FieldShape, locations: Location[], seed = 7): FieldLayout {
+export function fieldLayout(items: FieldItem[], order: FieldOrder, shape: FieldShape, locations: Location[], seed = 7, g: Geometry = RECT): FieldLayout {
   if (!items.length) return { tiles: [], labels: [], bounds: { minCol: 0, maxCol: 0, minRow: 0, maxRow: 0 } };
   let tiles: FieldTile[];
   let labels: FieldLabel[] = [];
   let wrap: FieldLayout['wrap'];
 
   if (shape === 'disc') {
-    const cells = discCells(items.length, seed);
-    if (order === 'color') tiles = colorWheel(items, cells);
+    const cells = discCells(items.length, seed, g);
+    if (order === 'color') tiles = colorWheel(items, cells, g);
     else {
       const list = sortKeyed(keyed(items, order, locations), order);
       const path = hilbertSorted(cells);
       tiles = list.map((k, i) => ({ id: k.item.book.id, col: path[i].col, row: path[i].row }));
-      labels = labelsFor(list, tiles);
+      labels = labelsFor(list, tiles, g);
     }
   } else {
-    wrap = torusSize(items.length);
+    wrap = torusSize(items.length, g);
     // Fill every cell: if the torus has a few more cells than books, the first books repeat.
     const filled = [...items];
     for (let i = 0; filled.length < wrap.cols * wrap.rows; i++) filled.push(items[i % items.length]);
@@ -315,7 +333,7 @@ export function fieldLayout(items: FieldItem[], order: FieldOrder, shape: FieldS
       for (let row = 0; row < wrap.rows; row++) for (let col = 0; col < wrap.cols; col++) cells.push({ id: '', col, row });
       const path = hilbertSorted(cells);
       tiles = list.map((k, i) => ({ id: k.item.book.id, col: path[i].col, row: path[i].row }));
-      labels = labelsFor(list, tiles, wrap);
+      labels = labelsFor(list, tiles, g, wrap);
     }
   }
   const cols = tiles.map((t) => t.col);

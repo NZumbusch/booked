@@ -9,7 +9,8 @@
   import { navigate, route } from '../lib/router';
   import { covers, library, toast } from '../lib/stores/app';
   import Icon from '../lib/ui/Icon.svelte';
-  import { CELL_H, CELL_W, FIELD_ORDERS, fieldLayout, fieldTopics, hasTopic, type FieldItem, type FieldOrder, type FieldShape } from '../lib/wall/field';
+  import { cellPos, FIELD_ORDERS, fieldLayout, fieldTopics, hasTopic, RECT, type FieldItem, type FieldOrder, type FieldShape } from '../lib/wall/field';
+  import { placeInRect } from '../lib/wall/paint';
 
   const lib = library();
   const cache = covers();
@@ -19,9 +20,9 @@
   // ---- options (kept in the URL with the library filter)
   const query = $derived($route.query);
   const order = $derived<FieldOrder>((query.order as FieldOrder) in FIELD_ORDERS ? (query.order as FieldOrder) : 'color');
-  const shape = $derived<FieldShape>(query.shape === 'endless' ? 'endless' : 'disc');
+  // Endless (wraps around in every direction) by default; "disc" shows the whole collection as one round field.
+  const shape = $derived<FieldShape>(query.shape === 'disc' ? 'disc' : 'endless');
   const topic = $derived(query.topic ?? '');
-  const bubbles = $derived(query.style === 'bubbles');
   const niceOnly = $derived(query.all !== '1');
   const focusId = $derived(query.focus);
   const filter = $derived(filterFromQuery(query));
@@ -39,19 +40,26 @@
   });
   const topics = $derived(fieldTopics(baseItems));
   const items = $derived(topic ? baseItems.filter((it) => hasTopic(it.book, topic)) : baseItems);
-  const layout = $derived(fieldLayout(items, order, shape, $lib.locations));
+  const geometry = RECT;
+  const layout = $derived(fieldLayout(items, order, shape, $lib.locations, 7, geometry));
   const period = $derived(layout.wrap);
-  /** Cell → book, for hit-testing (with wrap-around). */
-  const cellMap = $derived(new Map(layout.tiles.map((t) => [`${t.col},${t.row}`, t.id])));
   const byId = $derived(new Map(items.map((it) => [it.book.id, it])));
   const hiddenCount = $derived($lib.books.filter((b) => b.cover).length - items.length);
   const uncached = $derived(items.filter((it) => !cache.meta(it.book.cover)?.px).length);
 
-  // ---- geometry (world units: a cover is 1 wide, 1.5 high; cells include a small gap)
-  function worldOf(col: number, row: number): { x: number; y: number } {
-    return { x: col * CELL_W, y: row * CELL_H };
-  }
-  const mod = (a: number, n: number) => ((a % n) + n) % n;
+  // ---- geometry (world units: a cover is 1 wide and 1.5 high; cells add a small gap)
+  const tileH = 1.5;
+  const worldOf = (col: number, row: number) => cellPos(col, row, geometry);
+  /** World bounding box of all tiles. */
+  const box = $derived.by(() => {
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const t of layout.tiles) {
+      const p = worldOf(t.col, t.row);
+      x0 = Math.min(x0, p.x); y0 = Math.min(y0, p.y);
+      x1 = Math.max(x1, p.x + 1); y1 = Math.max(y1, p.y + tileH);
+    }
+    return { x0, y0, x1, y1 };
+  });
 
   // ---- camera
   let canvas: HTMLCanvasElement | undefined = $state();
@@ -70,15 +78,12 @@
     if (period) {
       // Endless: start at a comfortable zoom in the middle of the field.
       scale = Math.max(14, Math.min(48, width / 9));
-      ox = width / 2 - (period.cols * CELL_W * scale) / 2;
-      oy = height / 2 - (period.rows * CELL_H * scale) / 2;
+      ox = width / 2 - (period.cols * geometry.cellW * scale) / 2;
+      oy = height / 2 - (period.rows * geometry.cellH * scale) / 2;
     } else {
-      const b = layout.bounds;
-      const w = (b.maxCol - b.minCol + 1) * CELL_W;
-      const h = (b.maxRow - b.minRow + 1) * CELL_H;
-      scale = Math.min(width / w, height / h) * 0.94;
-      ox = width / 2 - ((b.minCol + b.maxCol + 1) / 2) * CELL_W * scale;
-      oy = height / 2 - ((b.minRow + b.maxRow + 1) / 2) * CELL_H * scale;
+      scale = Math.min(width / (box.x1 - box.x0), height / (box.y1 - box.y0)) * 0.94;
+      ox = width / 2 - ((box.x0 + box.x1) / 2) * scale;
+      oy = height / 2 - ((box.y0 + box.y1) / 2) * scale;
     }
     dirty = true;
   }
@@ -87,7 +92,7 @@
     const t = layout.tiles.find((x) => x.id === id);
     if (!t) return false;
     const p = worldOf(t.col, t.row);
-    animateTo(cellPx, width / 2 - (p.x + 0.5) * cellPx, height / 2 - (p.y + 0.75) * cellPx);
+    animateTo(cellPx, width / 2 - (p.x + 0.5) * cellPx, height / 2 - (p.y + tileH / 2) * cellPx);
     return true;
   }
 
@@ -139,8 +144,9 @@
     const cx = width / 2;
     const cy = height / 2;
     const reach = Math.max(width, height) * 0.62;
-    const periodX = period ? period.cols * CELL_W : 0;
-    const periodY = period ? period.rows * CELL_H : 0;
+    const periodX = period ? period.cols * geometry.cellW : 0;
+    const periodY = period ? period.rows * geometry.cellH : 0;
+    drawn = [];
     // Visible world rectangle (plus a margin for fisheye drift).
     const vx0 = -ox / scale - 2;
     const vy0 = -oy / scale - 2;
@@ -189,53 +195,44 @@
     ctx.textAlign = 'start';
   }
 
+  /** What was drawn last frame (screen space), for hit-testing exactly what the eye sees. */
+  let drawn: { id: string; x: number; y: number; w: number; h: number }[] = [];
+
   function drawTile(ctx: CanvasRenderingContext2D, it: FieldItem, id: string, wx: number, wy: number, o: { grey: string; ring: string; cx: number; cy: number; reach: number }) {
-    let sx = wx * scale + ox;
-    let sy = wy * scale + oy;
-    let w = scale;
-    let h = 1.5 * scale;
-    if (bubbles) {
-      // Apple-Watch-style: round covers that shrink and drift inwards towards the edges.
-      sy += 0.25 * scale;
-      h = w;
-      const dx = sx + w / 2 - o.cx;
-      const dy = sy + h / 2 - o.cy;
-      const d = Math.min(1, Math.hypot(dx, dy) / o.reach);
-      const f = Math.max(0.25, 1 - d * d * 0.75);
-      const pull = 0.82 + 0.18 * f;
-      sx = o.cx + dx * pull - (w * f) / 2;
-      sy = o.cy + dy * pull - (h * f) / 2;
-      w *= f * 1.1;
-      h *= f * 1.1;
-    }
-    if (sx + w < 0 || sy + h < 0 || sx > width || sy > height) return;
+    const sx = wx * scale + ox;
+    const sy = wy * scale + oy;
+    const w = scale;
+    const h = tileH * scale;
+    if (sx + w < 0 || sy + h < 0 || sx > width || sy > height || w < 0.6) return;
+    drawn.push({ id, x: sx, y: sy, w, h });
     const url = it.book.cover!;
-    const bmp = w >= 26 ? ready.get(url) : undefined;
-    if (w >= 26 && !bmp && cache.meta(url)?.px) want(url);
-    ctx.save();
-    if (bubbles) {
-      ctx.beginPath();
-      ctx.arc(sx + w / 2, sy + h / 2, w / 2, 0, Math.PI * 2);
-      ctx.clip();
-    }
-    if (bmp) {
-      if (bubbles) {
-        const side = Math.min(bmp.width, bmp.height);
-        ctx.drawImage(bmp, (bmp.width - side) / 2, (bmp.height - side) / 3, side, side, sx, sy, w, h);
-      } else ctx.drawImage(bmp, sx, sy, w, h);
-    } else {
-      ctx.fillStyle = it.analysis ? rgbCss(it.analysis.color) : o.grey;
-      ctx.fillRect(sx, sy, w, h);
-    }
-    ctx.restore();
+    const bmp = w >= 22 ? ready.get(url) : undefined;
+    if (w >= 22 && !bmp && cache.meta(url)?.px) want(url);
+    paintCover(ctx, it, bmp, sx, sy, w, h, o.grey);
     if (id === focusId || id === selected?.id) {
       ctx.strokeStyle = o.ring;
       ctx.lineWidth = 3;
-      if (bubbles) {
-        ctx.beginPath();
-        ctx.arc(sx + w / 2, sy + h / 2, w / 2 + 2, 0, Math.PI * 2);
-        ctx.stroke();
-      } else ctx.strokeRect(sx - 2, sy - 2, w + 4, h + 4);
+      ctx.beginPath();
+      ctx.roundRect(sx - 2.5, sy - 2.5, w + 5, h + 5, 4);
+      ctx.stroke();
+    }
+  }
+
+  /** A cover in its tile, never stretched; also used for the poster. */
+  function paintCover(ctx: CanvasRenderingContext2D, it: FieldItem, bmp: ImageBitmap | undefined, x: number, y: number, w: number, h: number, grey: string) {
+    if (!bmp) {
+      // Not decoded yet (or too small to matter): its dominant colour stands in.
+      ctx.fillStyle = it.analysis ? rgbCss(it.analysis.color) : grey;
+      ctx.fillRect(x, y, w, h);
+      return;
+    }
+    const p = placeInRect(bmp.width, bmp.height, { x, y, w, h });
+    ctx.drawImage(bmp, p.src.x, p.src.y, p.src.w, p.src.h, p.dst.x, p.dst.y, p.dst.w, p.dst.h);
+    if (w > 14) {
+      // Hairline edge, so pale covers don't melt into a pale background.
+      ctx.strokeStyle = 'rgba(0,0,0,0.12)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(p.dst.x + 0.5, p.dst.y + 0.5, p.dst.w - 1, p.dst.h - 1);
     }
   }
 
@@ -300,18 +297,18 @@
     if (pointers.size === 0) down = undefined;
   }
 
-  /** The cover under a screen point, if any (wrapping around in endless mode). */
+  /** The cover under a screen point, if any: exactly what was drawn there (fisheye and endless copies included). */
   function hit(x: number, y: number): string | undefined {
-    const wx = (x - ox) / scale;
-    const wy = (y - oy) / scale;
-    let col = Math.floor(wx / CELL_W);
-    let row = Math.floor(wy / CELL_H);
-    if (period) {
-      col = mod(col, period.cols);
-      row = mod(row, period.rows);
+    let best: string | undefined;
+    let bestD = Infinity;
+    for (const d of drawn) {
+      // Taps in the thin gaps count for the nearest cover (fingers aren't precise).
+      const pad = Math.max(4, d.w * 0.06);
+      if (x < d.x - pad || x > d.x + d.w + pad || y < d.y - pad || y > d.y + d.h + pad) continue;
+      const dist = Math.hypot(x - (d.x + d.w / 2), y - (d.y + d.h / 2)) / d.w;
+      if (dist < bestD) [best, bestD] = [d.id, dist];
     }
-    // Taps in the thin gaps count for the cover they belong to (fingers aren't precise).
-    return cellMap.get(`${col},${row}`);
+    return best;
   }
 
   function tap(x: number, y: number) {
@@ -401,28 +398,23 @@
   async function exportPoster() {
     exporting = true;
     try {
-      const b = layout.bounds;
-      const colsN = b.maxCol - b.minCol + 1;
-      const rowsN = b.maxRow - b.minRow + 1;
-      const cell = Math.max(24, Math.min(160, Math.floor(4096 / (colsN * CELL_W))));
+      const bw = box.x1 - box.x0;
+      const bh = box.y1 - box.y0;
+      const cell = Math.max(24, Math.min(160, Math.floor(4096 / bw)));
       const pad = cell;
       const out = document.createElement('canvas');
-      out.width = Math.round(colsN * CELL_W * cell + pad * 2);
-      out.height = Math.round(rowsN * CELL_H * cell + pad * 2);
+      out.width = Math.round(bw * cell + pad * 2);
+      out.height = Math.round(bh * cell + pad * 2);
       const ctx = out.getContext('2d')!;
       ctx.fillStyle = css('--bg', '#f7f5f0');
       ctx.fillRect(0, 0, out.width, out.height);
+      const grey = css('--surface-2', '#ddd');
       let done = 0;
       for (const t of layout.tiles) {
         const it = byId.get(t.id)!;
-        const x = pad + (t.col - b.minCol) * CELL_W * cell;
-        const y = pad + (t.row - b.minRow) * CELL_H * cell;
+        const p = worldOf(t.col, t.row);
         const bmp = cache.meta(it.book.cover)?.px ? await cache.bitmap(it.book.cover!) : undefined;
-        if (bmp) ctx.drawImage(bmp, x, y, cell, cell * 1.5);
-        else {
-          ctx.fillStyle = it.analysis ? rgbCss(it.analysis.color) : css('--surface-2', '#ddd');
-          ctx.fillRect(x, y, cell, cell * 1.5);
-        }
+        paintCover(ctx, it, bmp, pad + (p.x - box.x0) * cell, pad + (p.y - box.y0) * cell, cell, cell * tileH, grey);
         if (++done % 200 === 0) await new Promise((r) => setTimeout(r));
       }
       ctx.textAlign = 'center';
@@ -430,8 +422,8 @@
       for (const l of layout.labels.filter((x) => x.level === 1)) {
         const size = Math.round(cell * 0.9);
         ctx.font = `700 ${size}px system-ui, sans-serif`;
-        const x = pad + (l.x - b.minCol * CELL_W) * cell;
-        const y = pad + (l.y - b.minRow * CELL_H) * cell;
+        const x = pad + (l.x - box.x0) * cell;
+        const y = pad + (l.y - box.y0) * cell;
         const text = `${l.text} · ${l.count}`;
         const w = ctx.measureText(text).width + size;
         ctx.fillStyle = 'rgba(20,20,20,0.82)';
@@ -484,8 +476,7 @@
     {/if}
     <div class="tools" role="toolbar" aria-label="Wall options">
       <button class:on={shape === 'endless'} aria-pressed={shape === 'endless'} title="Endless: scroll forever in every direction"
-        aria-label="Endless scrolling" onclick={() => setQuery({ shape: shape === 'endless' ? undefined : 'endless' })}>∞</button>
-      <button class:on={bubbles} aria-pressed={bubbles} title="Bubbles" aria-label="Bubbles" onclick={() => setQuery({ style: bubbles ? undefined : 'bubbles' })}>◉</button>
+        aria-label="Endless scrolling" onclick={() => setQuery({ shape: shape === 'endless' ? 'disc' : undefined })}>∞</button>
       <button aria-label="Back to the start" title="Back to the start" onclick={fit}>⤢</button>
       <button aria-label="Save as poster" title="Save as poster" disabled={exporting} onclick={exportPoster}>{exporting ? '…' : '⤓'}</button>
     </div>
@@ -522,5 +513,5 @@
   .sel { position: absolute; left: 10px; right: 10px; bottom: 10px; display: flex; gap: 10px; align-items: center; padding: 10px 12px; }
   .sel-text { flex: 1; display: grid; min-width: 0; }
   .sel-text strong, .sel-text span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .hint { position: absolute; left: 0; right: 0; bottom: 6px; text-align: center; margin: 0; pointer-events: none; }
+  .hint { position: absolute; left: 50%; transform: translateX(-50%); bottom: 8px; margin: 0; pointer-events: none; white-space: nowrap; padding: 4px 12px; border-radius: 999px; background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(6px); }
 </style>
