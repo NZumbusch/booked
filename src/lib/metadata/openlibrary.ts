@@ -94,7 +94,7 @@ function format(physical: string | undefined): BookFormat | undefined {
 }
 
 /** Catalogue housekeeping that isn't about the book's content. */
-const NOISE = /^(new york times|large type|large print|accessible book|protected daisy|in library|lending library|open library|long now|reading level|award winner|.*award winner|nyt)/;
+const NOISE = /^(new york times|large type|large print|accessible book|protected daisy|in library|lending library|open library|long now|reading level|award winner|.*award winner|nyt)|translations? into|\((langue|language)\)|lectures et morceaux|morceaux choisis|^textes$|^readers$/;
 
 /** Drop machine tags ("nyt:…", "award:…"), catalogue noise and near-duplicates ("Science-fiction" = "Science fiction"). */
 export function cleanSubjects(subjects: string[] | undefined, max = 12): string[] {

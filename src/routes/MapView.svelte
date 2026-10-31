@@ -3,11 +3,27 @@
   import type { Book, PlaceBasis } from '../lib/domain/types';
   import { plural } from '../lib/format';
   import { clusterByPlace } from '../lib/metadata/geocode';
-  import { library } from '../lib/stores/app';
+  import { knowledge, library } from '../lib/stores/app';
 
-  let { mode = 'written' }: { mode?: 'written' | 'owned' } = $props();
+  let { mode = 'written' }: { mode?: 'written' | 'owned' | 'stories' } = $props();
 
   const lib = library();
+  const kn = knowledge();
+  const k = kn.state;
+  kn.refresh();
+  /** Where the stories take place (Wikidata "narrative location"), one entry per real place per book. */
+  const storyGroups = $derived(
+    clusterByPlace($lib.books.flatMap((b) => {
+      const w = b.identifiers?.wikidata ? $k.works.get(b.identifiers.wikidata) : undefined;
+      const seen = new Set<string>();
+      return (w?.settings ?? []).filter((st) => st.point).flatMap((st) => {
+        const key = `${st.point!.lat.toFixed(1)},${st.point!.lon.toFixed(1)}`;
+        if (seen.has(key)) return [];
+        seen.add(key);
+        return [{ point: st.point!, item: b }];
+      });
+    }), 1)
+  );
   let el: HTMLDivElement | undefined = $state();
   let L: typeof import('leaflet') | undefined;
   let map: import('leaflet').Map | undefined;
@@ -62,7 +78,15 @@
     const color = getComputedStyle(document.documentElement).getPropertyValue('--chart-bar').trim() || '#b5752c';
     const ring = getComputedStyle(document.documentElement).getPropertyValue('--surface').trim() || '#fff';
     const points: [number, number][] = [];
-    if (mode === 'written') {
+    if (mode === 'stories') {
+      for (const g of storyGroups) {
+        const list = g.items.slice(0, 30).map((b: Book) => `<li><a href="#/book/${b.id}">${esc(b.title)}</a>${b.authors[0] ? ` <span class="m">· ${esc(b.authors[0])}</span>` : ''}</li>`).join('');
+        L.circleMarker([g.point.lat, g.point.lon], { radius: radius(g.items.length), color: ring, weight: 2, fillColor: color, fillOpacity: 0.85 })
+          .bindPopup(`<strong>${esc(g.point.label ?? '')}</strong><br><span class="m">${plural(g.items.length, 'story', 'stories')} set here</span><ul>${list}</ul>`, { maxHeight: 260 })
+          .addTo(layer);
+        points.push([g.point.lat, g.point.lon]);
+      }
+    } else if (mode === 'written') {
       for (const g of writtenGroups) {
         const list = g.items
           .slice(0, 30)
@@ -90,6 +114,7 @@
     void mode;
     void writtenGroups;
     void placeGroups;
+    void storyGroups;
     draw();
   });
 </script>
@@ -97,8 +122,9 @@
 <div class="page stack">
   <h1>Map</h1>
   <div class="seg" role="tablist">
-    <a role="tab" href="#/map/written" aria-selected={mode === 'written'} class:on={mode === 'written'}>Where they were written</a>
-    <a role="tab" href="#/map/owned" aria-selected={mode === 'owned'} class:on={mode === 'owned'}>Where they are</a>
+    <a role="tab" href="#/map/written" aria-selected={mode === 'written'} class:on={mode === 'written'}>Written</a>
+    <a role="tab" href="#/map/stories" aria-selected={mode === 'stories'} class:on={mode === 'stories'}>Stories set</a>
+    <a role="tab" href="#/map/owned" aria-selected={mode === 'owned'} class:on={mode === 'owned'}>Your places</a>
   </div>
 
   {#if mode === 'written'}
@@ -107,6 +133,8 @@
       Where the place of writing isn’t recorded, the place of first publication or the author’s home town is used (tap a dot for details).
       Books get this automatically from Wikidata when they’re added.
     </p>
+  {:else if mode === 'stories'}
+    <p class="muted small">Where your books are set (Wikidata “narrative location”): {plural(new Set(storyGroups.flatMap((g) => g.items.map((b) => b.id))).size, 'book')} in {plural(storyGroups.length, 'place')} so far. Fictional places like Arrakis can’t be shown.</p>
   {:else if placesWithoutGeo}
     <p class="muted small">{plural(placesWithoutGeo, 'place')} without a map position. Set it under <a href="#/locations">Places</a> › Edit › Map position.</p>
   {/if}
@@ -119,7 +147,7 @@
 </div>
 
 <style>
-  .seg { display: grid; grid-template-columns: 1fr 1fr; background: var(--surface-2); border-radius: 999px; padding: 4px; gap: 4px; }
+  .seg { display: grid; grid-template-columns: 1fr 1fr 1fr; background: var(--surface-2); border-radius: 999px; padding: 4px; gap: 4px; }
   .seg a { text-align: center; text-decoration: none; min-height: 40px; display: grid; place-items: center; border-radius: 999px; font-size: 0.9rem; padding: 0 6px; }
   .seg a.on { background: var(--surface); box-shadow: var(--shadow); font-weight: 600; }
   .map { height: calc(100dvh - 300px); min-height: 320px; border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); z-index: 0; background: var(--surface-2); }

@@ -6,10 +6,10 @@
     { href: '#/', label: 'Home', icon: 'home', match: '' },
     { href: '#/books', label: 'Library', icon: 'books', match: 'books' },
     { href: '#/add', label: 'Add', icon: 'scan', match: 'add' },
-    { href: '#/locations', label: 'Places', icon: 'pin', match: 'locations' },
-    { href: '#/settings', label: 'Settings', icon: 'settings', match: 'settings' }
+    { href: '#/discover', label: 'Discover', icon: 'compass', match: 'discover' },
+    { href: '#/locations', label: 'Places', icon: 'pin', match: 'locations' }
   ];
-  const section = $derived(({ book: 'books', scan: 'add', tags: 'books', lending: '', stats: '', map: '', export: 'settings', print: 'settings' } as Record<string, string>)[$route.parts[0]] ?? $route.parts[0] ?? '');
+  const section = $derived(({ book: 'books', scan: 'add', tags: 'books', lending: '', stats: 'discover', map: 'discover', topic: 'discover', author: 'discover', export: '', print: '', settings: '' } as Record<string, string>)[$route.parts[0]] ?? $route.parts[0] ?? '');
 </script>
 
 <nav aria-label="Main" class="no-print">

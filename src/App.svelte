@@ -16,6 +16,9 @@
   import Terms from './routes/Terms.svelte';
   import Exchange from './routes/Exchange.svelte';
   import Join from './routes/Join.svelte';
+  import Discover from './routes/Discover.svelte';
+  import Topic from './routes/Topic.svelte';
+  import Author from './routes/Author.svelte';
   import Lending from './routes/Lending.svelte';
   import MapView from './routes/MapView.svelte';
   import Print from './routes/Print.svelte';
@@ -82,6 +85,12 @@
       {#key param}<Locations id={param ?? null} />{/key}
     {:else if section === 'tags'}
       <Terms kind={param === 'collections' || param === 'genres' ? param : 'tags'} />
+    {:else if section === 'discover'}
+      <Discover />
+    {:else if section === 'topic' && param}
+      {#key param}<Topic name={param} />{/key}
+    {:else if section === 'author' && param}
+      {#key param}<Author name={param} />{/key}
     {:else if section === 'join'}
       <Join />
     {:else if section === 'export'}
@@ -93,7 +102,7 @@
     {:else if section === 'stats'}
       <Stats />
     {:else if section === 'map'}
-      {#key param}<MapView mode={param === 'owned' ? 'owned' : 'written'} />{/key}
+      {#key param}<MapView mode={param === 'owned' ? 'owned' : param === 'stories' ? 'stories' : 'written'} />{/key}
     {:else if section === 'settings'}
       <Settings />
     {:else}

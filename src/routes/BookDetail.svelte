@@ -5,7 +5,9 @@
   import { lookupIsbn, searchBooks, lookupCandidate } from '../lib/metadata/lookup';
   import { FORMAT_LABEL, STATUS_LABEL, formatDate, formatPrice, languageName } from '../lib/format';
   import { navigate } from '../lib/router';
-  import { attempt, enricher, library, toast } from '../lib/stores/app';
+  import { attempt, enricher, knowledge, library, toast } from '../lib/stores/app';
+  import { buildIndex, similarTo } from '../lib/domain/similar';
+  import { connectionsOf, KIND_LABEL, seriesStatus } from '../lib/domain/connections';
   import BookForm from '../lib/ui/BookForm.svelte';
   import Confirm from '../lib/ui/Confirm.svelte';
   import Cover from '../lib/ui/Cover.svelte';
@@ -21,6 +23,19 @@
   const book = $derived($lib && lib.book(id));
   const s = $derived($lib.settings);
   const fetchingIds = enricher().pending;
+
+  const kn = knowledge();
+  const k = kn.state;
+  $effect(() => {
+    if (book?.identifiers?.wikidata) kn.refresh(); // cheap when cached; fetches for new books
+  });
+  const similar = $derived(book ? similarTo(book.id, buildIndex($lib.books), 10).map((m) => ({ ...m, book: lib.book(m.id)! })).filter((m) => m.book) : []);
+  const connections = $derived(book ? connectionsOf(book, $lib.books, $k.works) : []);
+  const mySeries = $derived.by(() => {
+    const w = book?.identifiers?.wikidata ? $k.works.get(book.identifiers.wikidata) : undefined;
+    return w?.series.length ? seriesStatus($lib.books, $k.works).filter((s) => w.series.some((x) => x.id === s.id)) : [];
+  });
+  const topics = $derived(book ? [...new Set([...book.genres, ...(book.subjects ?? [])])].slice(0, 14) : []);
 
   let moves = $state<MoveRecord[]>([]);
   let moveOpen = $state(false);
@@ -188,7 +203,7 @@
         <div>
           <h1>{book.title}</h1>
           {#if book.subtitle}<p class="muted sub">{book.subtitle}</p>{/if}
-          {#if book.authors.length}<p class="authors">{book.authors.join(', ')}</p>{/if}
+          {#if book.authors.length}<p class="authors">{#each book.authors as a, i}{#if i}, {/if}<a href="#/author/{encodeURIComponent(a)}">{a}</a>{/each}</p>{/if}
         </div>
         <div class="row">
           {#if book.ownership === 'wishlist'}<span class="badge warn">Wishlist</span>{/if}
@@ -286,6 +301,52 @@
       {/if}
     </section>
 
+    {#if topics.length}
+      <section class="row topics">
+        {#each topics as t (t)}<a class="chip" href="#/topic/{encodeURIComponent(t)}">{t}</a>{/each}
+      </section>
+    {/if}
+
+    {#if mySeries.length || connections.length}
+      <section class="card stack">
+        <h2>Connections</h2>
+        {#each mySeries as s (s.id)}
+          <div>
+            <span class="muted small">Series</span> <strong>{s.label}</strong>
+            <ol class="vols">
+              {#each s.volumes as v (v.id)}
+                <li class:have={!!v.owned} class:this={v.owned?.id === book.id}>
+                  <span class="pos">{v.position}</span>
+                  {#if v.owned}<a href="#/book/{v.owned.id}">{v.label}</a>{:else}<span>{v.label}</span>{/if}
+                </li>
+              {/each}
+            </ol>
+          </div>
+        {/each}
+        {#each connections as c (c.group.kind + c.group.id)}
+          <div class="conn">
+            <span class="muted small">{KIND_LABEL[c.group.kind]}</span> <strong>{c.group.label}</strong>
+            <div class="row">{#each c.others.slice(0, 6) as o (o.id)}<a class="chip" href="#/book/{o.id}">{o.title}</a>{/each}</div>
+          </div>
+        {/each}
+      </section>
+    {/if}
+
+    {#if similar.length}
+      <section class="stack">
+        <h2>More like this on your shelves</h2>
+        <div class="strip">
+          {#each similar as m (m.id)}
+            <a href="#/book/{m.id}" class="sim" title={m.book.title}>
+              <Cover book={m.book} />
+              <span class="small t">{m.book.title}</span>
+              <span class="muted small why">{m.reasons.join(' · ')}</span>
+            </a>
+          {/each}
+        </div>
+      </section>
+    {/if}
+
     <section class="card">
       <h2>My copy</h2>
       <dl>{#each mine as [k, v]}<dt>{k}</dt><dd>{v}</dd>{/each}</dl>
@@ -348,6 +409,23 @@
   dt { color: var(--muted); }
   dd { margin: 0; overflow-wrap: anywhere; }
   .links { margin: 12px 0 0; }
+  .authors a { text-decoration: none; }
+  .authors a:hover { text-decoration: underline; }
+  .topics { gap: 6px; }
+  .topics .chip { text-decoration: none; }
+  .vols { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 2px; }
+  .vols li { display: flex; gap: 8px; color: var(--muted); }
+  .vols li.have { color: var(--text); }
+  .vols li.have .pos { background: var(--chart-bar); color: #fff; }
+  .vols li.this { font-weight: 700; }
+  .vols a { text-decoration: none; }
+  .pos { min-width: 22px; height: 22px; border-radius: 50%; display: inline-grid; place-items: center; font-size: 0.75rem; background: var(--surface-2); }
+  .conn .row { margin-top: 4px; }
+  .conn .chip { text-decoration: none; }
+  .strip { display: grid; grid-auto-flow: column; grid-auto-columns: 104px; gap: 12px; overflow-x: auto; padding: 4px 2px 12px; }
+  .sim { display: grid; gap: 4px; text-decoration: none; align-content: start; }
+  .sim .t { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sim .why { font-size: 0.72rem; line-height: 1.2; }
   .end { justify-content: flex-end; margin-top: 8px; }
   .history { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
   .history li { display: grid; gap: 2px; }

@@ -24,7 +24,10 @@
 <div class="page stack">
   <header class="spread">
     <h1>Booked</h1>
-    <span class="muted small">{plural($lib.books.length, 'book')}</span>
+    <div class="row">
+      <span class="muted small">{plural($lib.books.length, 'book')}</span>
+      <a class="btn btn-ghost btn-icon" href="#/settings" aria-label="Settings"><Icon name="settings" /></a>
+    </div>
   </header>
 
   <form class="search" role="search" onsubmit={(e) => { e.preventDefault(); navigate('/books', { q }); }}>

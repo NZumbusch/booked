@@ -1,0 +1,848 @@
+{
+  "head" : {
+    "vars" : [ "a", "aLabel", "prop", "val", "valLabel", "code", "human" ]
+  },
+  "results" : {
+    "bindings" : [ {
+      "a" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q7934"
+      },
+      "val" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+        "type" : "literal",
+        "value" : "1920-10-08T00:00:00Z"
+      },
+      "prop" : {
+        "type" : "literal",
+        "value" : "born"
+      },
+      "aLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Frank Herbert"
+      },
+      "valLabel" : {
+        "type" : "literal",
+        "value" : "1920-10-08T00:00:00Z"
+      }
+    }, {
+      "a" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q25973"
+      },
+      "val" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+        "type" : "literal",
+        "value" : "1877-07-02T00:00:00Z"
+      },
+      "prop" : {
+        "type" : "literal",
+        "value" : "born"
+      },
+      "aLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Hermann Hesse"
+      },
+      "valLabel" : {
+        "type" : "literal",
+        "value" : "1877-07-02T00:00:00Z"
+      }
+    }, {
+      "a" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q7934"
+      },
+      "val" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+        "type" : "literal",
+        "value" : "1986-02-11T00:00:00Z"
+      },
+      "prop" : {
+        "type" : "literal",
+        "value" : "died"
+      },
+      "aLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Frank Herbert"
+      },
+      "valLabel" : {
+        "type" : "literal",
+        "value" : "1986-02-11T00:00:00Z"
+      }
+    }, {
+      "a" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q25973"
+      },
+      "val" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+        "type" : "literal",
+        "value" : "1962-08-09T00:00:00Z"
+      },
+      "prop" : {
+        "type" : "literal",
+        "value" : "died"
+      },
+      "aLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Hermann Hesse"
+      },
+      "valLabel" : {
+        "type" : "literal",
+        "value" : "1962-08-09T00:00:00Z"
+      }
+    }, {
+      "a" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q7934"
+      },
+      "val" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q199797"
+      },
+      "prop" : {
+        "type" : "literal",
+        "value" : "birthPlace"
+      },
+      "aLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Frank Herbert"
+      },
+      "valLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Tacoma"
+      }
+    }, {
+      "a" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q25973"
+      },
+      "val" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q487921"
+      },
+      "prop" : {
+        "type" : "literal",
+        "value" : "birthPlace"
+      },
+      "aLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Hermann Hesse"
+      },
+      "valLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Calw"
+      }
+    }, {
+      "a" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q7934"
+      },
+      "val" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q6095696"
+      },
+      "prop" : {
+        "type" : "literal",
+        "value" : "notableWork"
+      },
+      "aLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Frank Herbert"
+      },
+      "valLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Der Wüstenplanet"
+      }
+    }, {
+      "a" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q25973"
+      },
+      "val" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q217073"
+      },
+      "prop" : {
+        "type" : "literal",
+        "value" : "notableWork"
+      },
+      "aLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Hermann Hesse"
+      },
+      "valLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Der Steppenwolf"
+      }
+    }, {
+      "a" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q25973"
+      },
+      "val" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q457289"
+      },
+      "prop" : {
+        "type" : "literal",
+        "value" : "notableWork"
+      },
+      "aLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Hermann Hesse"
+      },
+      "valLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Siddhartha"
+      }
+    }, {
+      "a" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q25973"
+      },
+      "val" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q576493"
+      },
+      "prop" : {
+        "type" : "literal",
+        "value" : "notableWork"
+      },
+      "aLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Hermann Hesse"
+      },
+      "valLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Peter Camenzind"
+      }
+    }, {
+      "a" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q25973"
+      },
+      "val" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q836841"
+      },
+      "prop" : {
+        "type" : "literal",
+        "value" : "notableWork"
+      },
+      "aLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Hermann Hesse"
+      },
+      "valLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Das Glasperlenspiel"
+      }
+    }, {
+      "a" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q25973"
+      },
+      "val" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q860577"
+      },
+      "prop" : {
+        "type" : "literal",
+        "value" : "notableWork"
+      },
+      "aLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Hermann Hesse"
+      },
+      "valLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Demian"
+      }
+    }, {
+      "a" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q25973"
+      },
+      "val" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q1502926"
+      },
+      "prop" : {
+        "type" : "literal",
+        "value" : "notableWork"
+      },
+      "aLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Hermann Hesse"
+      },
+      "valLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Narziß und Goldmund"
+      }
+    }, {
+      "a" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q7934"
+      },
+      "val" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q43788"
+      },
+      "prop" : {
+        "type" : "literal",
+        "value" : "deathPlace"
+      },
+      "aLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Frank Herbert"
+      },
+      "valLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Madison"
+      }
+    }, {
+      "a" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q25973"
+      },
+      "val" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q694086"
+      },
+      "prop" : {
+        "type" : "literal",
+        "value" : "deathPlace"
+      },
+      "aLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Hermann Hesse"
+      },
+      "valLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Montagnola"
+      }
+    }, {
+      "a" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q25973"
+      },
+      "val" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q34636"
+      },
+      "prop" : {
+        "type" : "literal",
+        "value" : "movement"
+      },
+      "aLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Hermann Hesse"
+      },
+      "valLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Jugendstil"
+      }
+    }, {
+      "a" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q25973"
+      },
+      "val" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q188"
+      },
+      "prop" : {
+        "type" : "literal",
+        "value" : "writes"
+      },
+      "aLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Hermann Hesse"
+      },
+      "valLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Deutsch"
+      },
+      "code" : {
+        "type" : "literal",
+        "value" : "de"
+      }
+    }, {
+      "a" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q7934"
+      },
+      "val" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q1860"
+      },
+      "prop" : {
+        "type" : "literal",
+        "value" : "writes"
+      },
+      "aLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Frank Herbert"
+      },
+      "valLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Englisch"
+      },
+      "code" : {
+        "type" : "literal",
+        "value" : "en"
+      }
+    }, {
+      "a" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q25973"
+      },
+      "val" : {
+        "type" : "uri",
+        "value" : "https://de.wikipedia.org/wiki/Hermann_Hesse"
+      },
+      "prop" : {
+        "type" : "literal",
+        "value" : "wikipedia"
+      },
+      "aLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Hermann Hesse"
+      },
+      "valLabel" : {
+        "type" : "literal",
+        "value" : "https://de.wikipedia.org/wiki/Hermann_Hesse"
+      },
+      "code" : {
+        "type" : "literal",
+        "value" : "de"
+      }
+    }, {
+      "a" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q25973"
+      },
+      "val" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/Hermann_Hesse"
+      },
+      "prop" : {
+        "type" : "literal",
+        "value" : "wikipedia"
+      },
+      "aLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Hermann Hesse"
+      },
+      "valLabel" : {
+        "type" : "literal",
+        "value" : "https://en.wikipedia.org/wiki/Hermann_Hesse"
+      },
+      "code" : {
+        "type" : "literal",
+        "value" : "en"
+      }
+    }, {
+      "a" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q7934"
+      },
+      "val" : {
+        "type" : "uri",
+        "value" : "https://de.wikipedia.org/wiki/Frank_Herbert"
+      },
+      "prop" : {
+        "type" : "literal",
+        "value" : "wikipedia"
+      },
+      "aLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Frank Herbert"
+      },
+      "valLabel" : {
+        "type" : "literal",
+        "value" : "https://de.wikipedia.org/wiki/Frank_Herbert"
+      },
+      "code" : {
+        "type" : "literal",
+        "value" : "de"
+      }
+    }, {
+      "a" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q7934"
+      },
+      "val" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/Frank_Herbert"
+      },
+      "prop" : {
+        "type" : "literal",
+        "value" : "wikipedia"
+      },
+      "aLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Frank Herbert"
+      },
+      "valLabel" : {
+        "type" : "literal",
+        "value" : "https://en.wikipedia.org/wiki/Frank_Herbert"
+      },
+      "code" : {
+        "type" : "literal",
+        "value" : "en"
+      }
+    }, {
+      "a" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q25973"
+      },
+      "val" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q193664"
+      },
+      "prop" : {
+        "type" : "literal",
+        "value" : "influencedBy"
+      },
+      "aLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Hermann Hesse"
+      },
+      "valLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Pietismus"
+      },
+      "human" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#boolean",
+        "type" : "literal",
+        "value" : "false"
+      }
+    }, {
+      "a" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q25973"
+      },
+      "val" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q19523829"
+      },
+      "prop" : {
+        "type" : "literal",
+        "value" : "influencedBy"
+      },
+      "aLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Hermann Hesse"
+      },
+      "valLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Buddhism as a religion"
+      },
+      "human" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#boolean",
+        "type" : "literal",
+        "value" : "false"
+      }
+    }, {
+      "a" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q25973"
+      },
+      "val" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q41630"
+      },
+      "prop" : {
+        "type" : "literal",
+        "value" : "influencedBy"
+      },
+      "aLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Hermann Hesse"
+      },
+      "valLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Psychoanalyse"
+      },
+      "human" : {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#boolean",
+        "type" : "literal",
+        "value" : "false"
+      }
+    }, {
+      "a" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q25973"
+      },
+      "val" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q529583"
+      },
+      "prop" : {
+        "type" : "literal",
+        "value" : "influenced"
+      },
+      "aLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Hermann Hesse"
+      },
+      "valLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Micho Mossulischwili"
+      }
+    }, {
+      "a" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q25973"
+      },
+      "val" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q529583"
+      },
+      "prop" : {
+        "type" : "literal",
+        "value" : "influenced"
+      },
+      "aLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Hermann Hesse"
+      },
+      "valLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Micho Mossulischwili"
+      }
+    }, {
+      "a" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q7934"
+      },
+      "val" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q721345"
+      },
+      "prop" : {
+        "type" : "literal",
+        "value" : "influenced"
+      },
+      "aLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Frank Herbert"
+      },
+      "valLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Graham Joyce"
+      }
+    }, {
+      "a" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q25973"
+      },
+      "val" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q529583"
+      },
+      "prop" : {
+        "type" : "literal",
+        "value" : "influenced"
+      },
+      "aLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Hermann Hesse"
+      },
+      "valLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Micho Mossulischwili"
+      }
+    }, {
+      "a" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q25973"
+      },
+      "val" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q529583"
+      },
+      "prop" : {
+        "type" : "literal",
+        "value" : "influenced"
+      },
+      "aLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Hermann Hesse"
+      },
+      "valLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Micho Mossulischwili"
+      }
+    }, {
+      "a" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q7934"
+      },
+      "val" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q28532904"
+      },
+      "prop" : {
+        "type" : "literal",
+        "value" : "influenced"
+      },
+      "aLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Frank Herbert"
+      },
+      "valLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Timothy C. Armstrong"
+      }
+    }, {
+      "a" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q25973"
+      },
+      "val" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q4119221"
+      },
+      "prop" : {
+        "type" : "literal",
+        "value" : "influenced"
+      },
+      "aLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Hermann Hesse"
+      },
+      "valLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Jamal Naji"
+      }
+    }, {
+      "a" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q7934"
+      },
+      "val" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q721345"
+      },
+      "prop" : {
+        "type" : "literal",
+        "value" : "influenced"
+      },
+      "aLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Frank Herbert"
+      },
+      "valLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Graham Joyce"
+      }
+    }, {
+      "a" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q25973"
+      },
+      "val" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q529583"
+      },
+      "prop" : {
+        "type" : "literal",
+        "value" : "influenced"
+      },
+      "aLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Hermann Hesse"
+      },
+      "valLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Micho Mossulischwili"
+      }
+    }, {
+      "a" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q7934"
+      },
+      "val" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q721345"
+      },
+      "prop" : {
+        "type" : "literal",
+        "value" : "influenced"
+      },
+      "aLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Frank Herbert"
+      },
+      "valLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Graham Joyce"
+      }
+    } ]
+  }
+}

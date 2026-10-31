@@ -1,0 +1,130 @@
+{
+  "head" : {
+    "vars" : [ "series", "work", "workLabel", "ord" ]
+  },
+  "results" : {
+    "bindings" : [ {
+      "series" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q6095696"
+      },
+      "work" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q190192"
+      },
+      "workLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Der Wüstenplanet"
+      },
+      "ord" : {
+        "type" : "literal",
+        "value" : "1"
+      }
+    }, {
+      "series" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q6095696"
+      },
+      "work" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q282814"
+      },
+      "workLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Chapterhouse: Dune"
+      },
+      "ord" : {
+        "type" : "literal",
+        "value" : "6"
+      }
+    }, {
+      "series" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q6095696"
+      },
+      "work" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q401619"
+      },
+      "workLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Der Gottkaiser des Wüstenplaneten"
+      },
+      "ord" : {
+        "type" : "literal",
+        "value" : "4"
+      }
+    }, {
+      "series" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q6095696"
+      },
+      "work" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q437353"
+      },
+      "workLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Heretics of Dune"
+      },
+      "ord" : {
+        "type" : "literal",
+        "value" : "5"
+      }
+    }, {
+      "series" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q6095696"
+      },
+      "work" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q437365"
+      },
+      "workLabel" : {
+        "xml:lang" : "de",
+        "type" : "literal",
+        "value" : "Children of Dune"
+      },
+      "ord" : {
+        "type" : "literal",
+        "value" : "3"
+      }
+    }, {
+      "series" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q6095696"
+      },
+      "work" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q437383"
+      },
+      "workLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Dune Messiah"
+      },
+      "ord" : {
+        "type" : "literal",
+        "value" : "2"
+      }
+    }, {
+      "series" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q6095696"
+      },
+      "work" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q138672927"
+      },
+      "workLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Dune audiobook series"
+      }
+    } ]
+  }
+}
