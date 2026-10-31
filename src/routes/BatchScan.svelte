@@ -210,13 +210,14 @@
   .manual input { flex: 1; width: auto; }
   .center { text-align: center; }
   .warn { color: var(--warn); }
-  .items { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+  .items { min-width: 0; list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
   .item { display: flex; gap: 12px; align-items: center; padding: 10px 12px; }
   .item.confirm { outline: 2px solid var(--warn); }
   .item.gone { opacity: 0.5; }
   .text { flex: 1; display: grid; gap: 2px; min-width: 0; }
+  .text > * { min-width: 0; }
   .text a { text-decoration: none; }
-  .text strong { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+  .text strong { max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
   .actions { display: flex; gap: 6px; }
   .pending { animation: pulse 1.2s ease-in-out infinite; }
   @keyframes pulse { 50% { opacity: 0.4; } }
