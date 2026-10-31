@@ -17,7 +17,6 @@ export interface Candidate {
 export interface SeriesCoverContext {
   fetcher?: Fetcher;
   key?: string;
-  proxy?: string;
   probe: ImageProbe;
   /** Colours of the covers of the other volumes (saved on this device). */
   siblings: (book: Book) => CoverAnalysis[];
@@ -87,7 +86,7 @@ export async function matchingCover(book: Book, reference: CoverAnalysis[], ctx:
     while (i < list.length) {
       const c = list[i++];
       try {
-        const { analysis, w, h } = await sample(c.thumb, ctx.proxy);
+        const { analysis, w, h } = await sample(c.thumb);
         if (!isCoverShape(w, h) || looksLikePlaceholder(analysis)) continue;
         const d = Math.min(...reference.map((r) => lookDistance(analysis, r)));
         if (!best || d < best.d) best = { url: c.url, d };

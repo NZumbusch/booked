@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { booksKeyOf, helperUrlOf } from '../lib/config';
+  import { booksKeyOf } from '../lib/config';
   import { lookDistance, sampleImage } from '../lib/covers/cache';
   import { isCoverShape, looksLikePlaceholder, type CoverAnalysis } from '../lib/covers/colors';
   import { cleanTitle, displayTitle } from '../lib/domain/book';
@@ -136,14 +136,13 @@
     }
     loading = false;
     // 3. colours of each candidate (a few at a time), to rank look-alikes first and drop blanks and scans
-    const proxy = helperUrlOf(lib.state.settings);
     let i = 0;
     const todo = options.slice(0, 60);
     const worker = async () => {
       while (i < todo.length && mine === run) {
         const o = todo[i++];
         try {
-          const { analysis, w, h } = await sampleImage(o.thumb, proxy);
+          const { analysis, w, h } = await sampleImage(o.thumb);
           if (mine !== run) return;
           const bad = !isCoverShape(w, h) || looksLikePlaceholder(analysis);
           options = options.map((x) => (x.thumb === o.thumb ? { ...x, look: analysis, bad } : x));

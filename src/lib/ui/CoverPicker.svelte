@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { booksKeyOf, helperUrlOf } from '../config';
+  import { booksKeyOf } from '../config';
   import { lookDistance, sampleColors } from '../covers/cache';
   import type { CoverAnalysis } from '../covers/colors';
   import { dnbByIsbn } from '../metadata/dnb';
@@ -64,14 +64,13 @@
 
   /** Colours of the candidate covers (a few at a time), so similar-looking ones can be listed first. */
   async function analyse(list: CoverOption[]) {
-    const proxy = helperUrlOf(lib.state.settings);
     const todo = list.slice(0, 80).filter((o) => !looks.has(o.thumb));
     let i = 0;
     const worker = async () => {
       while (i < todo.length) {
         const o = todo[i++];
         try {
-          const a = await sampleColors(o.thumb, proxy);
+          const a = await sampleColors(o.thumb);
           looks = new Map(looks).set(o.thumb, a);
         } catch {
           // no colours for this one: it stays where it is

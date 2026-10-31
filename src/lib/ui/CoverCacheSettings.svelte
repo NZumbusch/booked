@@ -13,7 +13,7 @@
   const s = $derived($lib.settings.covers ?? {});
   let clearOpen = $state(false);
 
-  const update = (patch: { mode?: CacheMode; size?: CoverSize }) => attempt(() => lib.updateSettings({ covers: { ...s, ...patch } }));
+  const update = (patch: { mode?: CacheMode; size?: CoverSize; helper?: 'small' | 'off' }) => attempt(() => lib.updateSettings({ covers: { ...s, ...patch } }));
   const missingCovers = $derived($lib && booksWithoutCover($lib.books, (u) => cache.isBroken(u)).length);
   // Remember which books the library already answered for, so they aren't asked again.
   const CHECKED_KEY = 'booked.seriesChecked2';
@@ -67,6 +67,14 @@
       <option value="off">Off (always load from the internet)</option>
     </select>
   </label>
+
+  <label class="field">Covers the browser can’t download directly (Google Books)
+    <select value={s.helper ?? 'small'} onchange={(e) => update({ helper: e.currentTarget.value as 'small' | 'off' })}>
+      <option value="small">Via my Cloudflare helper, small images only (≈ 10–20 KB each)</option>
+      <option value="off">Never via the helper (always from the internet; not saved, not on the cover wall)</option>
+    </select>
+  </label>
+  <p class="muted small">Most covers come straight from the source to this device. Google doesn’t allow that for saving, so those few go through your helper, as small thumbnails only. Looking at covers, comparing them and choosing a cover never uses the helper.</p>
 
   <fieldset class="sizes">
     <legend class="small muted">Resolution (estimated storage for your {plural($status.total, 'cover')})</legend>

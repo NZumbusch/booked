@@ -231,7 +231,8 @@ export class CoverCache {
     const queue = this.wanted().filter((u) => this.needs(u, now));
     if (!queue.length) return;
     this.status$.update((s) => ({ ...s, running: true }));
-    const proxy = helperUrlOf(this.lib.state.settings);
+    // The helper only carries covers the browser can't read directly (no CORS, e.g. Google Books), and only as small images.
+    const proxy = this.lib.state.settings.covers?.helper === 'off' ? undefined : helperUrlOf(this.lib.state.settings);
     let i = 0;
     const worker = async () => {
       while (i < queue.length) {
@@ -324,18 +325,16 @@ export function sourceCandidates(url: string, size: CoverSize): string[] {
   return [...new Set([sourceUrl(url, size), url])];
 }
 
-async function fetchImage(url: string, proxy?: string): Promise<Blob> {
-  try {
-    const res = await fetch(url, { mode: 'cors' });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return await res.blob();
-  } catch (e) {
-    // Hosts without CORS (Google Books): go through the user's own helper if there is one.
-    if (!proxy || url.startsWith('data:')) throw e;
-    const res = await fetch(`${proxy.replace(/\/+$/, '')}/img?url=${encodeURIComponent(url)}`);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return res.blob();
-  }
+async function fetchDirect(url: string): Promise<Blob> {
+  const res = await fetch(url, { mode: 'cors' });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.blob();
+}
+
+async function fetchViaHelper(url: string, proxy: string): Promise<Blob> {
+  const res = await fetch(`${proxy.replace(/\/+$/, '')}/img?url=${encodeURIComponent(url)}`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.blob();
 }
 
 function canvas(w: number, h: number): HTMLCanvasElement {
@@ -349,9 +348,10 @@ function canvas(w: number, h: number): HTMLCanvasElement {
 export const browserProcessor: Processor = async ({ url, size, proxy, stored, storedType }) => {
   if (stored) return processBlob(new Blob([stored], { type: storedType ?? 'image/jpeg' }), size, true);
   let last: unknown = new Error('no image');
+  // 1. Straight from the source to this device (the helper isn't involved).
   for (const candidate of sourceCandidates(url, size)) {
     try {
-      const done = await processBlob(await fetchImage(candidate, proxy), size, false);
+      const done = await processBlob(await fetchDirect(candidate), size, false);
       if (looksLikePlaceholder(done.analysis) && !url.startsWith('data:')) {
         last = new PlaceholderError();
         continue; // try the smaller rendition before giving up
@@ -360,6 +360,12 @@ export const browserProcessor: Processor = async ({ url, size, proxy, stored, st
     } catch (e) {
       last = e;
     }
+  }
+  // 2. The source doesn't allow that: the helper passes on the small stored image, once (never the large one).
+  if (proxy && !url.startsWith('data:') && !(last instanceof PlaceholderError)) {
+    const done = await processBlob(await fetchViaHelper(url, proxy), size, false);
+    if (looksLikePlaceholder(done.analysis)) throw new PlaceholderError();
+    return done;
   }
   throw last;
 };
@@ -386,8 +392,9 @@ async function processBlob(blob: Blob, size: CoverSize, fromStored: boolean): Pr
 }
 
 /** Size and dominant colours of the image at a URL (small sample; for comparing covers, not stored). */
-export async function sampleImage(url: string, proxy?: string): Promise<{ analysis: CoverAnalysis; w: number; h: number }> {
-  const bmp = await createImageBitmap(await fetchImage(url, proxy));
+export async function sampleImage(url: string): Promise<{ analysis: CoverAnalysis; w: number; h: number }> {
+  // Always direct: comparing candidate covers must never go through the helper (that would be many images per book).
+  const bmp = await createImageBitmap(await fetchDirect(url));
   try {
     const sample = canvas(24, 36).getContext('2d', { willReadFrequently: true })!;
     sample.drawImage(bmp, 0, 0, 24, 36);
@@ -397,8 +404,8 @@ export async function sampleImage(url: string, proxy?: string): Promise<{ analys
   }
 }
 
-export async function sampleColors(url: string, proxy?: string): Promise<CoverAnalysis> {
-  return (await sampleImage(url, proxy)).analysis;
+export async function sampleColors(url: string): Promise<CoverAnalysis> {
+  return (await sampleImage(url)).analysis;
 }
 
 /** How far apart two covers look (0 = same dominant colour and lightness). */
