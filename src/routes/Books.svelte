@@ -245,7 +245,7 @@
                 {#if book.lending}<span class="badge lent" class:danger={isOverdue(book, today)}>lent</span>
                 {:else if book.away}<span class="badge lent away">with {book.away.by}</span>{/if}
               </span>
-              <span class="t">{book.title}</span>
+              <span class="t">{book.title}{#if book.volume} <span class="vol">· Vol. {book.volume}</span>{/if}</span>
               <span class="a muted">{book.authors.join(', ')}</span>
             </a>
           {/each}
@@ -276,7 +276,7 @@
                       onclick={(e) => { e.stopPropagation(); toggle(book.id); }} /></td>
                   {/if}
                   <td class="c-cover"><Cover {book} size="sm" /></td>
-                  <td class="c-title"><a href="#/book/{book.id}" onclick={(e) => { e.stopPropagation(); open(book, e); }}>{book.title}</a>
+                  <td class="c-title"><a href="#/book/{book.id}" onclick={(e) => { e.stopPropagation(); open(book, e); }}>{book.title}{#if book.volume} · Vol. {book.volume}{/if}</a>
                     {#if book.lending}<span class="badge" class:danger={isOverdue(book, today)}>lent</span>
                     {:else if book.away}<span class="badge away">with {book.away.by}</span>{/if}
                     <div class="muted small mobile-only">{book.authors.join(', ')}</div></td>
