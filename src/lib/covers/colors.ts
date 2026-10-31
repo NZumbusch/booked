@@ -87,3 +87,8 @@ export function colorSortKey(a: Pick<CoverAnalysis, 'hue' | 'saturation' | 'ligh
 export function rgbCss([r, g, b]: RGB): string {
   return `rgb(${r} ${g} ${b})`;
 }
+
+/** Google Books' "image not available" tile (and similar blanks): pale, nearly colourless, almost no contrast. */
+export function looksLikePlaceholder(a: Pick<CoverAnalysis, 'lightness' | 'saturation' | 'contrast'>): boolean {
+  return a.lightness > 0.8 && a.saturation < 0.25 && a.contrast < 0.12;
+}

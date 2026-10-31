@@ -1,5 +1,7 @@
 import { writable } from 'svelte/store';
-import { lookupCandidate, lookupIsbn } from '../metadata/lookup';
+import { booksKeyOf } from '../config';
+import { alternativeCovers } from '../metadata/covers';
+import { browserProbe, lookupCandidate, lookupIsbn } from '../metadata/lookup';
 import { Enricher } from '../services/enrich';
 import { KnowledgeStore } from '../services/knowledge';
 import { browserProcessor, CoverCache } from '../covers/cache';
@@ -130,7 +132,7 @@ function startCoverCache(lib: Library, cache: CoverCache) {
   let last: unknown[] = [];
   const kick = (ms: number) => {
     clearTimeout(timer);
-    timer = setTimeout(() => cache.run().catch(() => {}), ms);
+    timer = setTimeout(() => cache.run().catch(() => {}).then(() => repairCovers(lib, cache)), ms);
   };
   lib.subscribe((s) => {
     const key = [s.books, s.settings.covers];
@@ -145,4 +147,27 @@ function startCoverCache(lib: Library, cache: CoverCache) {
     cache.publish();
     kick(1000);
   });
+}
+
+const repairTried = new Set<string>();
+
+/** Books whose cover turned out to be missing/"not available": quietly switch to another edition's cover. */
+async function repairCovers(lib: Library, cache: CoverCache) {
+  const broken = lib.state.books.filter((b) => b.cover && !b.cover.startsWith('data:') && cache.isBroken(b.cover) && !repairTried.has(b.id + b.cover));
+  for (const b of broken.slice(0, 5)) {
+    repairTried.add(b.id + b.cover);
+    try {
+      const options = await alternativeCovers(b, fetch.bind(globalThis), booksKeyOf(lib.state.settings));
+      // Open Library 404s on a missing cover, so prefer it; Google can serve a blank tile.
+      const ordered = [...options.filter((o) => o.source === 'openlibrary'), ...options.filter((o) => o.source !== 'openlibrary')];
+      for (const o of ordered.slice(0, 6)) {
+        if (await browserProbe(o.thumb)) {
+          await lib.updateBook(b.id, { cover: o.url });
+          break;
+        }
+      }
+    } catch {
+      // offline or catalogues down: try again next start
+    }
+  }
 }

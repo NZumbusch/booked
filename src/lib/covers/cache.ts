@@ -2,7 +2,7 @@ import Dexie, { type Table } from 'dexie';
 import { helperUrlOf } from '../config';
 import { writable, type Readable } from 'svelte/store';
 import type { Library } from '../services/library';
-import { analyzePixels, isNiceCover, type CoverAnalysis } from './colors';
+import { analyzePixels, isNiceCover, looksLikePlaceholder, type CoverAnalysis } from './colors';
 import { currentConnection, downloadDecision, type CacheMode, type ConnectionInfo } from './policy';
 import { COVER_SIZES, DEFAULT_COVER_SIZE, sourceUrl, type CoverSize } from './sizes';
 
@@ -175,6 +175,21 @@ export class CoverCache {
     }));
   }
 
+  /** The source gave us nothing usable (download failed or only a "not available" tile). */
+  isBroken(url: string | undefined): boolean {
+    const e = url ? this.index.get(url) : undefined;
+    return !!e && !e.px && !!e.failedAt;
+  }
+
+  /** Forget a failed download so it is tried again on the next run. */
+  retry(url: string): void {
+    const e = this.index.get(url);
+    if (e && !e.px) {
+      this.index.delete(url);
+      void this.db.covers.delete(url);
+    }
+  }
+
   meta(url: string | undefined): CoverMeta | undefined {
     return url ? this.index.get(url) : undefined;
   }
@@ -225,6 +240,7 @@ export class CoverCache {
         const stored = kind === 'shrink' ? await this.db.covers.get(url) : undefined;
         try {
           const p = await this.process({ url, size: this.size, proxy, stored: stored?.data, storedType: stored?.type });
+          if (kind === 'download' && looksLikePlaceholder(p.analysis)) throw new Error('placeholder image');
           // A local shrink keeps knowing how big the source was (to grow again later).
           const sourcePx = kind === 'shrink' ? Math.max(this.index.get(url)?.sourcePx ?? 0, p.sourcePx) : p.sourcePx;
           const entry: CoverEntry = {
