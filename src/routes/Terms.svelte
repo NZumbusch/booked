@@ -64,7 +64,7 @@
     <ul class="list">
       {#each items as item (item.value)}
         <li class="card row-item">
-          <button class="main btn-ghost" onclick={() => show(item.value)}>
+          <button class="main btn-ghost" title={item.value} onclick={() => show(item.value)}>
             <strong>{kind === 'tags' ? '#' : ''}{item.value}</strong>
             <span class="muted small">{plural(item.count, 'book')}</span>
           </button>
@@ -94,9 +94,12 @@
   .seg { display: grid; grid-template-columns: repeat(3, 1fr); background: var(--surface-2); border-radius: 999px; padding: 4px; gap: 4px; }
   .seg a { text-align: center; text-decoration: none; min-height: 40px; display: grid; place-items: center; border-radius: 999px; }
   .seg a.on { background: var(--surface); box-shadow: var(--shadow); font-weight: 600; }
-  .list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+  .list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
   .row-item { display: flex; align-items: center; padding: 4px 4px 4px 8px; }
-  .main { flex: 1; justify-content: space-between; border-radius: 10px; }
+  .main { flex: 1; min-width: 0; justify-content: space-between; gap: 10px; border-radius: 10px; text-align: left; }
+  .main strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .main .small { flex: none; }
+  .row-item .btn-icon { flex: none; }
   .add input { flex: 1; width: auto; }
   .warn { color: var(--warn); margin: 0; }
 </style>
