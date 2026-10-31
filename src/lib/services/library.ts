@@ -33,6 +33,7 @@ export class Library {
   private locations = new Map<Id, Location>();
   private countsCache?: Map<Id | null, number>;
   private lastTime = 0;
+  private lock: Promise<unknown> = Promise.resolve();
 
   private constructor(private repo: Repository, public state: LoadedState) {
     this.index();
@@ -83,7 +84,11 @@ export class Library {
   async addBook(draft: BookDraft): Promise<Book> {
     const book = createBook(
       // An explicitly undefined location means "not chosen", so the default applies.
-      { ...draft, locationId: draft.locationId === undefined ? this.state.settings.defaultLocationId : draft.locationId },
+      {
+        addedBy: this.state.settings.userName,
+        ...draft,
+        locationId: draft.locationId === undefined ? this.state.settings.defaultLocationId : draft.locationId
+      },
       { id: newId(), now: this.now() }
     );
     await this.run(`Added “${book.title}”`, { putBooks: [book] });
@@ -344,6 +349,30 @@ export class Library {
 
   async lastActionLabel(): Promise<string | undefined> {
     return (await this.repo.latestUndo())?.label;
+  }
+
+  /** Run `fn` after any other exclusive task finished (used to keep syncs from overlapping). */
+  exclusive<T>(fn: () => Promise<T>): Promise<T> {
+    const run = this.lock.then(fn, fn);
+    this.lock = run.catch(() => {});
+    return run;
+  }
+
+  /**
+   * Apply changes that came from elsewhere (a shared place). Not an undoable user action;
+   * deletions get markers so the user's own Drive sync carries them to their other devices.
+   */
+  async applyExternal(c: Pick<ChangeSet, 'putBooks' | 'deleteBookIds' | 'putLocations' | 'deleteLocationIds' | 'putMoves' | 'putTombstones'>): Promise<void> {
+    if (!c.putBooks?.length && !c.deleteBookIds?.length && !c.putLocations?.length && !c.deleteLocationIds?.length && !c.putMoves?.length) return;
+    await this.commit(plain(c));
+  }
+
+  getMeta<T>(key: string): Promise<T | undefined> {
+    return this.repo.getMeta<T>(key);
+  }
+
+  setMeta(key: string, value: unknown): Promise<void> {
+    return this.repo.setMeta(key, plain(value));
   }
 
   exportSyncData(): Promise<SyncData> {

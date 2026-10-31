@@ -3,7 +3,8 @@
   import type { Id, Location, LocationKind } from '../lib/domain/types';
   import { plural } from '../lib/format';
   import { navigate } from '../lib/router';
-  import { attempt, library, toast } from '../lib/stores/app';
+  import { attempt, library, spaces, toast } from '../lib/stores/app';
+  import ShareDialog from '../lib/ui/ShareDialog.svelte';
   import Dialog from '../lib/ui/Dialog.svelte';
   import Icon from '../lib/ui/Icon.svelte';
   import LocationPicker from '../lib/ui/LocationPicker.svelte';
@@ -20,6 +21,15 @@
   const kidKind = $derived<LocationKind | null>(current ? childKind(current.kind) : 'place');
 
   let newName = $state('');
+  const ctl = spaces();
+  const sharedRoots = $derived(new Set(($lib.settings.spaces ?? []).map((sp) => sp.rootLocationId)));
+  let shareOpen = $state(false);
+  let shareTarget = $state<Location>();
+  function openShare(loc: Location) {
+    editOpen = false;
+    shareTarget = loc;
+    shareOpen = true;
+  }
   // Shelves are optional: their add form stays hidden until asked for.
   let showShelfForm = $state(false);
   const showAddForm = $derived(kidKind !== 'shelf' || kids.length > 0 || showShelfForm);
@@ -139,7 +149,7 @@
       <h1>Location not found</h1>
     {:else}
       <div class="spread">
-        <h1>{current?.name ?? 'Places'}</h1>
+        <h1>{current?.name ?? 'Places'}{#if current && ctl.spaceOf(current.id)} <span class="badge">👥 shared</span>{/if}</h1>
         {#if current}<button class="btn-sm" onclick={() => manage(current)}><Icon name="edit" size={18} /> Edit</button>{/if}
       </div>
       {#if current}
@@ -155,10 +165,11 @@
         {#each kids as loc, i (loc.id)}
           <li class="card item">
             <a class="main" href="#/locations/{loc.id}">
-              <strong>{loc.name}</strong>
+              <strong>{loc.name}{#if sharedRoots.has(loc.id)} <span class="badge" title="Shared with family">👥 shared</span>{/if}</strong>
               <span class="muted small">
                 {plural(counts.get(loc.id) ?? 0, 'book')}
-                {#if childKind(loc.kind)}· {plural(lib.children(loc.id).length, KIND_LABEL[childKind(loc.kind)!].toLowerCase())}{/if}
+                {#if childKind(loc.kind) === 'room'}· {plural(lib.children(loc.id).length, 'room')}
+                {:else if childKind(loc.kind) === 'shelf' && lib.children(loc.id).length}· {plural(lib.children(loc.id).length, 'shelf', 'shelves')}{/if}
               </span>
             </a>
             <div class="tools">
@@ -220,8 +231,13 @@
       <Icon name="move" /> Move whole {KIND_LABEL[editing.kind].toLowerCase()} to another {editing.kind === 'room' ? 'place' : 'room'}
     </button>
   {/if}
+  {#if editing && editing.kind !== 'shelf'}
+    <button onclick={() => openShare(editing!)}>👥 {sharedRoots.has(editing.id) ? 'Shared with family: link & status' : 'Share with family…'}</button>
+  {/if}
   <button class="btn-danger" onclick={openDelete}><Icon name="trash" /> Delete</button>
 </Dialog>
+
+{#if shareTarget}<ShareDialog bind:open={shareOpen} location={shareTarget} />{/if}
 
 <Dialog bind:open={moveOpen} title="Move “{editing?.name}”">
   <p class="muted small">Everything inside moves along, and each book’s history records the move.</p>

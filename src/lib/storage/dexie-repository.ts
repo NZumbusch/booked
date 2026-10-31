@@ -110,6 +110,14 @@ export class DexieRepository implements Repository {
     return (await this.db.meta.get('safetyCopy'))?.value as Snapshot | undefined;
   }
 
+  async getMeta<T>(key: string): Promise<T | undefined> {
+    return (await this.db.meta.get(`x:${key}`))?.value as T | undefined;
+  }
+
+  async setMeta(key: string, value: unknown): Promise<void> {
+    await this.db.meta.put({ key: `x:${key}`, value });
+  }
+
   async exportSyncData(): Promise<SyncData> {
     const [books, locations, moves, deleted] = await Promise.all([
       this.db.books.toArray(), this.db.locations.toArray(), this.db.moves.toArray(), this.db.deleted.toArray()

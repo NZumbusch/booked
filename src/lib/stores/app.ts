@@ -4,10 +4,18 @@ import { Enricher } from '../services/enrich';
 import { Library } from '../services/library';
 import { DexieRepository } from '../storage/dexie-repository';
 import { SyncController } from '../sync/controller';
+import { SpacesController } from '../sync/spaces';
 
 let instance: Library | undefined;
 let enricherInstance: Enricher | undefined;
 let syncInstance: SyncController | undefined;
+let spacesInstance: SpacesController | undefined;
+
+/** Places shared with family. */
+export function spaces(): SpacesController {
+  if (!spacesInstance) throw new Error('Library not opened yet');
+  return spacesInstance;
+}
 
 /** Google Drive sync (inactive until configured in Settings). */
 export function sync(): SyncController {
@@ -34,6 +42,7 @@ export async function openLibrary(): Promise<Library> {
     enricherInstance.resumeAll();
     window.addEventListener('online', () => enricherInstance?.resumeAll());
     syncInstance = new SyncController(instance);
+    spacesInstance = new SpacesController(instance);
   }
   // Ask the browser not to evict our data under storage pressure.
   navigator.storage?.persist?.().catch(() => {});

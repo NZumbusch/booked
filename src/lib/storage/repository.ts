@@ -38,6 +38,9 @@ export interface Repository {
   /** A copy of the library taken right before a restore, so the restore can be undone. */
   saveSafetyCopy(snapshot: Snapshot | undefined): Promise<void>;
   loadSafetyCopy(): Promise<Snapshot | undefined>;
+  /** Small device-local bookkeeping values (e.g. per shared place). */
+  getMeta<T>(key: string): Promise<T | undefined>;
+  setMeta(key: string, value: unknown): Promise<void>;
   /** The synced part of the library (records + deletion markers). */
   exportSyncData(): Promise<SyncData>;
   /** Replace the synced part with merged data; settings stay, the undo history is cleared. */

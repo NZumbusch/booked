@@ -153,7 +153,7 @@
     ['Signed', book.signed ? 'Yes' : ''],
     ['Purchased', formatDate(book.purchasedOn, s.dateFormat)],
     ['Price', formatPrice(book.price, s.currency)],
-    ['Added', formatDate(book.createdAt, s.dateFormat)],
+    ['Added', `${formatDate(book.createdAt, s.dateFormat)}${book.addedBy ? ` by ${book.addedBy}` : ''}`],
     ['Last modified', formatDate(book.updatedAt, s.dateFormat)]
   ] as const).filter(([, v]) => v !== undefined && v !== '') : []);
 </script>

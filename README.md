@@ -117,6 +117,34 @@ A website can only get one-hour Google tokens on its own. Staying signed in need
 
 The free plan allows 100,000 requests a day. Booked uses a handful.
 
+## Shared places (family)
+
+Share a place or room, e.g. *Flat A › Living room*, so family members can see, **add, edit and move** the books there from their own phones.
+
+- **Everyone keeps their own library.** Only the shared room and its shelves are exchanged. A book moved out of the room, into someone's own room, leaves the shared place for the others. Deleting a shared book removes it for everyone.
+- **Who added what:** each person sets their name once, and books show "Added … by Anna".
+- **Privacy:** data is encrypted on the phone (AES-GCM) before upload. The key exists only in the share link, after the `#`, so the server and Cloudflare only ever see unreadable data.
+- **Automatic syncing:** when the app opens, a few seconds after changes, and every 2 minutes.
+- **Family members need nothing set up:** they open the link, enter their name and tap **Join**. Anyone with the link can edit, so share it only with people who should.
+
+**Setup (owner only).** This uses the same Cloudflare Worker as "Stay signed in", plus Cloudflare's free D1 database:
+
+```bash
+cd worker
+npx wrangler d1 create booked-spaces          # prints a database_id
+# paste it into wrangler.toml: uncomment the [[d1_databases]] block and set database_id
+npx wrangler d1 execute booked-spaces --remote --file=schema.sql
+npx wrangler deploy
+```
+
+If you only want sharing and not Drive sync, leave the Google values in `wrangler.toml` as they are. `ALLOWED_ORIGIN` must still be your app's address.
+Then, in the app:
+1. Enter the Worker address under **Settings → Shared places**, or under Sync › Stay signed in; both use the same field.
+2. Go to **Places → Living room → Edit → Share with family… → Create share link**.
+3. Tap **Send link…** and send it by WhatsApp, Signal or email.
+
+To stop sharing, go to **Settings → Shared places → Stop**. That deletes the shared copy, and the link stops working. Everyone keeps their last copy.
+
 ## PWA or Capacitor?
 
 **Recommendation: PWA now. Capacitor stays possible later with no rewrite.**
@@ -162,7 +190,7 @@ src/
   routes/                    one component per screen
 tests/setup.ts               fake IndexedDB + testing-library cleanup
 .github/workflows/deploy.yml CI + GitHub Pages deploy
-worker/                      optional Cloudflare Worker: keeps Google Drive sync signed in
+worker/                      optional Cloudflare Worker: keeps Google Drive sync signed in; stores shared places (D1)
 ```
 
 ### Architecture in one paragraph
@@ -261,6 +289,8 @@ Labels are snapshots, so renaming a room later doesn't rewrite history. Moving a
     - CSV import with automatic column mapping for Libib, Goodreads and Booked files, which you can adjust before importing
     - Optionally skips duplicates. Missing places/rooms are created, details are filled in in the background, and the whole import is one undo step
   - **Printable list** per place or room, grouped by room/shelf and sorted by author. Print it, or save it as a PDF
+- [x] **Shared places**
+  - A family can add and edit books in a shared room, with live sync, end-to-end encryption and "Added by"
 - [x] **Phase 5: Google Drive sync**
   - Optional Cloudflare token helper (`worker/`) to stay signed in. Without it, the sign-in renews automatically on your first tap after it expires
   - Works through Drive's hidden per-app folder (`appDataFolder`), and needs no backend

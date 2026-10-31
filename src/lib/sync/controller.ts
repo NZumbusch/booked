@@ -2,7 +2,7 @@ import { get, writable, type Readable } from 'svelte/store';
 import type { Library } from '../services/library';
 import { DriveTarget } from './drive';
 import { GoogleAuth } from './google-auth';
-import { SyncService, type SyncOutcome, type SyncStatus } from './service';
+import { librarySource, SyncService, type SyncOutcome, type SyncStatus } from './service';
 
 /** How long to wait after a change before syncing it (edits often come in bursts). */
 const DEBOUNCE_MS = 15_000;
@@ -82,7 +82,7 @@ export class SyncController {
     }
     this.auth = new GoogleAuth(id, { helperUrl });
     const auth = this.auth;
-    this.service = new SyncService(this.lib, new DriveTarget(() => auth.accessToken()));
+    this.service = new SyncService(librarySource(this.lib), new DriveTarget(() => auth.accessToken()));
     const last = this.lib.state.settings.sync?.lastSyncAt;
     this.service.setStatus({ state: auth.connected ? 'idle' : 'needs-auth', lastSyncAt: last });
     this.unsubscribeStatus = this.service.status.subscribe((s) => this.status$.set(s));

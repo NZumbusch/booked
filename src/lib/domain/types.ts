@@ -135,6 +135,9 @@ export interface Book {
   copies: number;
   lending?: Lending;
 
+  /** Who added it (shared places: the member's name). */
+  addedBy?: string;
+
   // --- metadata
   createdAt: Timestamp;
   updatedAt: Timestamp;
@@ -185,6 +188,10 @@ export interface Settings {
   savedFilters?: SavedFilter[];
   /** Optional free Google Books API key for a reliable 1,000 lookups/day. */
   googleBooksKey?: string;
+  /** Your name, shown to family on books you add to a shared place. */
+  userName?: string;
+  /** Places/rooms shared with family (per device; the key never leaves the share link). */
+  spaces?: SpaceConfig[];
   /** Google Drive sync (per device). */
   sync?: {
     clientId?: string;
@@ -197,6 +204,22 @@ export interface Settings {
   };
   /** When the last backup file was made (for reminders). */
   lastBackupAt?: Timestamp;
+}
+
+export interface SpaceConfig {
+  /** Server-side id of the shared place. */
+  id: string;
+  /** Encryption key (from the share link). */
+  key: string;
+  /** Token helper (Cloudflare Worker) that stores the encrypted data. */
+  helperUrl: string;
+  /** The shared location (same id for every member). */
+  rootLocationId: Id;
+  name: string;
+  role: 'owner' | 'member';
+  /** Owner only: allows deleting the shared data from the server. */
+  adminToken?: string;
+  lastSyncAt?: Timestamp;
 }
 
 export interface SavedFilter {

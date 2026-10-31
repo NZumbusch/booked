@@ -11,6 +11,7 @@
 
   const lib = library();
   let q = $state('');
+  const shared = $derived(new Set(($lib.settings.spaces ?? []).map((sp) => sp.rootLocationId)));
 
   const places = $derived($lib && lib.children(null));
   const counts = $derived($lib && lib.counts());
@@ -68,12 +69,12 @@
         {#each places as place (place.id)}
           <div class="card place">
             <a class="spread title" href="#/locations/{place.id}">
-              <strong>{place.name}</strong>
+              <strong>{place.name}{#if shared.has(place.id)} 👥{/if}</strong>
               <span class="muted small">{plural(counts.get(place.id) ?? 0, 'book')}</span>
             </a>
             <div class="row">
               {#each lib.children(place.id) as room (room.id)}
-                <a class="chip" href="#/books?loc={room.id}">{room.name} <span class="muted">{counts.get(room.id) ?? 0}</span></a>
+                <a class="chip" href="#/books?loc={room.id}">{room.name}{#if shared.has(room.id)} 👥{/if} <span class="muted">{counts.get(room.id) ?? 0}</span></a>
               {/each}
             </div>
           </div>

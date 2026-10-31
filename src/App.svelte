@@ -15,6 +15,7 @@
   import Settings from './routes/Settings.svelte';
   import Terms from './routes/Terms.svelte';
   import Exchange from './routes/Exchange.svelte';
+  import Join from './routes/Join.svelte';
   import Lending from './routes/Lending.svelte';
   import MapView from './routes/MapView.svelte';
   import Print from './routes/Print.svelte';
@@ -81,6 +82,8 @@
       {#key param}<Locations id={param ?? null} />{/key}
     {:else if section === 'tags'}
       <Terms kind={param === 'collections' || param === 'genres' ? param : 'tags'} />
+    {:else if section === 'join'}
+      <Join />
     {:else if section === 'export'}
       <Exchange />
     {:else if section === 'print'}

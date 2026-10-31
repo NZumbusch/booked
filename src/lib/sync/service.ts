@@ -1,5 +1,5 @@
 import { writable, type Readable } from 'svelte/store';
-import { mergeSyncData } from '../domain/sync';
+import { mergeSyncData, type SyncData } from '../domain/sync';
 import type { Library } from '../services/library';
 import { SyncAuthError, SyncConflict, type SyncTarget } from './target';
 
@@ -13,6 +13,25 @@ export interface SyncStatus {
 
 export type SyncOutcome = 'unchanged' | 'pulled' | 'pushed' | 'both';
 
+/** What gets synced: the whole library (Drive) or one shared place. */
+export interface SyncSource {
+  export(): Promise<SyncData>;
+  apply(merged: SyncData): Promise<void>;
+  /** Serializes syncs that touch the same library. */
+  exclusive<T>(fn: () => Promise<T>): Promise<T>;
+  /** Called after every successful sync with the agreed state (both sides now match it). */
+  committed?(merged: SyncData): Promise<void>;
+}
+
+/** The whole library as a sync source. */
+export function librarySource(lib: Library): SyncSource {
+  return {
+    export: () => lib.exportSyncData(),
+    apply: (merged) => lib.applySyncData(merged),
+    exclusive: (fn) => lib.exclusive(fn)
+  };
+}
+
 /**
  * Two-way sync: read the remote copy, merge record by record, update whichever side is
  * behind. Optimistic concurrency: if another device wrote meanwhile, merge again.
@@ -21,7 +40,7 @@ export class SyncService {
   private store = writable<SyncStatus>({ state: 'off' });
   private running: Promise<SyncOutcome> | undefined;
 
-  constructor(private lib: Library, private target: SyncTarget) {}
+  constructor(private source: SyncSource, private target: SyncTarget) {}
 
   get status(): Readable<SyncStatus> {
     return this.store;
@@ -33,7 +52,7 @@ export class SyncService {
 
   /** Run a sync (concurrent calls share the same run). */
   sync(): Promise<SyncOutcome> {
-    this.running ??= this.run().finally(() => (this.running = undefined));
+    this.running ??= this.source.exclusive(() => this.run()).finally(() => (this.running = undefined));
     return this.running;
   }
 
@@ -42,7 +61,7 @@ export class SyncService {
     try {
       for (let attempt = 0; attempt < 3; attempt++) {
         const remote = await this.target.read();
-        const local = await this.lib.exportSyncData();
+        const local = await this.source.export();
         const now = new Date().toISOString();
         const { merged, localChanged, remoteChanged } = remote
           ? mergeSyncData(local, remote.data, now)
@@ -53,7 +72,8 @@ export class SyncService {
           if (e instanceof SyncConflict) continue; // someone else wrote: merge again
           throw e;
         }
-        if (localChanged) await this.lib.applySyncData(merged);
+        if (localChanged) await this.source.apply(merged);
+        await this.source.committed?.(merged);
         this.store.set({ state: 'idle', lastSyncAt: now });
         return localChanged && remoteChanged ? 'both' : localChanged ? 'pulled' : remoteChanged ? 'pushed' : 'unchanged';
       }

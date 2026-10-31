@@ -2,8 +2,15 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { get } from 'svelte/store';
 import { Library } from '../services/library';
 import { DexieRepository } from '../storage/dexie-repository';
-import { SyncService } from './service';
+import { librarySource, SyncService as BaseService } from './service';
 import { MemoryTarget, SyncAuthError, SyncConflict, type SyncTarget } from './target';
+
+/** Library-wide sync, as the Drive sync uses it. */
+class SyncService extends BaseService {
+  constructor(lib: Library, target: SyncTarget) {
+    super(librarySource(lib), target);
+  }
+}
 
 let n = 0;
 const repos: DexieRepository[] = [];

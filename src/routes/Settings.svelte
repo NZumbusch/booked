@@ -8,6 +8,7 @@
   import Confirm from '../lib/ui/Confirm.svelte';
   import LocationPicker from '../lib/ui/LocationPicker.svelte';
   import SyncSettings from '../lib/ui/SyncSettings.svelte';
+  import SharedPlaces from '../lib/ui/SharedPlaces.svelte';
 
   const lib = library();
   const s = $derived($lib.settings);
@@ -98,6 +99,7 @@
   </section>
 
   <SyncSettings />
+  <SharedPlaces />
 
   <section class="card stack">
     <h2>Import, export & print</h2>
@@ -134,7 +136,7 @@
     {/if}
   </section>
 
-  <p class="muted small center">Booked {__APP_VERSION__} · works offline · your data never leaves this device</p>
+  <p class="muted small center">Booked {__APP_VERSION__} · works offline · your data stays on your devices unless you turn on sync or sharing</p>
 </div>
 
 <Confirm bind:open={restoreOpen} title="Replace your library?" confirmLabel="Replace"
