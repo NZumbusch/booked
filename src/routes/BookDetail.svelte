@@ -148,6 +148,7 @@
     ['Format', book.format && FORMAT_LABEL[book.format], 'format'],
     ['Pages', book.pageCount, 'pageCount'],
     ['Language', languageName(book.language), 'language'],
+    ['Volume', book.volume, ''],
     ['Series', book.series && `${book.series}${book.seriesNumber ? ` #${book.seriesNumber}` : ''}`, 'series'],
     ['ISBN-13', book.isbn13, ''],
     ['ISBN-10', book.isbn10, ''],

@@ -129,6 +129,9 @@ export function placeholderTitle(isbn13: string): string {
   return `ISBN ${isbn13}`;
 }
 
+/** Tag for books that no catalogue knew: they need their details typed in by hand. */
+export const MANUAL_TAG = 'enter manually';
+
 export function hasPlaceholderTitle(book: Pick<Book, 'title' | 'isbn13'>): boolean {
   return !!book.isbn13 && book.title === placeholderTitle(book.isbn13);
 }

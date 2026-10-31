@@ -3,6 +3,7 @@ import type { Book } from '../domain/types';
 import { getJson, type Fetcher } from './http';
 import { gbSearch } from './googlebooks';
 import { marcToIso, olSearch } from './openlibrary';
+import type { ImageProbe } from './lookup';
 import { titlesMatch } from './wikidata';
 
 /**
@@ -95,4 +96,39 @@ export async function alternativeCovers(book: Book, f: Fetcher, key?: string): P
     .sort((a, b) => rank(a.o) - rank(b.o) || a.i - b.i)
     .map(({ o }) => o)
     .filter((o) => !seen.has(o.url) && !seen.has(o.thumb) && seen.add(o.url) && seen.add(o.thumb));
+}
+
+/**
+ * Cover URLs that are looked up directly by ISBN, bypassing the catalogue search (which often
+ * has no cover for new books): Open Library's edition cover, the German National Library's
+ * cover service, and Google's by-ISBN image (last: it answers with a blank tile when it has none).
+ */
+export function isbnCoverUrls(book: Pick<Book, 'isbn13' | 'isbn10'>): { early: string[]; last: string[] } {
+  const isbn = book.isbn13 ?? book.isbn10;
+  if (!isbn) return { early: [], last: [] };
+  return {
+    early: [`https://covers.openlibrary.org/b/isbn/${isbn}-L.jpg?default=false`],
+    // Google by ISBN (checked: returns the real scan, small, even for books the API search doesn't list; zoom=0 would
+    // only give a blank tile for many of them), then the DNB cover service (not checked: unreachable from where this was built).
+    last: [
+      `https://books.google.com/books/content?vid=ISBN${isbn}&printsec=frontcover&img=1&zoom=1`,
+      ...(book.isbn13 ? [`https://portal.dnb.de/opac/mvb/cover?isbn=${book.isbn13}`] : [])
+    ]
+  };
+}
+
+/** First working cover for a book: by ISBN, then other editions of the same work, then Google's ISBN image. */
+export async function findCover(book: Book, f: Fetcher, probe: ImageProbe, key?: string): Promise<string | undefined> {
+  const { early, last } = isbnCoverUrls(book);
+  for (const u of early) if (await probe(u)) return u;
+  try {
+    const options = await alternativeCovers(book, f, key);
+    // Open Library answers 404 for a missing cover, so its covers are safe; Google may serve a blank tile.
+    const ordered = [...options.filter((o) => o.source === 'openlibrary'), ...options.filter((o) => o.source !== 'openlibrary')];
+    for (const o of ordered.slice(0, 6)) if (await probe(o.thumb)) return o.url;
+  } catch {
+    // catalogue unreachable: still try the last resort below
+  }
+  for (const u of last) if (await probe(u)) return u;
+  return undefined;
 }

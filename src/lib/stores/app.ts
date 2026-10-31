@@ -1,6 +1,6 @@
 import { writable } from 'svelte/store';
-import { booksKeyOf } from '../config';
-import { alternativeCovers } from '../metadata/covers';
+import { booksKeyOf, helperUrlOf } from '../config';
+import { coverFor, siblingLooks, type SeriesCoverContext } from '../services/seriesCovers';
 import { browserProbe, lookupCandidate, lookupIsbn } from '../metadata/lookup';
 import { Enricher } from '../services/enrich';
 import { KnowledgeStore } from '../services/knowledge';
@@ -151,23 +151,28 @@ function startCoverCache(lib: Library, cache: CoverCache) {
 
 const repairTried = new Set<string>();
 
-/** Books whose cover turned out to be missing/"not available": quietly switch to another edition's cover. */
+/** Books whose cover turned out to be missing/"not available": quietly switch to another cover. */
 async function repairCovers(lib: Library, cache: CoverCache) {
   const broken = lib.state.books.filter((b) => b.cover && !b.cover.startsWith('data:') && cache.isBroken(b.cover) && !repairTried.has(b.id + b.cover));
   for (const b of broken.slice(0, 5)) {
     repairTried.add(b.id + b.cover);
     try {
-      const options = await alternativeCovers(b, fetch.bind(globalThis), booksKeyOf(lib.state.settings));
-      // Open Library 404s on a missing cover, so prefer it; Google can serve a blank tile.
-      const ordered = [...options.filter((o) => o.source === 'openlibrary'), ...options.filter((o) => o.source !== 'openlibrary')];
-      for (const o of ordered.slice(0, 6)) {
-        if (await browserProbe(o.thumb)) {
-          await lib.updateBook(b.id, { cover: o.url });
-          break;
-        }
-      }
+      const cover = await coverFor(b, coverContext());
+      if (cover && cover !== b.cover) await lib.enrichBook(b.id, { cover });
     } catch {
       // offline or catalogues down: try again next start
     }
   }
+}
+
+/** What cover searches need: catalogue access and, for books in a series, the look of the other volumes. */
+export function coverContext(): SeriesCoverContext {
+  const lib = library();
+  const cache = covers();
+  return {
+    key: booksKeyOf(lib.state.settings),
+    proxy: helperUrlOf(lib.state.settings),
+    probe: browserProbe,
+    siblings: (b) => siblingLooks(lib.state.books, b, (c) => cache.meta(c)?.analysis)
+  };
 }

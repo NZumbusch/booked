@@ -114,6 +114,8 @@ export interface Book {
   subjects?: string[];
   series?: string;
   seriesNumber?: string;
+  /** Which volume of a multi-volume work this copy is (several volumes can share one ISBN). */
+  volume?: string;
   writing?: WritingInfo;
   /** Which providers contributed metadata, e.g. ["openlibrary","googlebooks"]. */
   sources?: SourceId[];

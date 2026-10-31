@@ -43,6 +43,8 @@ export function publisherSeries(series: string | undefined, number: string | und
   const norm = (s: string) => s.toLowerCase().replace(/[^a-zäöüß]/g, '');
   const a = norm(series);
   const b = norm(publisher ?? '');
+  // "Suhrkamp-Taschenbuch Wissenschaft" (stw) is a scholarly series people collect, unlike a paperback line.
+  if (/wissenschaft/.test(a)) return false;
   return /taschenb/.test(a) || (!!b && b.startsWith(a));
 }
 
@@ -59,7 +61,12 @@ export function parseDnbRecord(xml: string): ProviderResult | undefined {
   const first = (tag: string, code: string) => sub(fields(tag)[0], code)[0];
   const control = (tag: string) => [...marc.getElementsByTagNameNS('*', 'controlfield')].find((f) => f.getAttribute('tag') === tag)?.textContent ?? undefined;
 
-  const title = clean(first('245', 'a'));
+  // Multi-volume works: $a is the set ("Werkausgabe"), $n the volume ("Bd. 5."), $p the part's own title
+  // ("Das Prinzip Hoffnung : in 5 Teilen"), $n again the part ("Kap. 1 - 32").
+  const set = clean(first('245', 'a'));
+  const partTitle = clean(sub(fields('245')[0], 'p')[0]?.split(/\s+:\s+/)[0]);
+  const volume = sub(fields('245')[0], 'n').map((n) => clean(n)).filter(Boolean).join(', ');
+  const title = partTitle ?? set;
   if (!title) return undefined;
   const authors = [...fields('100'), ...fields('700').filter((f) => sub(f, '4').includes('aut'))]
     .map((f) => sub(f, 'a')[0]).filter(Boolean).map((n) => uninvert(clean(n)!));
@@ -85,7 +92,7 @@ export function parseDnbRecord(xml: string): ProviderResult | undefined {
     url: idn ? `https://d-nb.info/${idn}` : undefined,
     fields: {
       title,
-      subtitle: clean(first('245', 'b')),
+      subtitle: partTitle ? [set, volume].filter(Boolean).join(', ') || undefined : clean(first('245', 'b')),
       authors: authors.length ? authors : undefined,
       contributors: contributors.length ? contributors : undefined,
       publisher,

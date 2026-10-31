@@ -287,9 +287,28 @@ function colorWheel(items: FieldItem[], cells: FieldTile[], g: Geometry): FieldT
   return assignNearest(cells, targets, g);
 }
 
+/**
+ * Pads a sorted list to `total` cells with copies of books (the torus has a few more cells than
+ * books). A copy is inserted at evenly spread places but shows a book from the far side of the
+ * order, so a book never ends up right next to its own copy. `make` builds the copy from the
+ * book it repeats and the neighbour it sits beside (so group labels stay right).
+ */
+export function spreadCopies<T>(sorted: T[], total: number, make: (source: T, neighbour: T) => T): T[] {
+  const n = sorted.length;
+  const extra = total - n;
+  if (extra <= 0 || n === 0) return sorted;
+  const out = [...sorted];
+  for (let k = extra - 1; k >= 0; k--) {
+    const at = Math.min(n - 1, Math.floor(((k + 0.5) * n) / extra));
+    const source = sorted[(at + Math.floor(n / 2)) % n];
+    out.splice(at + 1, 0, make(source, sorted[at]));
+  }
+  return out;
+}
+
 /** Endless colour: hue runs along x (wraps naturally), lightness goes up and back down along y (wraps too). */
 function colorTorus(items: FieldItem[], cols: number, rows: number): FieldTile[] {
-  const byHue = [...items].sort((a, b) => colorKey(a) - colorKey(b));
+  const byHue = spreadCopies([...items].sort((a, b) => colorKey(a) - colorKey(b)), cols * rows, (src) => src);
   const tiles: FieldTile[] = [];
   for (let c = 0; c * rows < byHue.length; c++) {
     const column = byHue.slice(c * rows, (c + 1) * rows).sort((a, b) => (a.analysis?.lightness ?? 0.5) - (b.analysis?.lightness ?? 0.5));
@@ -323,12 +342,10 @@ export function fieldLayout(items: FieldItem[], order: FieldOrder, shape: FieldS
     }
   } else {
     wrap = torusSize(items.length, g);
-    // Fill every cell: if the torus has a few more cells than books, the first books repeat.
-    const filled = [...items];
-    for (let i = 0; filled.length < wrap.cols * wrap.rows; i++) filled.push(items[i % items.length]);
-    if (order === 'color') tiles = colorTorus(filled, wrap.cols, wrap.rows);
+    // Every cell is filled: if the torus has a few more cells than books, some books repeat (spread out, never side by side).
+    if (order === 'color') tiles = colorTorus(items, wrap.cols, wrap.rows);
     else {
-      const list = sortKeyed(keyed(filled, order, locations), order);
+      const list = spreadCopies(sortKeyed(keyed(items, order, locations), order), wrap.cols * wrap.rows, (src, at) => ({ item: src.item, g1: at.g1, g2: at.g2 }));
       const cells: FieldTile[] = [];
       for (let row = 0; row < wrap.rows; row++) for (let col = 0; col < wrap.cols; col++) cells.push({ id: '', col, row });
       const path = hilbertSorted(cells);

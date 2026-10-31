@@ -93,7 +93,11 @@
   // ---- selection
   let selecting = $state(false);
   let selected = $state<Set<Id>>(new Set());
-  const selectedIds = $derived([...selected].filter((id) => lib.book(id)));
+  // In the order shown (so "number the volumes" follows the list), then anything selected but filtered out.
+  const selectedIds = $derived.by(() => {
+    const shown = results.filter((b) => selected.has(b.id)).map((b) => b.id);
+    return [...shown, ...[...selected].filter((id) => lib.book(id) && !shown.includes(id))];
+  });
 
   function toggle(id: Id) {
     const next = new Set(selected);
@@ -245,7 +249,7 @@
                 {#if book.lending}<span class="badge lent" class:danger={isOverdue(book, today)}>lent</span>
                 {:else if book.away}<span class="badge lent away">with {book.away.by}</span>{/if}
               </span>
-              <span class="t">{book.title}</span>
+              <span class="t">{book.title}{#if book.volume} <span class="vol">· Vol. {book.volume}</span>{/if}</span>
               <span class="a muted">{book.authors.join(', ')}</span>
             </a>
           {/each}
@@ -276,7 +280,7 @@
                       onclick={(e) => { e.stopPropagation(); toggle(book.id); }} /></td>
                   {/if}
                   <td class="c-cover"><Cover {book} size="sm" /></td>
-                  <td class="c-title"><a href="#/book/{book.id}" onclick={(e) => { e.stopPropagation(); open(book, e); }}>{book.title}</a>
+                  <td class="c-title"><a href="#/book/{book.id}" onclick={(e) => { e.stopPropagation(); open(book, e); }}>{book.title}{#if book.volume} · Vol. {book.volume}{/if}</a>
                     {#if book.lending}<span class="badge" class:danger={isOverdue(book, today)}>lent</span>
                     {:else if book.away}<span class="badge away">with {book.away.by}</span>{/if}
                     <div class="muted small mobile-only">{book.authors.join(', ')}</div></td>

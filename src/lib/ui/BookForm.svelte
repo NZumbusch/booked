@@ -60,7 +60,7 @@
         : undefined
     };
     for (const k of ['subtitle', 'publisher', 'edition', 'language', 'description', 'notes', 'condition', 'isbn10', 'isbn13',
-      'startedOn', 'finishedOn', 'purchasedOn', 'series', 'seriesNumber', 'cover'] as const) {
+      'startedOn', 'finishedOn', 'purchasedOn', 'series', 'seriesNumber', 'volume', 'cover'] as const) {
       (draft as Record<string, unknown>)[k] = str(draft[k]);
     }
     onsubmit(draft);
@@ -126,6 +126,7 @@
         <label class="field">First published<input type="number" bind:value={b.firstPublishedYear} /></label>
         <label class="field">Series<input bind:value={b.series} /></label>
         <label class="field">No. in series<input bind:value={b.seriesNumber} /></label>
+        <label class="field">Volume (if the work has several, e.g. 2)<input bind:value={b.volume} /></label>
       </div>
       <label class="field">Genres <span class="hint">comma-separated</span><input bind:value={lists.genres} /></label>
       <label class="field">Subjects / topics<input bind:value={lists.subjects} /></label>

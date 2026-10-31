@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Book } from '../domain/types';
 
+  import { isCoverShape } from '../covers/colors';
   import { covers } from '../stores/app';
 
   let { book, size = 'md' }: { book: Pick<Book, 'title' | 'authors' | 'cover'>; size?: 'sm' | 'md' | 'lg' } = $props();
@@ -41,6 +42,11 @@
     if (!n || url.startsWith('data:')) return url;
     return url + (url.includes('?') ? '&' : '?') + `r=${n}`;
   }
+  /** A wide title-page scan or similar isn't a cover: show the title instead of a zoomed-in crop. */
+  function onLoad(e: Event) {
+    const img = e.currentTarget as HTMLImageElement;
+    if (!book.cover?.startsWith('data:') && !isCoverShape(img.naturalWidth, img.naturalHeight)) failed = true;
+  }
   function onError() {
     if (!retried) {
       retried = true;
@@ -54,7 +60,7 @@
 
 <div class="cover {size}" style:--hue={hue}>
   {#if src && !failed}
-    <img {src} alt="" loading="lazy" decoding="async" onerror={onError} />
+    <img {src} alt="" loading="lazy" decoding="async" onerror={onError} onload={onLoad} />
   {:else}
     <div class="placeholder">
       <span class="t">{book.title}</span>
