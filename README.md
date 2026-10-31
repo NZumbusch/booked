@@ -25,10 +25,15 @@ All data stays on your device (IndexedDB). The app needs no backend and no API k
   - Connections: series gaps, shared movements, settings, awards and sources
   - A map of where books were written, where the stories are set, and where your books are
 - **Cover wall**
-  - All your covers on one zoomable, pannable wall (pinch, scroll or drag; tap to zoom; tap again for details)
-  - Arranged by colour (a rainbow field), topic (clustered islands), title, author, decade or room
-  - Zoomed out, every cover becomes its colour block, so the library turns into a colour graphic
-  - "Bubbles" mode like the Apple Watch home screen
+  - All your covers in one organic, roughly round field with a natural, uneven edge. Pinch, scroll or drag; tap to zoom; tap again for details
+  - **Endless mode (∞):** the field repeats in every direction, so you can scroll forever. Colours wrap seamlessly
+  - **Arrangements:**
+    - Colour, as a colour wheel
+    - Topic › subtopic, as seamless clusters with floating labels
+    - Title, author › title, century › decade, place › room
+  - **Topic dropdown:** narrows the field to one topic, clustered by its subtopics
+  - **Zoomed out,** every cover becomes its colour block, so the library turns into a colour graphic
+  - **"Bubbles" mode,** like the Apple Watch home screen
   - Follows your library filter; "Show on wall" from any book; export as a poster image
 - **Reading and analysis**
   - Up next queue, reading progress and a yearly goal

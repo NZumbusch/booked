@@ -9,7 +9,7 @@
   import { navigate, route } from '../lib/router';
   import { covers, library, toast } from '../lib/stores/app';
   import Icon from '../lib/ui/Icon.svelte';
-  import { WALL_ORDERS, wallLayout, type WallItem, type WallOrder } from '../lib/wall/layout';
+  import { CELL_H, CELL_W, FIELD_ORDERS, fieldLayout, fieldTopics, hasTopic, type FieldItem, type FieldOrder, type FieldShape } from '../lib/wall/field';
 
   const lib = library();
   const cache = covers();
@@ -18,7 +18,9 @@
 
   // ---- options (kept in the URL with the library filter)
   const query = $derived($route.query);
-  const order = $derived<WallOrder>((query.order as WallOrder) in WALL_ORDERS ? (query.order as WallOrder) : 'color');
+  const order = $derived<FieldOrder>((query.order as FieldOrder) in FIELD_ORDERS ? (query.order as FieldOrder) : 'color');
+  const shape = $derived<FieldShape>(query.shape === 'endless' ? 'endless' : 'disc');
+  const topic = $derived(query.topic ?? '');
   const bubbles = $derived(query.style === 'bubbles');
   const niceOnly = $derived(query.all !== '1');
   const focusId = $derived(query.focus);
@@ -27,7 +29,7 @@
   const setQuery = (patch: Record<string, string | undefined>) => navigate('/wall', { ...query, ...patch }, true);
 
   // ---- data
-  const items = $derived.by((): WallItem[] => {
+  const baseItems = $derived.by((): FieldItem[] => {
     void $cacheVersion;
     const books = applyFilter($lib.books, filter, { locations: $lib.locations, today: todayIso() }).filter((b) => b.cover);
     return books
@@ -35,20 +37,21 @@
       // Unknown (not yet cached) covers stay in; only covers known to be placeholders/odd are hidden.
       .filter((it) => !niceOnly || it.nice !== false);
   });
-  const layout = $derived(wallLayout(items, order, $lib.locations));
+  const topics = $derived(fieldTopics(baseItems));
+  const items = $derived(topic ? baseItems.filter((it) => hasTopic(it.book, topic)) : baseItems);
+  const layout = $derived(fieldLayout(items, order, shape, $lib.locations));
+  const period = $derived(layout.wrap);
+  /** Cell → book, for hit-testing (with wrap-around). */
+  const cellMap = $derived(new Map(layout.tiles.map((t) => [`${t.col},${t.row}`, t.id])));
   const byId = $derived(new Map(items.map((it) => [it.book.id, it])));
   const hiddenCount = $derived($lib.books.filter((b) => b.cover).length - items.length);
   const uncached = $derived(items.filter((it) => !cache.meta(it.book.cover)?.px).length);
 
-  // ---- geometry (world units: a cover is 1 wide, 1.5 high)
-  const PX = 1.12;
-  const PY = 1.62;
-  const BUBBLE_PITCH = 1.04;
+  // ---- geometry (world units: a cover is 1 wide, 1.5 high; cells include a small gap)
   function worldOf(col: number, row: number): { x: number; y: number } {
-    if (bubbles) return { x: col * BUBBLE_PITCH + (row % 2 ? BUBBLE_PITCH / 2 : 0), y: row * BUBBLE_PITCH * 0.9 };
-    return { x: col * PX, y: row * PY };
+    return { x: col * CELL_W, y: row * CELL_H };
   }
-  const cellH = $derived(bubbles ? 1 : 1.5);
+  const mod = (a: number, n: number) => ((a % n) + n) % n;
 
   // ---- camera
   let canvas: HTMLCanvasElement | undefined = $state();
@@ -64,11 +67,19 @@
 
   function fit() {
     if (!width || !layout.tiles.length) return;
-    const w = (layout.cols + 0.5) * (bubbles ? BUBBLE_PITCH : PX);
-    const h = (layout.rows + 0.5) * (bubbles ? BUBBLE_PITCH * 0.9 : PY);
-    scale = Math.min(width / w, height / h) * 0.95;
-    ox = (width - w * scale) / 2;
-    oy = (height - h * scale) / 2;
+    if (period) {
+      // Endless: start at a comfortable zoom in the middle of the field.
+      scale = Math.max(14, Math.min(48, width / 9));
+      ox = width / 2 - (period.cols * CELL_W * scale) / 2;
+      oy = height / 2 - (period.rows * CELL_H * scale) / 2;
+    } else {
+      const b = layout.bounds;
+      const w = (b.maxCol - b.minCol + 1) * CELL_W;
+      const h = (b.maxRow - b.minRow + 1) * CELL_H;
+      scale = Math.min(width / w, height / h) * 0.94;
+      ox = width / 2 - ((b.minCol + b.maxCol + 1) / 2) * CELL_W * scale;
+      oy = height / 2 - ((b.minRow + b.maxRow + 1) / 2) * CELL_H * scale;
+    }
     dirty = true;
   }
 
@@ -76,7 +87,7 @@
     const t = layout.tiles.find((x) => x.id === id);
     if (!t) return false;
     const p = worldOf(t.col, t.row);
-    animateTo(cellPx, width / 2 - (p.x + 0.5) * cellPx, height / 2 - (p.y + cellH / 2) * cellPx);
+    animateTo(cellPx, width / 2 - (p.x + 0.5) * cellPx, height / 2 - (p.y + 0.75) * cellPx);
     return true;
   }
 
@@ -128,72 +139,103 @@
     const cx = width / 2;
     const cy = height / 2;
     const reach = Math.max(width, height) * 0.62;
+    const periodX = period ? period.cols * CELL_W : 0;
+    const periodY = period ? period.rows * CELL_H : 0;
+    // Visible world rectangle (plus a margin for fisheye drift).
+    const vx0 = -ox / scale - 2;
+    const vy0 = -oy / scale - 2;
+    const vx1 = (width - ox) / scale + 2;
+    const vy1 = (height - oy) / scale + 2;
+    /** World x positions where a tile (or its endless copies) are visible. */
+    const copies = (x: number, period: number, lo: number, hi: number): number[] => {
+      if (!period) return x >= lo - 2 && x <= hi ? [x] : [];
+      const out: number[] = [];
+      for (let v = x + Math.ceil((lo - 2 - x) / period) * period; v <= hi; v += period) out.push(v);
+      return out;
+    };
     for (const t of layout.tiles) {
       const it = byId.get(t.id);
       if (!it) continue;
-      const p = worldOf(t.col, t.row);
-      let sx = p.x * scale + ox;
-      let sy = p.y * scale + oy;
-      let w = scale;
-      let h = cellH * scale;
-      if (bubbles) {
-        // Apple-Watch-style fisheye: bubbles shrink and drift inwards towards the edges.
-        const dx = sx + w / 2 - cx;
-        const dy = sy + h / 2 - cy;
-        const d = Math.min(1, Math.hypot(dx, dy) / reach);
-        const f = Math.max(0.25, 1 - d * d * 0.75);
-        const pull = 0.82 + 0.18 * f;
-        sx = cx + dx * pull - (w * f) / 2;
-        sy = cy + dy * pull - (h * f) / 2;
-        w *= f;
-        h *= f;
-      }
-      if (sx + w < 0 || sy + h < 0 || sx > width || sy > height) continue;
-      const color = it.analysis ? rgbCss(it.analysis.color) : grey;
-      const url = it.book.cover!;
-      const bmp = w >= 26 ? ready.get(url) : undefined;
-      if (w >= 26 && !bmp && cache.meta(url)?.px) want(url);
-      ctx.save();
-      if (bubbles) {
-        ctx.beginPath();
-        ctx.arc(sx + w / 2, sy + h / 2, w / 2, 0, Math.PI * 2);
-        ctx.clip();
-      }
-      if (bmp) {
-        if (bubbles) {
-          const side = Math.min(bmp.width, bmp.height);
-          ctx.drawImage(bmp, (bmp.width - side) / 2, (bmp.height - side) / 3, side, side, sx, sy, w, h);
-        } else ctx.drawImage(bmp, sx, sy, w, h);
-      } else {
-        ctx.fillStyle = color;
-        ctx.fillRect(sx, sy, w, h);
-      }
-      ctx.restore();
-      if (t.id === focusId || t.id === selected?.id) {
-        ctx.strokeStyle = ring;
-        ctx.lineWidth = 3;
-        if (bubbles) {
-          ctx.beginPath();
-          ctx.arc(sx + w / 2, sy + h / 2, w / 2 + 2, 0, Math.PI * 2);
-          ctx.stroke();
-        } else ctx.strokeRect(sx - 2, sy - 2, w + 4, h + 4);
+      const base = worldOf(t.col, t.row);
+      for (const wx of copies(base.x, periodX, vx0, vx1)) {
+        for (const wy of copies(base.y, periodY, vy0, vy1)) drawTile(ctx, it, t.id, wx, wy, { grey, ring, cx, cy, reach });
       }
     }
-    // Island labels, readable when zoomed out.
-    if (!bubbles && layout.labels.length && scale < 90) {
-      const size = Math.max(11, Math.min(26, scale * 0.55));
-      ctx.font = `600 ${size}px system-ui, sans-serif`;
-      ctx.textBaseline = 'bottom';
-      for (const l of layout.labels) {
-        const p = worldOf(l.col, l.row);
-        const x = p.x * scale + ox;
-        const y = (p.y + PY - 0.08) * scale + oy;
-        if (x > width || y < 0 || y - size > height) continue;
-        const text = `${l.text} · ${l.count}`;
-        const maxW = Math.max(l.width * PX * scale, 60);
-        ctx.fillStyle = css('--text', '#222');
-        ctx.fillText(text.length * size * 0.55 > maxW ? `${l.text.slice(0, Math.max(3, Math.floor(maxW / (size * 0.55)) - 1))}…` : text, x, y);
+    // Floating labels: groups when zoomed out, subgroups at medium zoom.
+    const showLevel = (lvl: 1 | 2) => (lvl === 1 ? scale < 40 : scale >= 40 && scale < 150);
+    for (const l of layout.labels) {
+      if (!showLevel(l.level)) continue;
+      const size = l.level === 1 ? Math.max(13, Math.min(30, scale * 0.9 + Math.sqrt(l.count) * 0.6)) : Math.max(11, Math.min(20, scale * 0.35));
+      ctx.font = `${l.level === 1 ? 700 : 600} ${size}px system-ui, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      for (const wx of copies(l.x, periodX, vx0, vx1)) {
+        for (const wy of copies(l.y, periodY, vy0, vy1)) {
+          const x = wx * scale + ox;
+          const y = wy * scale + oy;
+          const text = l.level === 1 ? `${l.text} · ${l.count}` : l.text;
+          const w = ctx.measureText(text).width + size;
+          ctx.fillStyle = l.level === 1 ? css('--text', '#222') : css('--surface', '#fff');
+          ctx.globalAlpha = 0.86;
+          ctx.beginPath();
+          ctx.roundRect(x - w / 2, y - size * 0.8, w, size * 1.6, size * 0.8);
+          ctx.fill();
+          ctx.globalAlpha = 1;
+          ctx.fillStyle = l.level === 1 ? css('--bg', '#fff') : css('--text', '#222');
+          ctx.fillText(text, x, y);
+        }
       }
+    }
+    ctx.textAlign = 'start';
+  }
+
+  function drawTile(ctx: CanvasRenderingContext2D, it: FieldItem, id: string, wx: number, wy: number, o: { grey: string; ring: string; cx: number; cy: number; reach: number }) {
+    let sx = wx * scale + ox;
+    let sy = wy * scale + oy;
+    let w = scale;
+    let h = 1.5 * scale;
+    if (bubbles) {
+      // Apple-Watch-style: round covers that shrink and drift inwards towards the edges.
+      sy += 0.25 * scale;
+      h = w;
+      const dx = sx + w / 2 - o.cx;
+      const dy = sy + h / 2 - o.cy;
+      const d = Math.min(1, Math.hypot(dx, dy) / o.reach);
+      const f = Math.max(0.25, 1 - d * d * 0.75);
+      const pull = 0.82 + 0.18 * f;
+      sx = o.cx + dx * pull - (w * f) / 2;
+      sy = o.cy + dy * pull - (h * f) / 2;
+      w *= f * 1.1;
+      h *= f * 1.1;
+    }
+    if (sx + w < 0 || sy + h < 0 || sx > width || sy > height) return;
+    const url = it.book.cover!;
+    const bmp = w >= 26 ? ready.get(url) : undefined;
+    if (w >= 26 && !bmp && cache.meta(url)?.px) want(url);
+    ctx.save();
+    if (bubbles) {
+      ctx.beginPath();
+      ctx.arc(sx + w / 2, sy + h / 2, w / 2, 0, Math.PI * 2);
+      ctx.clip();
+    }
+    if (bmp) {
+      if (bubbles) {
+        const side = Math.min(bmp.width, bmp.height);
+        ctx.drawImage(bmp, (bmp.width - side) / 2, (bmp.height - side) / 3, side, side, sx, sy, w, h);
+      } else ctx.drawImage(bmp, sx, sy, w, h);
+    } else {
+      ctx.fillStyle = it.analysis ? rgbCss(it.analysis.color) : o.grey;
+      ctx.fillRect(sx, sy, w, h);
+    }
+    ctx.restore();
+    if (id === focusId || id === selected?.id) {
+      ctx.strokeStyle = o.ring;
+      ctx.lineWidth = 3;
+      if (bubbles) {
+        ctx.beginPath();
+        ctx.arc(sx + w / 2, sy + h / 2, w / 2 + 2, 0, Math.PI * 2);
+        ctx.stroke();
+      } else ctx.strokeRect(sx - 2, sy - 2, w + 4, h + 4);
     }
   }
 
@@ -258,21 +300,18 @@
     if (pointers.size === 0) down = undefined;
   }
 
-  /** The cover under a screen point, if any. */
+  /** The cover under a screen point, if any (wrapping around in endless mode). */
   function hit(x: number, y: number): string | undefined {
-    let best: { id: string; d: number } | undefined;
-    for (const t of layout.tiles) {
-      const p = worldOf(t.col, t.row);
-      const sx = p.x * scale + ox;
-      const sy = p.y * scale + oy;
-      if (!bubbles) {
-        if (x >= sx && x <= sx + scale && y >= sy && y <= sy + cellH * scale) return t.id;
-      } else {
-        const d = Math.hypot(x - (sx + scale / 2), y - (sy + scale / 2));
-        if (d < scale * 0.6 && (!best || d < best.d)) best = { id: t.id, d };
-      }
+    const wx = (x - ox) / scale;
+    const wy = (y - oy) / scale;
+    let col = Math.floor(wx / CELL_W);
+    let row = Math.floor(wy / CELL_H);
+    if (period) {
+      col = mod(col, period.cols);
+      row = mod(row, period.rows);
     }
-    return best?.id;
+    // Taps in the thin gaps count for the cover they belong to (fingers aren't precise).
+    return cellMap.get(`${col},${row}`);
   }
 
   function tap(x: number, y: number) {
@@ -283,7 +322,9 @@
       return;
     }
     if (scale < 110) {
-      focusOn(id, 170);
+      // Zoom in around the tapped point (works for every endless copy too).
+      const s2 = 170;
+      animateTo(s2, x - ((x - ox) * s2) / scale, y - ((y - oy) * s2) / scale);
       selected = byId.get(id)?.book;
     } else if (selected?.id === id) navigate(`/book/${id}`);
     else selected = byId.get(id)?.book;
@@ -342,7 +383,6 @@
   let focusedOnce = false;
   $effect(() => {
     void layout;
-    void bubbles;
     untrack(() => {
       fit();
       if (focusId && !focusedOnce && focusOn(focusId, 160)) {
@@ -361,51 +401,47 @@
   async function exportPoster() {
     exporting = true;
     try {
-      const pitchX = bubbles ? BUBBLE_PITCH : PX;
-      const pitchY = bubbles ? BUBBLE_PITCH * 0.9 : PY;
-      const cell = Math.max(24, Math.min(160, Math.floor(4096 / ((layout.cols + 1) * pitchX))));
+      const b = layout.bounds;
+      const colsN = b.maxCol - b.minCol + 1;
+      const rowsN = b.maxRow - b.minRow + 1;
+      const cell = Math.max(24, Math.min(160, Math.floor(4096 / (colsN * CELL_W))));
       const pad = cell;
       const out = document.createElement('canvas');
-      out.width = Math.round((layout.cols * pitchX + 0.5) * cell + pad * 2);
-      out.height = Math.round((layout.rows * pitchY + 0.5) * cell + pad * 2 + (layout.labels.length ? cell : 0));
+      out.width = Math.round(colsN * CELL_W * cell + pad * 2);
+      out.height = Math.round(rowsN * CELL_H * cell + pad * 2);
       const ctx = out.getContext('2d')!;
       ctx.fillStyle = css('--bg', '#f7f5f0');
       ctx.fillRect(0, 0, out.width, out.height);
       let done = 0;
       for (const t of layout.tiles) {
         const it = byId.get(t.id)!;
-        const p = worldOf(t.col, t.row);
-        const x = pad + p.x * cell;
-        const y = pad + p.y * cell;
+        const x = pad + (t.col - b.minCol) * CELL_W * cell;
+        const y = pad + (t.row - b.minRow) * CELL_H * cell;
         const bmp = cache.meta(it.book.cover)?.px ? await cache.bitmap(it.book.cover!) : undefined;
-        ctx.save();
-        if (bubbles) {
-          ctx.beginPath();
-          ctx.arc(x + cell / 2, y + cell / 2, cell / 2, 0, Math.PI * 2);
-          ctx.clip();
-        }
-        if (bmp) {
-          if (bubbles) {
-            const side = Math.min(bmp.width, bmp.height);
-            ctx.drawImage(bmp, (bmp.width - side) / 2, (bmp.height - side) / 3, side, side, x, y, cell, cell);
-          } else ctx.drawImage(bmp, x, y, cell, cell * 1.5);
-        } else {
+        if (bmp) ctx.drawImage(bmp, x, y, cell, cell * 1.5);
+        else {
           ctx.fillStyle = it.analysis ? rgbCss(it.analysis.color) : css('--surface-2', '#ddd');
-          ctx.fillRect(x, y, cell, bubbles ? cell : cell * 1.5);
+          ctx.fillRect(x, y, cell, cell * 1.5);
         }
-        ctx.restore();
         if (++done % 200 === 0) await new Promise((r) => setTimeout(r));
       }
-      if (!bubbles) {
-        ctx.fillStyle = css('--text', '#222');
-        ctx.font = `600 ${Math.round(cell * 0.45)}px system-ui, sans-serif`;
-        ctx.textBaseline = 'bottom';
-        for (const l of layout.labels) {
-          const p = worldOf(l.col, l.row);
-          ctx.fillText(`${l.text} · ${l.count}`, pad + p.x * cell, pad + (p.y + PY - 0.1) * cell);
-        }
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      for (const l of layout.labels.filter((x) => x.level === 1)) {
+        const size = Math.round(cell * 0.9);
+        ctx.font = `700 ${size}px system-ui, sans-serif`;
+        const x = pad + (l.x - b.minCol * CELL_W) * cell;
+        const y = pad + (l.y - b.minRow * CELL_H) * cell;
+        const text = `${l.text} · ${l.count}`;
+        const w = ctx.measureText(text).width + size;
+        ctx.fillStyle = 'rgba(20,20,20,0.82)';
+        ctx.beginPath();
+        ctx.roundRect(x - w / 2, y - size * 0.8, w, size * 1.6, size * 0.8);
+        ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.fillText(text, x, y);
       }
-      const blob = await new Promise<Blob>((res, rej) => out.toBlob((b) => (b ? res(b) : rej(new Error('Export failed'))), 'image/jpeg', 0.9));
+      const blob = await new Promise<Blob>((res, rej) => out.toBlob((bl) => (bl ? res(bl) : rej(new Error('Export failed'))), 'image/jpeg', 0.9));
       const result = await saveFile(new File([blob], `booked-wall-${order}-${stamp()}.jpg`, { type: 'image/jpeg' }));
       if (result !== 'cancelled') toast('Poster saved');
     } catch (e) {
@@ -420,11 +456,12 @@
   <header class="bar">
     <a class="btn btn-ghost btn-icon" href="#/books" aria-label="Back to library"><Icon name="back" /></a>
     <select value={order} aria-label="Arrange by" onchange={(e) => setQuery({ order: e.currentTarget.value === 'color' ? undefined : e.currentTarget.value })}>
-      {#each Object.entries(WALL_ORDERS) as [k, l]}<option value={k}>{l}</option>{/each}
+      {#each Object.entries(FIELD_ORDERS) as [k, l]}<option value={k}>{l}</option>{/each}
     </select>
-    <button class="btn-sm" class:on={bubbles} aria-pressed={bubbles} onclick={() => setQuery({ style: bubbles ? undefined : 'bubbles' })}>◉ Bubbles</button>
-    <button class="btn-sm btn-ghost btn-icon" aria-label="Fit everything" onclick={fit}>⤢</button>
-    <button class="btn-sm btn-ghost btn-icon" aria-label="Save as poster" disabled={exporting} onclick={exportPoster}>{exporting ? '…' : '⤓'}</button>
+    <select value={topic} aria-label="Topic" onchange={(e) => setQuery({ topic: e.currentTarget.value || undefined })}>
+      <option value="">All topics</option>
+      {#each topics as t (t.name)}<option value={t.name}>{t.name} ({t.count})</option>{/each}
+    </select>
   </header>
   {#if chips.length || hiddenCount || uncached}
     <div class="info small">
@@ -445,6 +482,13 @@
         <a class="btn" href="#/settings">Cover settings</a>
       </div>
     {/if}
+    <div class="tools" role="toolbar" aria-label="Wall options">
+      <button class:on={shape === 'endless'} aria-pressed={shape === 'endless'} title="Endless: scroll forever in every direction"
+        aria-label="Endless scrolling" onclick={() => setQuery({ shape: shape === 'endless' ? undefined : 'endless' })}>∞</button>
+      <button class:on={bubbles} aria-pressed={bubbles} title="Bubbles" aria-label="Bubbles" onclick={() => setQuery({ style: bubbles ? undefined : 'bubbles' })}>◉</button>
+      <button aria-label="Back to the start" title="Back to the start" onclick={fit}>⤢</button>
+      <button aria-label="Save as poster" title="Save as poster" disabled={exporting} onclick={exportPoster}>{exporting ? '…' : '⤓'}</button>
+    </div>
     <canvas bind:this={canvas} tabindex="0" aria-label="Cover wall: drag to move, pinch or +/- to zoom, tap a cover"
       onpointerdown={onDown} onpointermove={onMove} onpointerup={onUp} onpointercancel={onUp} onwheel={onWheel} onkeydown={onKey}></canvas>
   </div>
@@ -465,9 +509,10 @@
 <style>
   .wall { position: fixed; inset: 0 0 calc(var(--nav-h) + env(safe-area-inset-bottom)) 0; display: flex; flex-direction: column; background: var(--bg); }
   .bar { display: flex; gap: 6px; align-items: center; padding: 8px 10px 4px; }
-  .bar select { width: auto; min-height: 40px; border-radius: 999px; flex: 1; max-width: 200px; }
-  .bar .on { background: var(--accent); color: var(--accent-text); border-color: transparent; }
-  .bar .btn-icon { font-size: 1.2rem; }
+  .bar select { width: auto; min-height: 40px; border-radius: 999px; flex: 1; min-width: 0; max-width: 220px; padding: 0 10px; font-size: 0.95rem; }
+  .tools { position: absolute; right: 10px; top: 10px; z-index: 2; display: grid; gap: 8px; }
+  .tools button { width: 44px; min-height: 44px; padding: 0; border-radius: 50%; font-size: 1.15rem; box-shadow: var(--shadow); }
+  .tools .on { background: var(--accent); color: var(--accent-text); border-color: transparent; }
   .info { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; padding: 0 12px 6px; color: var(--muted); }
   .linkish { min-height: 28px; padding: 0 8px; border: none; background: transparent; color: var(--text); text-decoration: underline; font-size: 0.85rem; }
   .stage { position: relative; flex: 1; min-height: 0; }
