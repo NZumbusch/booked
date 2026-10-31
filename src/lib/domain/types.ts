@@ -202,6 +202,8 @@ export interface Settings {
   theme: 'system' | 'light' | 'dark';
   dateFormat: 'iso' | 'dmy' | 'mdy';
   currency: string;
+  /** Exchange rates (EUR per 1 unit), fetched from the ECB; used for the collection value in other currencies. */
+  rates?: { eurPer: Record<string, number>; updatedAt?: string };
   view: 'grid' | 'list';
   /** Named library filters, stored as URL query params. */
   savedFilters?: SavedFilter[];
