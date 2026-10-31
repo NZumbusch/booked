@@ -57,7 +57,7 @@ img { max-width: 100%; }
 .small { font-size: 0.875rem; }
 .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .spread { display: flex; gap: 8px; align-items: center; justify-content: space-between; }
-.stack { display: grid; gap: 12px; }
+.stack { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
 .card { background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow); padding: 16px; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
