@@ -36,6 +36,16 @@ export default defineConfig({
         navigateFallback: 'index.html',
         runtimeCaching: [
           {
+            // Map tiles: keep what you've looked at for offline use (bounded, per OSM tile policy).
+            urlPattern: ({ url }) => url.hostname === 'tile.openstreetmap.org',
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'map-tiles',
+              expiration: { maxEntries: 1500, maxAgeSeconds: 60 * 60 * 24 * 30 },
+              cacheableResponse: { statuses: [0, 200] }
+            }
+          },
+          {
             // Cover images from metadata providers: cache once, serve offline.
             urlPattern: ({ url }) =>
               /covers\.openlibrary\.org|archive\.org|books\.google|googleusercontent/.test(url.hostname),

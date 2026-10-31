@@ -9,10 +9,10 @@
     { href: '#/locations', label: 'Places', icon: 'pin', match: 'locations' },
     { href: '#/settings', label: 'Settings', icon: 'settings', match: 'settings' }
   ];
-  const section = $derived(({ book: 'books', scan: 'add', tags: 'books' } as Record<string, string>)[$route.parts[0]] ?? $route.parts[0] ?? '');
+  const section = $derived(({ book: 'books', scan: 'add', tags: 'books', lending: '', stats: '', map: '', export: 'settings', print: 'settings' } as Record<string, string>)[$route.parts[0]] ?? $route.parts[0] ?? '');
 </script>
 
-<nav aria-label="Main">
+<nav aria-label="Main" class="no-print">
   {#each items as item}
     <a href={item.href} class:active={section === item.match} class:primary={item.match === 'add'}
       aria-current={section === item.match ? 'page' : undefined}>

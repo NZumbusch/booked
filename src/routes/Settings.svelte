@@ -96,6 +96,12 @@
     </label>
   </section>
 
+  <section class="card stack">
+    <h2>Import, export & print</h2>
+    <p class="muted small">CSV (Libib-compatible) for spreadsheets, Zotero/BibTeX/RIS for citations, CSV import from Libib or Goodreads, and printable lists per room.</p>
+    <div class="row"><a class="btn" href="#/export">Open import & export</a></div>
+  </section>
+
   <section class="card stack" id="backup">
     <h2>Backup</h2>
     <p class="small">

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { isOverdue, todayIso } from '../lib/domain/book';
   import { sortBooks } from '../lib/domain/query';
   import { plural } from '../lib/format';
   import { navigate } from '../lib/router';
@@ -14,6 +15,8 @@
   const counts = $derived($lib && lib.counts());
   const recent = $derived(sortBooks($lib.books, 'added', 'desc').slice(0, 12));
   const unplaced = $derived(counts.get(null) ?? 0);
+  const lent = $derived($lib.books.filter((b) => b.lending).length);
+  const overdue = $derived($lib.books.filter((b) => isOverdue(b, todayIso())).length);
 </script>
 
 <div class="page stack">
@@ -37,6 +40,15 @@
   </div>
 
   <BackupReminder />
+
+  {#if $lib.books.length}
+    <nav class="explore" aria-label="Explore">
+      <a class="card" href="#/stats"><span>📊</span>Stats</a>
+      <a class="card" href="#/map"><span>🗺️</span>Map</a>
+      <a class="card" href="#/lending"><span>🤝</span>Lending{#if overdue}<b class="badge danger">{overdue}</b>{:else if lent}<b class="badge">{lent}</b>{/if}</a>
+      <a class="card" href="#/tags"><span>#</span>Tags</a>
+    </nav>
+  {/if}
 
   <section class="stack">
     <div class="spread">
@@ -99,6 +111,10 @@
   .scan { min-height: 72px; font-size: 1.2rem; border-radius: 20px; }
   .more-ways { margin-top: -6px; justify-content: center; gap: 0; color: var(--muted); }
   .more-ways .btn { padding: 0 10px; color: var(--muted); }
+  .explore { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .explore a { display: grid; justify-items: center; gap: 2px; padding: 10px 4px; text-decoration: none; font-size: 0.85rem; position: relative; }
+  .explore span { font-size: 1.3rem; line-height: 1.4; font-weight: 700; }
+  .explore b { position: absolute; top: 6px; right: 6px; }
   .places { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
   .place { display: grid; gap: 10px; text-decoration: none; }
   .title { text-decoration: none; min-height: 32px; }

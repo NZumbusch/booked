@@ -295,3 +295,37 @@ describe('saved filters', () => {
     expect(lib.state.settings.savedFilters).toEqual([]);
   });
 });
+
+describe('importBooks', () => {
+  it('creates missing locations, reuses existing ones and is one undo step', async () => {
+    const { flatA, living } = await setupFlats();
+    const r = await lib.importBooks([
+      { draft: { title: 'A', isbn13: '9780441172719' }, locationPath: ['flat a', 'Living room'] },
+      { draft: { title: 'B' }, locationPath: ['Flat C', 'Hall'] },
+      { draft: { title: 'C' }, locationPath: [] }
+    ], { lookup: true });
+    expect(r.added).toHaveLength(3);
+    expect(r.createdLocations).toBe(2);
+    expect(r.added[0].locationId).toBe(living.id);
+    expect(r.added[0].pendingLookup).toBe(true);
+    expect(r.added[1].pendingLookup).toBeUndefined();
+    expect(lib.label(r.added[1].locationId)).toBe('Flat C › Hall');
+    expect(r.added[2].locationId).toBeNull();
+    expect(lib.location(flatA.id)).toBeDefined();
+
+    await lib.undo();
+    expect(lib.state.books).toHaveLength(0);
+    expect(lib.state.locations).toHaveLength(5);
+  });
+
+  it('can skip ISBNs already in the library (also within the file)', async () => {
+    await lib.addBook({ title: 'A', isbn13: '9780441172719' });
+    const r = await lib.importBooks([
+      { draft: { title: 'A', isbn10: '0441172717' }, locationPath: [] },
+      { draft: { title: 'B', isbn13: '9780306406157' }, locationPath: [] },
+      { draft: { title: 'B again', isbn13: '9780306406157' }, locationPath: [] }
+    ], { skipDuplicates: true });
+    expect(r.added.map((b) => b.title)).toEqual(['B']);
+    expect(r.skipped).toBe(2);
+  });
+});

@@ -136,6 +136,57 @@ export class Library {
     return pairs.length;
   }
 
+  /**
+   * Import many books in one undoable step. Location paths (place › room › shelf names) are
+   * matched case-insensitively and created when missing. Returns the new books.
+   */
+  async importBooks(
+    items: { draft: BookDraft; locationPath: string[] }[],
+    { skipDuplicates = false, lookup = false }: { skipDuplicates?: boolean; lookup?: boolean } = {}
+  ): Promise<{ added: Book[]; skipped: number; createdLocations: number }> {
+    const now = this.now();
+    const locations = [...this.state.locations];
+    const newLocations: Location[] = [];
+    const kinds: LocationKind[] = ['place', 'room', 'shelf'];
+    const resolve = (path: string[]): Id | null => {
+      let parentId: Id | null = null;
+      path.slice(0, 3).forEach((name, depth) => {
+        const existing = locations.find((l) => l.parentId === parentId && fold(l.name) === fold(name));
+        if (existing) {
+          parentId = existing.id;
+          return;
+        }
+        const loc: Location = {
+          id: newId(), kind: kinds[depth], name: name.trim(), parentId,
+          order: nextOrder(locations, parentId), createdAt: now, updatedAt: now
+        };
+        locations.push(loc);
+        newLocations.push(loc);
+        parentId = loc.id;
+      });
+      return parentId;
+    };
+
+    const added: Book[] = [];
+    let skipped = 0;
+    const seen = [...this.state.books];
+    for (const { draft, locationPath } of items) {
+      if (skipDuplicates && findDuplicates(seen, draft).length) {
+        skipped++;
+        continue;
+      }
+      const locationId = locationPath.length ? resolve(locationPath) : (draft.locationId ?? null);
+      const pendingLookup = lookup && !!(draft.isbn13 || draft.isbn10) ? true : undefined;
+      const book = createBook({ ...draft, locationId, pendingLookup }, { id: newId(), now });
+      added.push(book);
+      seen.push(book);
+    }
+    if (added.length || newLocations.length) {
+      await this.run(`Imported ${added.length} book${added.length === 1 ? '' : 's'}`, { putBooks: added, putLocations: newLocations });
+    }
+    return { added, skipped, createdLocations: newLocations.length };
+  }
+
   /** Rename a tag/collection/genre everywhere. Renaming onto an existing name merges them. */
   async renameTerm(kind: TermKind, from: string, to: string): Promise<number> {
     const target = to.trim();

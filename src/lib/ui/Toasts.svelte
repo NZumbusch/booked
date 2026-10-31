@@ -2,7 +2,7 @@
   import { dismissToast, toasts, undoLast } from '../stores/app';
 </script>
 
-<div class="toasts" aria-live="polite">
+<div class="toasts no-print" aria-live="polite">
   {#each $toasts as t (t.id)}
     <div class="toast">
       <span>{t.message}</span>

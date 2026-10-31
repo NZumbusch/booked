@@ -3,10 +3,12 @@
   import type { Id, Location, LocationKind } from '../lib/domain/types';
   import { plural } from '../lib/format';
   import { navigate } from '../lib/router';
-  import { attempt, library } from '../lib/stores/app';
+  import { attempt, library, toast } from '../lib/stores/app';
   import Dialog from '../lib/ui/Dialog.svelte';
   import Icon from '../lib/ui/Icon.svelte';
   import LocationPicker from '../lib/ui/LocationPicker.svelte';
+  import { geocode } from '../lib/metadata/geocode';
+  import type { GeoPoint } from '../lib/domain/types';
 
   let { id = null }: { id?: Id | null } = $props();
 
@@ -42,7 +44,33 @@
   function manage(loc: Location) {
     editing = loc;
     renameTo = loc.name;
+    geoQuery = loc.name;
+    geoHits = undefined;
     editOpen = true;
+  }
+
+  // Map position for places (for "where are my books" on the map).
+  let geoQuery = $state('');
+  let geoHits = $state<GeoPoint[]>();
+  let geoBusy = $state(false);
+  async function findGeo(e: SubmitEvent) {
+    e.preventDefault();
+    if (!geoQuery.trim()) return;
+    geoBusy = true;
+    try {
+      geoHits = await geocode(geoQuery.trim());
+    } catch {
+      geoHits = [];
+      toast('Place search needs an internet connection');
+    } finally {
+      geoBusy = false;
+    }
+  }
+  async function setGeo(geo: GeoPoint | undefined) {
+    if (!editing) return;
+    await attempt(() => lib.updateLocation(editing!.id, { geo }), geo ? `Map position set to ${geo.label}` : 'Map position removed');
+    editing = lib.location(editing.id);
+    geoHits = undefined;
   }
 
   async function rename() {
@@ -173,6 +201,20 @@
     <input bind:value={renameTo} aria-label="Name" />
     <button class="btn-primary" type="submit" disabled={!renameTo.trim()}>Rename</button>
   </form>
+  {#if editing?.kind === 'place'}
+    <div class="geo stack">
+      <span class="muted small">Map position{editing.geo ? `: ${editing.geo.label ?? `${editing.geo.lat.toFixed(3)}, ${editing.geo.lon.toFixed(3)}`}` : ' (for the map of where your books are)'}</span>
+      <form class="add" onsubmit={findGeo}>
+        <input bind:value={geoQuery} placeholder="Town or address" aria-label="Search a town or address" />
+        <button type="submit" disabled={geoBusy || !geoQuery.trim()}>{geoBusy ? '…' : 'Find'}</button>
+      </form>
+      {#if geoHits?.length === 0}<span class="muted small">No match. Try just the town name.</span>{/if}
+      {#each geoHits ?? [] as hit}
+        <button class="btn-sm hit" onclick={() => setGeo(hit)}>{hit.label}</button>
+      {/each}
+      {#if editing.geo}<button class="btn-sm btn-ghost" onclick={() => setGeo(undefined)}>Remove map position</button>{/if}
+    </div>
+  {/if}
   {#if editing && editing.kind !== 'place'}
     <button onclick={openMove} disabled={!parentOptions.length}>
       <Icon name="move" /> Move whole {KIND_LABEL[editing.kind].toLowerCase()} to another {editing.kind === 'room' ? 'place' : 'room'}
@@ -226,4 +268,6 @@
   .add { display: flex; gap: 8px; }
   .empty-hint { margin: 0; }
   .optional { color: var(--muted); justify-self: start; }
+  .geo { gap: 6px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 10px 0; }
+  .hit { justify-content: flex-start; white-space: normal; text-align: left; }
 </style>

@@ -162,12 +162,22 @@ Labels are snapshots, so renaming a room later doesn't rewrite history. Moving a
   - Adding a book waits for at most one quick lookup (under 3 s). Everything else is filled in in the background
   - Background fill-ins never overwrite your edits and don't interfere with Undo
   - Location pickers can create a new place or room inline
-- [ ] **Phase 4: Insight & exchange**
-  - Lending tracker
-  - Stats dashboard and the map
-  - Libib-compatible CSV export, and CSV import with column mapping
-  - Printable location lists
-  - Zotero export as CSL-JSON / RIS / BibTeX. Zotero imports these directly, so no API key is needed.
+- [x] **Phase 4: Insight & exchange**
+  - **Lending tracker** grouped by borrower, with overdue books highlighted and one-tap "Returned"
+  - **Stats:**
+    - Totals, plus books read per year (with a table view)
+    - Counts per status, place and room, top authors, genres, and first-publication decade
+    - Every bar links to the matching filtered list
+  - **Map:**
+    - "Where they were written" shows the writing place, with the evidence used noted in each popup
+    - "Where they are" shows your places. Set a place's map position via OpenStreetMap search under Places › Edit
+    - Tiles you've viewed are cached for offline use
+  - **Import & export page:**
+    - Libib-compatible CSV export (Libib's columns, then all Booked fields)
+    - Zotero export as CSL-JSON, RIS or BibTeX. Zotero imports these directly with File › Import, so no API key is needed
+    - CSV import with automatic column mapping for Libib, Goodreads and Booked files, which you can adjust before importing
+    - Optionally skips duplicates. Missing places/rooms are created, details are filled in in the background, and the whole import is one undo step
+  - **Printable list** per place or room, grouped by room/shelf and sorted by author. Print it, or save it as a PDF
 - [ ] **Phase 5: Google Drive sync**
   - Uses Drive's hidden per-app folder (`appDataFolder`). It's free, but needs a one-time OAuth client ID from a Google Cloud project
   - Plugs in behind `Repository.exportSnapshot/importSnapshot`
