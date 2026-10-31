@@ -1,8 +1,8 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 import { Library } from '../services/library';
 import { DexieRepository } from '../storage/dexie-repository';
-import { CoverCache, type Processor } from './cache';
+import { CoverCache, HttpError, type Processor } from './cache';
 import type { ConnectionInfo } from './policy';
 
 let repo: DexieRepository;
@@ -11,11 +11,15 @@ let n = 0;
 let calls: { url: string; size: string; shrink: boolean; want: string }[];
 let conn: ConnectionInfo | undefined;
 let fail = new Set<string>();
+let gone = new Set<string>(); // 404s
+let gate: Promise<void> | undefined;
 
 /** Fake processor: source images are 600px tall; "stores" a buffer of size px/10 bytes. */
 const processor: Processor = async ({ url, size, stored, want }) => {
   calls.push({ url, size, shrink: !!stored, want });
-  if (fail.has(url)) throw new Error('404');
+  if (url.includes('slow') && gate) await gate;
+  if (gone.has(url)) throw new HttpError(404);
+  if (fail.has(url)) throw new Error('rate limited');
   const target = { small: 360, medium: 540, large: 900, xl: 1350 }[size];
   const px = Math.min(600, target);
   const thumb = { data: new ArrayBuffer(100), type: 'image/jpeg', w: 66, h: 100 };
@@ -34,10 +38,13 @@ beforeEach(async () => {
   calls = [];
   conn = { type: 'wifi' };
   fail = new Set();
+  gone = new Set();
+  gate = undefined;
   await lib.updateSettings({ covers: { full: 'all' } }); // the large image for every book (the default)
   cache = new CoverCache(lib, processor, () => conn, `covers-${n++}`);
 });
 afterEach(async () => {
+  vi.useRealTimers();
   await cache.destroy();
   await repo.destroy();
 });
@@ -110,7 +117,7 @@ describe('CoverCache', () => {
     expect(cache.meta('https://c/a.jpg')?.px).toBe(360);
   });
 
-  it('remembers failures and retries only after a day', async () => {
+  it('remembers failures: a hiccup is retried after a minute, a missing image (404) only after a day', async () => {
     await add('https://c/broken.jpg');
     fail.add('https://c/broken.jpg');
     await cache.run();
@@ -118,6 +125,48 @@ describe('CoverCache', () => {
     expect(calls).toHaveLength(1);
     cache.publish();
     expect(get(cache.status).failed).toBe(1);
+    // a transient failure (rate limit, no connection) is tried again soon
+    vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + 2 * 60_000 });
+    await cache.run();
+    expect(calls).toHaveLength(2);
+    vi.useRealTimers();
+  });
+
+  it('does not retry a missing image (404) the same day', async () => {
+    await add('https://c/gone.jpg');
+    gone.add('https://c/gone.jpg');
+    await cache.run();
+    vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + 2 * 3600_000 });
+    await cache.run();
+    expect(calls).toHaveLength(1);
+    vi.setSystemTime(Date.now() + 25 * 3600_000);
+    await cache.run();
+    expect(calls).toHaveLength(2);
+  });
+
+  it('picks up a cover that appears while a run is going, instead of waiting for the next change', async () => {
+    let release!: () => void;
+    gate = new Promise<void>((r) => (release = r));
+    await add('https://c/slow.jpg');
+    const first = cache.run();
+    await vi.waitFor(() => expect(calls.some((c) => c.url.includes('slow'))).toBe(true));
+    await add('https://c/late.jpg');
+    cache.run(); // the library changed mid-run
+    release();
+    await first;
+    expect(calls.map((c) => c.url).sort()).toEqual(['https://c/late.jpg', 'https://c/slow.jpg']);
+    expect(cache.has('https://c/late.jpg')).toBe(true);
+  });
+
+  it('warm: saves the small image of a cover on screen right away, even on mobile data, but not when off', async () => {
+    conn = { type: 'cellular' };
+    cache.warm('https://c/a.jpg');
+    await vi.waitFor(() => expect(cache.has('https://c/a.jpg')).toBe(true));
+    expect(calls.at(-1)).toMatchObject({ url: 'https://c/a.jpg', want: 'thumb' });
+    await lib.updateSettings({ covers: { mode: 'off' } });
+    cache.warm('https://c/b.jpg');
+    await new Promise((r) => setTimeout(r, 30));
+    expect(calls.filter((c) => c.url.includes('b.jpg'))).toHaveLength(0);
   });
 
   it('clears everything', async () => {

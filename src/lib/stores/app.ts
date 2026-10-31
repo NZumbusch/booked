@@ -1,5 +1,6 @@
 import { writable } from 'svelte/store';
 import { booksKeyOf } from '../config';
+import { olCoverByIsbn } from '../metadata/openlibrary';
 import { coverFor, siblingLooks, type SeriesCoverContext } from '../services/seriesCovers';
 import { browserProbe, lookupCandidate, lookupIsbn } from '../metadata/lookup';
 import { Enricher } from '../services/enrich';
@@ -153,6 +154,7 @@ const repairTried = new Set<string>();
 
 /** Books whose cover turned out to be missing/"not available": quietly switch to another cover. */
 async function repairCovers(lib: Library, cache: CoverCache) {
+  await migrateIsbnCovers(lib);
   const broken = lib.state.books.filter((b) => b.cover && !b.cover.startsWith('data:') && cache.isBroken(b.cover) && !repairTried.has(b.id + b.cover));
   for (const b of broken.slice(0, 5)) {
     repairTried.add(b.id + b.cover);
@@ -174,4 +176,19 @@ export function coverContext(): SeriesCoverContext {
     probe: browserProbe,
     siblings: (b) => siblingLooks(lib.state.books, b, (c) => cache.meta(c)?.analysis)
   };
+}
+
+/** Covers saved as Open Library by-ISBN URLs (slow, throttled) become their stable id URL. */
+async function migrateIsbnCovers(lib: Library) {
+  const todo = lib.state.books.filter((b) => b.cover?.includes('covers.openlibrary.org/b/isbn/') && !repairTried.has(`isbn:${b.id}`));
+  for (const b of todo.slice(0, 20)) {
+    repairTried.add(`isbn:${b.id}`);
+    try {
+      const isbn = b.cover!.match(/\/b\/isbn\/(\d{9}[\dXx]|\d{13})/)?.[1] ?? b.isbn13 ?? b.isbn10;
+      const url = isbn ? await olCoverByIsbn(isbn, fetch.bind(globalThis)) : undefined;
+      if (url && url !== b.cover) await lib.enrichBook(b.id, { cover: url });
+    } catch {
+      // offline: next start
+    }
+  }
 }

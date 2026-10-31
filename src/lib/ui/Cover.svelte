@@ -34,6 +34,7 @@
         if (!u) cache.ensureFull(url);
       }
       u ??= await cache.objectUrl(url, 'thumb');
+      if (!u) cache.warm(url); // not saved yet: have it saved now, so the saved copy takes over from the slow network image
       if (url !== book.cover || !u || u === local) return;
       local = u;
       failed = false; // the saved copy works even if the network image didn't

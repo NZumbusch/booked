@@ -2,7 +2,7 @@ import { fold } from '../domain/query';
 import type { Book } from '../domain/types';
 import { lookDistance, sampleImage } from '../covers/cache';
 import { isCoverShape, looksLikePlaceholder, type CoverAnalysis } from '../covers/colors';
-import { alternativeCovers, findCover, isbnCoverUrls } from '../metadata/covers';
+import { alternativeCovers, findCover, isbnCovers } from '../metadata/covers';
 import type { Fetcher } from '../metadata/http';
 import type { ImageProbe } from '../metadata/lookup';
 
@@ -61,7 +61,7 @@ export function siblingLooks(books: Book[], book: Book, analysisOf: (cover: stri
 
 async function defaultCandidates(book: Book, ctx: SeriesCoverContext): Promise<Candidate[]> {
   const f = ctx.fetcher ?? fetch.bind(globalThis);
-  const { early, last } = isbnCoverUrls(book);
+  const { early, last } = await isbnCovers(book, f);
   const out: Candidate[] = [...early, ...last].map((u) => ({ url: u, thumb: u }));
   try {
     const options = await alternativeCovers(book, f, ctx.key);

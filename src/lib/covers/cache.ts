@@ -28,6 +28,8 @@ export interface CoverEntry {
   nice?: boolean;
   /** Failed downloads are retried after a day. */
   failedAt?: number;
+  /** How many downloads failed in a row: the wait before the next try grows (1 min, 5 min, 30 min, 3 h, a day). */
+  failures?: number;
   /** The source only had a blank "image not available" tile. */
   placeholder?: boolean;
   at: number;
@@ -89,6 +91,8 @@ export interface CacheStatus {
 }
 
 const DAY = 86400000;
+/** Waits after the 1st, 2nd… failed download. A missing image (404) or a blank tile waits a day right away. */
+const RETRY_WAIT = [60_000, 5 * 60_000, 30 * 60_000, 3 * 3600_000, DAY];
 
 /** Small LRU of object URLs / bitmaps so thousands of covers don't sit in memory. */
 class Lru<V> {
@@ -186,10 +190,28 @@ export class CoverCache {
       .filter((u): u is string => !!u && !seen.has(u) && !!seen.add(u));
   }
 
+  private waitAfter(e: CoverMeta): number {
+    return e.placeholder ? DAY : RETRY_WAIT[Math.min(Math.max((e.failures ?? 1) - 1, 0), RETRY_WAIT.length - 1)];
+  }
+
+  /** Remember a failed download; a transient problem (rate limit, no connection) is retried soon, not tomorrow. */
+  private async recordFailure(url: string, e: unknown) {
+    const prev = this.index.get(url);
+    if (prev?.px || prev?.tpx) return; // something usable is saved already
+    const permanent = e instanceof PlaceholderError || (e instanceof HttpError && (e.status === 404 || e.status === 410));
+    const failed: CoverEntry = {
+      ...(prev ?? { url }), failedAt: Date.now(), at: Date.now(),
+      failures: permanent ? RETRY_WAIT.length : (prev?.failures ?? 0) + 1,
+      ...(e instanceof PlaceholderError ? { placeholder: true } : {})
+    };
+    await this.db.covers.put(failed);
+    this.index.set(url, failed);
+  }
+
   /** Does this cover need (re)processing? 'thumb' = only the small copy is missing (made on the device, no download). */
   private needs(url: string, now: number): 'download' | 'shrink' | 'thumb' | false {
     const e = this.index.get(url);
-    if (!e || (!e.px && !e.tpx)) return e?.failedAt && now - e.failedAt < DAY ? false : 'download';
+    if (!e || (!e.px && !e.tpx)) return e?.failedAt && now - e.failedAt < this.waitAfter(e) ? false : 'download';
     if (!e.tpx) return 'thumb';
     if (this.fullMode === 'detail') return false;
     const target = COVER_SIZES[this.size].px;
@@ -250,12 +272,97 @@ export class CoverCache {
    * Never downloads when offline or when saving covers is turned off.
    */
   run(force: boolean | 'mobile' = false): Promise<void> {
-    this.running ??= this.doRun(force).finally(() => {
+    if (this.running) {
+      // Covers changed while a run is going: do another round afterwards instead of waiting for the next change.
+      this.rerun = this.rerun === 'mobile' || force === 'mobile' ? 'mobile' : this.rerun || force;
+      return this.running;
+    }
+    this.running = (async () => {
+      let f = force;
+      for (let round = 0; round < 5; round++) {
+        this.rerun = undefined;
+        await this.doRun(f);
+        if (this.rerun === undefined) break;
+        f = this.rerun;
+      }
+    })().finally(() => {
       this.running = undefined;
       this.status$.update((s) => ({ ...s, running: false }));
       this.publish();
+      this.scheduleRetry();
     });
     return this.running;
+  }
+
+  private rerun: boolean | 'mobile' | undefined;
+  private retryTimer: ReturnType<typeof setTimeout> | undefined;
+
+  /** Come back when the first failed cover is due for another try. */
+  private scheduleRetry() {
+    clearTimeout(this.retryTimer);
+    const now = Date.now();
+    let due = Infinity;
+    for (const u of this.wanted()) {
+      const e = this.index.get(u);
+      if (e?.failedAt && !e.px && !e.tpx) due = Math.min(due, e.failedAt + this.waitAfter(e));
+    }
+    if (due < Infinity && due - now < DAY) this.retryTimer = setTimeout(() => this.run().catch(() => {}), Math.max(5000, due - now + 500));
+  }
+
+  // ---- covers on screen: saved first, right away
+
+  private warming = new Set<string>();
+  private warmQueue: string[] = [];
+  private warmActive = 0;
+  private bumpTimer: ReturnType<typeof setTimeout> | undefined;
+
+  private bumpSoon() {
+    if (this.bumpTimer) return;
+    this.bumpTimer = setTimeout(() => {
+      this.bumpTimer = undefined;
+      this.publish();
+      this.version.update((v) => v + 1);
+    }, 250);
+  }
+
+  /**
+   * A cover is on screen but not saved yet: fetch its small image now, ahead of the background run
+   * (a few at a time), on any connection (it is only a few KB). Quiet when saving is off, the device
+   * is offline or on data saver, or it failed recently.
+   */
+  warm(url: string | undefined): void {
+    if (!url || url.startsWith('data:') || this.has(url) || this.warming.has(url) || this.mode === 'off') return;
+    if (typeof navigator !== 'undefined' && !navigator.onLine) return;
+    if (this.connection()?.saveData) return;
+    const e = this.index.get(url);
+    if (e?.failedAt && Date.now() - e.failedAt < this.waitAfter(e)) return;
+    this.warming.add(url);
+    this.warmQueue.push(url);
+    this.pumpWarm();
+  }
+
+  private pumpWarm() {
+    while (this.warmActive < 3 && this.warmQueue.length) {
+      const url = this.warmQueue.shift()!;
+      this.warmActive++;
+      this.warmOne(url).finally(() => {
+        this.warmActive--;
+        this.warming.delete(url);
+        this.pumpWarm();
+      });
+    }
+  }
+
+  private async warmOne(url: string) {
+    await this.loaded;
+    if (this.has(url)) return;
+    const proxy = this.lib.state.settings.covers?.helper === 'off' ? undefined : helperUrlOf(this.lib.state.settings);
+    try {
+      await this.save(url, await this.process({ url, size: this.size, want: 'thumb', proxy }), undefined);
+    } catch (e) {
+      await this.recordFailure(url, e);
+    }
+    this.bumpSoon();
   }
 
   private allowed(force: boolean | 'mobile'): boolean {
@@ -287,13 +394,7 @@ export class CoverCache {
           const p = await this.process({ url, size: this.size, want, proxy, stored: local ? prev?.data : undefined, storedType: prev?.type });
           await this.save(url, p, kind === 'download' ? undefined : prev);
         } catch (e) {
-          const failed: CoverEntry = {
-            ...(this.index.get(url) ?? { url }), failedAt: Date.now(), at: Date.now(), ...(e instanceof PlaceholderError ? { placeholder: true } : {})
-          };
-          if (!failed.px && !failed.tpx) {
-            await this.db.covers.put(failed);
-            this.index.set(url, failed);
-          }
+          await this.recordFailure(url, e);
         }
         if (i % 10 === 0) {
           this.publish();
@@ -404,11 +505,20 @@ export class CoverCache {
 
   /** For tests. */
   async destroy() {
+    clearTimeout(this.retryTimer);
+    clearTimeout(this.bumpTimer);
     await this.db.delete();
   }
 }
 
 // ------------------------------------------------------------- browser image processing
+
+/** The source answered with an error status. */
+export class HttpError extends Error {
+  constructor(public status: number) {
+    super(`HTTP ${status}`);
+  }
+}
 
 /** The source answered, but only with a blank "image not available" tile. */
 export class PlaceholderError extends Error {
@@ -424,13 +534,13 @@ export function sourceCandidates(url: string, size: CoverSize): string[] {
 
 async function fetchDirect(url: string): Promise<Blob> {
   const res = await fetch(url, { mode: 'cors' });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  if (!res.ok) throw new HttpError(res.status);
   return res.blob();
 }
 
 async function fetchViaHelper(url: string, proxy: string): Promise<Blob> {
   const res = await fetch(`${proxy.replace(/\/+$/, '')}/img?url=${encodeURIComponent(url)}`);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  if (!res.ok) throw new HttpError(res.status);
   return res.blob();
 }
 
