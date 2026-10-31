@@ -13,7 +13,7 @@
   const s = $derived($lib.settings.covers ?? {});
   let clearOpen = $state(false);
 
-  const update = (patch: { mode?: CacheMode; size?: CoverSize; helper?: 'small' | 'off' }) => attempt(() => lib.updateSettings({ covers: { ...s, ...patch } }));
+  const update = (patch: { mode?: CacheMode; size?: CoverSize; helper?: 'small' | 'off'; full?: 'detail' | 'all' }) => attempt(() => lib.updateSettings({ covers: { ...s, ...patch } }));
   const missingCovers = $derived($lib && booksWithoutCover($lib.books, (u) => cache.isBroken(u)).length);
   // Remember which books the library already answered for, so they aren't asked again.
   const CHECKED_KEY = 'booked.seriesChecked2';
@@ -76,8 +76,20 @@
   </label>
   <p class="muted small">Most covers come straight from the source to this device. Google doesn’t allow that for saving, so those few go through your helper, as small thumbnails only. Looking at covers, comparing them and choosing a cover never uses the helper.</p>
 
+  <label class="field">Large images
+    <select value={s.full ?? 'all'} onchange={(e) => update({ full: e.currentTarget.value as 'detail' | 'all' })}>
+      <option value="all">Saved for every book (recommended, works offline)</option>
+      <option value="detail">Only when I open a book (saves space and data)</option>
+    </select>
+  </label>
+  <p class="muted small">
+    Every book gets a small image (about 10–25 KB, ≈ {formatBytes($status.total * 20 * 1024)} for your {plural($status.total, 'cover')}) for grids, lists and the wall,
+    and a large one for the book’s page. Both are saved on this device in one download. Only the link to the cover is synced; each device saves its own copies.
+    Your own photos are different: they are part of the book and sync with it.
+  </p>
+
   <fieldset class="sizes">
-    <legend class="small muted">Resolution (estimated storage for your {plural($status.total, 'cover')})</legend>
+    <legend class="small muted">Resolution of large images{(s.full ?? 'all') === 'all' ? ` (estimated storage for your ${plural($status.total, 'cover')})` : ''}</legend>
     {#each Object.entries(COVER_SIZES) as [key, opt] (key)}
       <label class="size" class:on={(s.size ?? 'medium') === key}>
         <input type="radio" name="cover-size" value={key} checked={(s.size ?? 'medium') === key} onchange={() => update({ size: key as CoverSize })} />

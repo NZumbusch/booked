@@ -19,7 +19,9 @@
   const status = cache.status;
   let open = $state(false);
   const missing = $derived(Math.max(0, $status.total - $status.current));
-  const estimate = $derived(formatBytes(estimateBytes(missing, $lib.settings.covers?.size ?? 'medium', cache.measured())));
+  const estimate = $derived(formatBytes(
+    $lib.settings.covers?.full !== 'detail' ? estimateBytes(missing, $lib.settings.covers?.size ?? 'medium', cache.measured()) : missing * 20 * 1024
+  ));
 
   async function download(force: true | 'mobile') {
     open = false;

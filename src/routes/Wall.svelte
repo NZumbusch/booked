@@ -11,6 +11,7 @@
   import Cover from '../lib/ui/Cover.svelte';
   import CoverDownload from '../lib/ui/CoverDownload.svelte';
   import Icon from '../lib/ui/Icon.svelte';
+  import { childrenOf } from '../lib/domain/locations';
   import { cellPos, FIELD_ORDERS, fieldLayout, fieldTopics, hasTopic, RECT, type FieldItem, type FieldOrder, type FieldShape } from '../lib/wall/field';
   import { placeInRect } from '../lib/wall/paint';
 
@@ -41,6 +42,20 @@
       // Unknown (not yet cached) covers stay in; only covers known to be placeholders/odd are hidden.
       .filter((it) => !niceOnly || it.nice !== false);
   });
+  // Room filter: places, rooms and shelves as an indented list with the number of books in each.
+  const roomOptions = $derived.by(() => {
+    void $lib;
+    const counts = lib.counts();
+    const out: { id: string; label: string }[] = [];
+    const walk = (parent: string | null, depth: number) => {
+      for (const l of childrenOf($lib.locations, parent)) {
+        out.push({ id: l.id, label: `${'\u2003'.repeat(depth)}${l.name} (${counts.get(l.id) ?? 0})` });
+        walk(l.id, depth + 1);
+      }
+    };
+    walk(null, 0);
+    return out;
+  });
   const topics = $derived(fieldTopics(baseItems));
   const items = $derived(topic ? baseItems.filter((it) => hasTopic(it.book, topic)) : baseItems);
   const geometry = RECT;
@@ -48,7 +63,7 @@
   const period = $derived(layout.wrap);
   const byId = $derived(new Map(items.map((it) => [it.book.id, it])));
   const hiddenCount = $derived($lib.books.filter((b) => b.cover).length - items.length);
-  const uncached = $derived(items.filter((it) => !cache.meta(it.book.cover)?.px).length);
+  const uncached = $derived(items.filter((it) => !cache.has(it.book.cover)).length);
 
   // ---- geometry (world units: a cover is 1 wide and 1.5 high; cells add a small gap)
   const tileH = 1.5;
@@ -260,7 +275,7 @@
     drawn.push({ id, x: sx, y: sy, w, h });
     const url = it.book.cover!;
     const bmp = w >= MIN_SCALE - 2 ? ready.get(url) : undefined;
-    if (w >= MIN_SCALE - 2 && !bmp && cache.meta(url)?.px) want(url);
+    if (w >= MIN_SCALE - 2 && !bmp && cache.has(url)) want(url);
     paintCover(ctx, it, bmp, sx, sy, w, h, o.grey);
     if (id === focusId || id === selected?.id) {
       ctx.strokeStyle = o.ring;
@@ -479,7 +494,7 @@
       for (const t of layout.tiles) {
         const it = byId.get(t.id)!;
         const p = worldOf(t.col, t.row);
-        const bmp = cache.meta(it.book.cover)?.px ? await cache.bitmap(it.book.cover!) : undefined;
+        const bmp = cache.has(it.book.cover) ? await cache.bitmap(it.book.cover!) : undefined;
         paintCover(ctx, it, bmp, pad + (p.x - box.x0) * cell, pad + (p.y - box.y0) * cell, cell, cell * tileH, grey);
         if (++done % 200 === 0) await new Promise((r) => setTimeout(r));
       }
@@ -518,6 +533,13 @@
     <select value={order} aria-label="Arrange by" onchange={(e) => setQuery({ order: e.currentTarget.value === 'color' ? undefined : e.currentTarget.value })}>
       {#each Object.entries(FIELD_ORDERS) as [k, l]}<option value={k}>{l}</option>{/each}
     </select>
+    {#if roomOptions.length}
+      <select value={filter.loc ?? ''} aria-label="Room" onchange={(e) => setQuery({ loc: e.currentTarget.value || undefined })}>
+        <option value="">All rooms</option>
+        {#each roomOptions as r (r.id)}<option value={r.id}>{r.label}</option>{/each}
+        <option value="none">No room</option>
+      </select>
+    {/if}
     <select value={topic} aria-label="Topic" onchange={(e) => setQuery({ topic: e.currentTarget.value || undefined })}>
       <option value="">All topics</option>
       {#each topics as t (t.name)}<option value={t.name}>{t.name} ({t.count})</option>{/each}
