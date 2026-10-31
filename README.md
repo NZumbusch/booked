@@ -149,17 +149,25 @@ Labels are snapshots, so renaming a room later doesn't rewrite history. Moving a
   - Each backup file has a date and time in its name, so new backups never overwrite old ones
   - The home screen reminds you if you've never backed up, after 20 changed books, or after 7 days with any change. "Later" snoozes it for a day
   - Restore checks the file first (wrong app, newer version, damaged records) and keeps a safety copy of the current library, so you can undo it
-- [ ] **Phase 3: Organising**
-  - Combinable filters as chips, plus saved filters
-  - Group-by and a virtualised list
-  - Multi-select (long-press or checkbox), "select all in filter", and bulk actions (move, tags, collection, status, lend/return, delete)
-  - Page for managing tags and collections (rename, merge, delete)
+- [x] **Phase 3: Organising**
+  - Combinable filters, shown as removable chips:
+    - Place/room, author, genre, tag, collection, status, rating, format, language and year range
+    - Lent out or overdue, owned or wishlist, no location, missing cover or missing details
+  - Filters live in the URL, so back/forward works. They can be saved under a name
+  - Group by location, author, genre or status. The list renders incrementally, so 5,000 books render in about 100 ms
+  - Multi-select by checkbox or long-press, with "Select all in filter"
+  - Bulk actions as one undoable step each: move, tags, collection, status, lend/return, owned/wishlist, delete
+  - Tags & collections page (genres too): rename, merge by renaming onto an existing name, remove
+- [x] **Speed first**
+  - Adding a book waits for at most one quick lookup (under 3 s). Everything else is filled in in the background
+  - Background fill-ins never overwrite your edits and don't interfere with Undo
+  - Location pickers can create a new place or room inline
 - [ ] **Phase 4: Insight & exchange**
   - Lending tracker
   - Stats dashboard and the map
   - Libib-compatible CSV export, and CSV import with column mapping
   - Printable location lists
   - Zotero export as CSL-JSON / RIS / BibTeX. Zotero imports these directly, so no API key is needed.
-- [ ] **Later: Google Drive sync**
+- [ ] **Phase 5: Google Drive sync**
   - Uses Drive's hidden per-app folder (`appDataFolder`). It's free, but needs a one-time OAuth client ID from a Google Cloud project
   - Plugs in behind `Repository.exportSnapshot/importSnapshot`

@@ -9,7 +9,7 @@
     { href: '#/locations', label: 'Places', icon: 'pin', match: 'locations' },
     { href: '#/settings', label: 'Settings', icon: 'settings', match: 'settings' }
   ];
-  const section = $derived(({ book: 'books', scan: 'add' } as Record<string, string>)[$route.parts[0]] ?? $route.parts[0] ?? '');
+  const section = $derived(({ book: 'books', scan: 'add', tags: 'books' } as Record<string, string>)[$route.parts[0]] ?? $route.parts[0] ?? '');
 </script>
 
 <nav aria-label="Main">

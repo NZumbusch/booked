@@ -242,3 +242,56 @@ describe('persistence of proxied input', () => {
     expect(reopened.book(book.id)?.authors).toEqual(['X']);
   });
 });
+
+describe('bulk updates', () => {
+  it('changes many books in one undoable step and logs moves', async () => {
+    const { study } = await setupFlats();
+    const a = await lib.addBook({ title: 'A', tags: ['x'] });
+    const b = await lib.addBook({ title: 'B' });
+    const n = await lib.bulkUpdate([a.id, b.id], (bk) => ({ tags: [...bk.tags, 'new'], locationId: study.id }), 'Tagged');
+    expect(n).toBe(2);
+    expect(lib.book(a.id)?.tags).toEqual(['x', 'new']);
+    expect((await lib.history(b.id))[0].toLabel).toBe('Flat A › Study');
+    expect(await lib.undo()).toBe('Tagged');
+    expect(lib.book(a.id)?.tags).toEqual(['x']);
+    expect(lib.book(b.id)?.locationId).toBeNull();
+  });
+
+  it('skips books that would not change', async () => {
+    const a = await lib.addBook({ title: 'A', status: 'read' });
+    expect(await lib.bulkUpdate([a.id], () => ({ status: 'read' }), 'x')).toBe(0);
+    expect(await lib.bulkUpdate([a.id], () => undefined, 'x')).toBe(0);
+  });
+});
+
+describe('tags, collections and genres', () => {
+  it('renames everywhere, case-insensitively', async () => {
+    await lib.addBook({ title: 'A', tags: ['Scifi'] });
+    await lib.addBook({ title: 'B', tags: ['scifi', 'other'] });
+    expect(await lib.renameTerm('tags', 'SCIFI', 'Science fiction')).toBe(2);
+    expect(lib.state.books.map((b) => b.tags)).toEqual([['Science fiction'], ['Science fiction', 'other']]);
+  });
+
+  it('merges into an existing name without duplicates', async () => {
+    const a = await lib.addBook({ title: 'A', collections: ['Classics', 'Klassiker'] });
+    expect(await lib.lastActionLabel()).toMatch(/Added/);
+    await lib.renameTerm('collections', 'Klassiker', 'Classics');
+    expect(lib.book(a.id)?.collections).toEqual(['Classics']);
+    expect(await lib.lastActionLabel()).toMatch(/Merged/);
+  });
+
+  it('deletes a term from all books', async () => {
+    const a = await lib.addBook({ title: 'A', genres: ['Fantasy', 'Horror'] });
+    expect(await lib.deleteTerm('genres', 'fantasy')).toBe(1);
+    expect(lib.book(a.id)?.genres).toEqual(['Horror']);
+  });
+});
+
+describe('saved filters', () => {
+  it('saves and deletes named filters', async () => {
+    const f = await lib.saveFilter(' Unread in A ', { status: 'unread' });
+    expect(lib.state.settings.savedFilters).toEqual([{ id: f.id, name: 'Unread in A', query: { status: 'unread' } }]);
+    await lib.deleteSavedFilter(f.id);
+    expect(lib.state.settings.savedFilters).toEqual([]);
+  });
+});

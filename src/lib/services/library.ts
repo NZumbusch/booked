@@ -1,9 +1,14 @@
-import { applyPatch, createBook, findDuplicates } from '../domain/book';
+import { applyPatch, cleanList, createBook, findDuplicates } from '../domain/book';
+import { fold } from '../domain/query';
 import { newId } from '../domain/ids';
 import { bookCounts, canParent, childrenOf, descendantIds, labelOf, nextOrder, reorder } from '../domain/locations';
 import type {
-  Book, BookDraft, Id, Location, LocationKind, MoveRecord, Settings, Snapshot, Timestamp, UndoEntry
+  Book, BookDraft, Id, Location, LocationKind, MoveRecord, SavedFilter, Settings, Snapshot, Timestamp, UndoEntry
 } from '../domain/types';
+
+/** Free-form list fields that can be renamed, merged and deleted library-wide. */
+export type TermKind = 'tags' | 'collections' | 'genres';
+const TERM_LABEL: Record<TermKind, string> = { tags: 'tag', collections: 'collection', genres: 'genre' };
 import type { ChangeSet, LoadedState, Repository } from '../storage/repository';
 
 type Listener = (state: LoadedState) => void;
@@ -109,6 +114,59 @@ export class Library {
     const books = ids.map((id) => this.mustBook(id));
     const label = books.length === 1 ? `Deleted “${books[0].title}”` : `Deleted ${books.length} books`;
     await this.run(label, { deleteBookIds: books.map((b) => b.id) });
+  }
+
+  /**
+   * Change many books in one undoable step. `change` returns a patch per book (or undefined to skip it).
+   * Location changes are recorded in each book's history. Returns how many books changed.
+   */
+  async bulkUpdate(ids: Id[], change: (book: Book) => Partial<Book> | undefined, label: string): Promise<number> {
+    const now = this.now();
+    const pairs: [Book, Book][] = [];
+    for (const id of ids) {
+      const before = this.mustBook(id);
+      const patch = change(before);
+      if (!patch) continue;
+      if ('locationId' in patch && patch.locationId !== before.locationId) this.mustLocation(patch.locationId ?? null);
+      const after = applyPatch(before, patch, now);
+      if (JSON.stringify({ ...after, updatedAt: '' }) !== JSON.stringify({ ...before, updatedAt: '' })) pairs.push([before, after]);
+    }
+    if (!pairs.length) return 0;
+    await this.run(label, { putBooks: pairs.map(([, b]) => b), putMoves: this.moveRecords(pairs, now) });
+    return pairs.length;
+  }
+
+  /** Rename a tag/collection/genre everywhere. Renaming onto an existing name merges them. */
+  async renameTerm(kind: TermKind, from: string, to: string): Promise<number> {
+    const target = to.trim();
+    if (!target) throw new Error('Name cannot be empty');
+    const key = fold(from);
+    const exists = this.state.books.some((b) => b[kind].some((v) => fold(v) === fold(target) && fold(v) !== key));
+    return this.bulkUpdate(
+      this.state.books.filter((b) => b[kind].some((v) => fold(v) === key)).map((b) => b.id),
+      (b) => ({ [kind]: cleanList(b[kind].map((v) => (fold(v) === key ? target : v))) }),
+      exists ? `Merged ${TERM_LABEL[kind]} “${from}” into “${target}”` : `Renamed ${TERM_LABEL[kind]} “${from}” to “${target}”`
+    );
+  }
+
+  /** Remove a tag/collection/genre from every book. */
+  async deleteTerm(kind: TermKind, name: string): Promise<number> {
+    const key = fold(name);
+    return this.bulkUpdate(
+      this.state.books.filter((b) => b[kind].some((v) => fold(v) === key)).map((b) => b.id),
+      (b) => ({ [kind]: b[kind].filter((v) => fold(v) !== key) }),
+      `Removed ${TERM_LABEL[kind]} “${name}”`
+    );
+  }
+
+  async saveFilter(name: string, query: Record<string, string>): Promise<SavedFilter> {
+    const filter: SavedFilter = { id: newId(), name: name.trim() || 'My filter', query };
+    await this.updateSettings({ savedFilters: [...(this.state.settings.savedFilters ?? []), filter] });
+    return filter;
+  }
+
+  async deleteSavedFilter(id: Id): Promise<void> {
+    await this.updateSettings({ savedFilters: (this.state.settings.savedFilters ?? []).filter((f) => f.id !== id) });
   }
 
   /** Move books to a location (null = no location). Returns how many actually moved. */

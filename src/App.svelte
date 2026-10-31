@@ -13,6 +13,7 @@
   import Home from './routes/Home.svelte';
   import Locations from './routes/Locations.svelte';
   import Settings from './routes/Settings.svelte';
+  import Terms from './routes/Terms.svelte';
 
   let lib = $state<Library>();
   let error = $state('');
@@ -61,6 +62,8 @@
       <BatchScan />
     {:else if section === 'locations'}
       {#key param}<Locations id={param ?? null} />{/key}
+    {:else if section === 'tags'}
+      <Terms kind={param === 'collections' || param === 'genres' ? param : 'tags'} />
     {:else if section === 'settings'}
       <Settings />
     {:else}
