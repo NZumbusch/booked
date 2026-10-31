@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { cleanTitle } from '../domain/book';
   import type { Book } from '../domain/types';
 
   import { isCoverShape } from '../covers/colors';
@@ -63,7 +64,7 @@
     <img {src} alt="" loading="lazy" decoding="async" onerror={onError} onload={onLoad} />
   {:else}
     <div class="placeholder">
-      <span class="t">{book.title}</span>
+      <span class="t">{cleanTitle(book.title)}</span>
       {#if book.authors[0]}<span class="a">{book.authors[0]}</span>{/if}
     </div>
   {/if}
