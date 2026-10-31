@@ -11,6 +11,7 @@
   import SyncSettings from '../lib/ui/SyncSettings.svelte';
   import SharedPlaces from '../lib/ui/SharedPlaces.svelte';
   import CoverCacheSettings from '../lib/ui/CoverCacheSettings.svelte';
+  import RatesSettings from '../lib/ui/RatesSettings.svelte';
 
   const lib = library();
   const s = $derived($lib.settings);
@@ -86,6 +87,8 @@
       </label>
     </div>
   </section>
+
+  <RatesSettings />
 
   <section class="card stack">
     <h2>Online lookups</h2>

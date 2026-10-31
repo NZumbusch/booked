@@ -11,7 +11,7 @@
   import { attempt } from '../lib/stores/app';
 
   const lib = library();
-  const s = $derived(computeStats($lib.books, $lib.locations, todayIso(), $lib.settings.currency));
+  const s = $derived(computeStats($lib.books, $lib.locations, todayIso(), $lib.settings.currency, $lib.settings.rates?.eurPer));
   const q = (f: Parameters<typeof filterToQuery>[0]) => `#/books?${new URLSearchParams(filterToQuery(f))}`;
 
   const places = $derived<(Count & { depth?: number })[]>([
@@ -48,11 +48,25 @@
       <div class="tile"><span class="v">{s.byStatus.read.toLocaleString()}</span><span class="k">read ({s.owned ? Math.round((s.byStatus.read / s.owned) * 100) : 0}%)</span></div>
       <a class="tile" href={q({ lending: 'lent' })}><span class="v">{s.lent}</span><span class="k">lent out{#if s.overdue} · <strong class="danger">{s.overdue} overdue</strong>{/if}</span></a>
       <a class="tile" href={q({ ownership: 'wishlist' })}><span class="v">{s.wishlist}</span><span class="k">on wishlist</span></a>
-      {#each s.valueByCurrency.slice(0, 2) as v (v.currency)}
-        <div class="tile"><span class="v">{formatPrice(v.amount, v.currency)}</span><span class="k">collection value ({plural(v.books, 'book')} with a price)</span></div>
-      {/each}
+      {#if s.totalValue.books}
+        <div class="tile"><span class="v">{s.totalValue.converted.length ? '≈ ' : ''}{formatPrice(s.totalValue.amount, s.totalValue.currency)}</span>
+          <span class="k">collection value ({plural(s.totalValue.books, 'book')} with a price)</span></div>
+      {/if}
       {#if s.copies !== s.owned}<div class="tile"><span class="v">{s.copies.toLocaleString()}</span><span class="k">copies incl. duplicates</span></div>{/if}
     </section>
+
+    {#if s.totalValue.converted.length || s.totalValue.unknown.length}
+      <details class="card value">
+        <summary>How the collection value is counted</summary>
+        <ul>
+          {#each s.valueByCurrency as v (v.currency)}
+            <li>{formatPrice(v.amount, v.currency === 'DEM' ? 'DEM' : v.currency)} <span class="muted small">· {plural(v.books, 'book')}{v.currency !== s.totalValue.currency ? ', converted' : ''}</span></li>
+          {/each}
+        </ul>
+        {#if s.totalValue.unknown.length}<p class="muted small">Not included (no exchange rate): {s.totalValue.unknown.map((u) => `${u.currency} (${u.books})`).join(', ')}.</p>{/if}
+        <p class="muted small">German marks use the fixed euro rate. Other currencies use {$lib.settings.rates?.updatedAt ? `rates from ${$lib.settings.rates.updatedAt.slice(0, 10)}` : 'rough built-in rates'}; <a href="#/settings">update them in Settings</a>.</p>
+      </details>
+    {/if}
 
     <section class="card stack">
       <h2>Reading in {r.year}</h2>
@@ -213,4 +227,7 @@
   .room a { text-decoration: none; }
   table { border-collapse: collapse; margin-top: 8px; }
   th, td { padding: 2px 12px 2px 0; text-align: left; }
+  .value summary { cursor: pointer; font-weight: 600; }
+  .value ul { margin: 8px 0; padding-left: 18px; display: grid; gap: 2px; }
+  .value p { margin: 4px 0 0; }
 </style>
