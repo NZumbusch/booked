@@ -29,7 +29,7 @@ export interface CoverSearchOptions {
 
 /** Books that may still be missing their series: they have an ISBN and no series yet. */
 export function booksWithoutSeries(books: Book[], checked?: { has: (id: string) => boolean }): Book[] {
-  return books.filter((b) => !b.series && (b.isbn13 || b.isbn10) && !checked?.has(b.id));
+  return books.filter((b) => !b.series && !b.line && (b.isbn13 || b.isbn10) && !checked?.has(b.id));
 }
 
 /**
@@ -47,9 +47,9 @@ export async function fillMissingSeries(lib: Library, opts: CoverSearchOptions, 
     try {
       const r = await dnbByIsbn((b.isbn13 ?? b.isbn10)!, f);
       opts.seriesChecked?.add(b.id);
-      const { series, seriesNumber } = r?.fields ?? {};
-      if (series && lib.book(b.id)) {
-        await lib.enrichBook(b.id, { series, ...(seriesNumber && !b.seriesNumber ? { seriesNumber } : {}) });
+      const { series, seriesNumber, line } = r?.fields ?? {};
+      if ((series || line) && lib.book(b.id)) {
+        await lib.enrichBook(b.id, { ...(series ? { series } : { line }), ...(series && seriesNumber && !b.seriesNumber ? { seriesNumber } : {}) });
         progress.found++;
       }
     } catch {

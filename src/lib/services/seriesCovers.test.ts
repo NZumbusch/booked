@@ -38,3 +38,22 @@ describe('series covers', () => {
     expect(seen).toEqual([NAVY]);
   });
 });
+
+import { isUniform } from './seriesCovers';
+describe('paperback lines', () => {
+  it('counts a line only when its covers share a look', () => {
+    const navy = [look(20, 20, 50, 0.1), look(25, 22, 55, 0.12), look(18, 20, 48, 0.1)];
+    expect(isUniform(navy)).toBe(true);
+    expect(isUniform([...navy.slice(0, 2), look(240, 200, 20, 0.6)])).toBe(false);
+    expect(isUniform(navy.slice(0, 2))).toBe(false); // too few to tell
+  });
+
+  it('uses a uniform line for matching, ignores a mixed one, and series always count', () => {
+    const line = (id: string, cover: string) => createBook({ title: id, line: 'Reclam', cover }, { id, now: '2026-01-01T00:00:00.000Z' });
+    const books = [line('a', '1'), line('b', '2'), line('c', '3'), line('d', '4')];
+    const same = (c: string) => ({ '1': look(240, 200, 20, 0.6), '2': look(238, 198, 24, 0.6), '3': look(242, 205, 18, 0.6) }[c]);
+    expect(siblingLooks(books, books[3], same)).toHaveLength(3);
+    const mixed = (c: string) => ({ '1': look(240, 200, 20, 0.6), '2': look(20, 20, 50, 0.1), '3': look(30, 160, 60, 0.4) }[c]);
+    expect(siblingLooks(books, books[3], mixed)).toEqual([]);
+  });
+});

@@ -84,7 +84,10 @@ export function parseDnbRecord(xml: string): ProviderResult | undefined {
   const year = (first('264', 'c') ?? first('260', 'c'))?.match(/\d{4}/)?.[0];
   const subjects = [...new Set([...fields('689'), ...fields('650')].map((f) => clean(sub(f, 'a')[0])).filter((s): s is string => !!s && !FORM_TERMS.has(s)))];
   const publisher = expandPublisher(clean(first('264', 'b') ?? first('260', 'b')));
-  const series = publisherSeries(clean(first('490', 'a')), clean(first('490', 'v')), publisher) ? undefined : clean(first('490', 'a'));
+  const seriesName = clean(first('490', 'a'));
+  const isLine = publisherSeries(seriesName, clean(first('490', 'v')), publisher);
+  const series = isLine ? undefined : seriesName;
+  const line = isLine ? seriesName : undefined;
   const idn = control('001');
 
   return {
@@ -102,6 +105,7 @@ export function parseDnbRecord(xml: string): ProviderResult | undefined {
       pageCount: pages ? Number(pages) : undefined,
       series,
       seriesNumber: series ? clean(first('490', 'v')) : undefined,
+      line,
       subjects: subjects.length ? subjects.slice(0, 12) : undefined,
       listPrice: price ? { amount: price.amount, currency: price.currency, source: 'dnb' } : undefined,
       identifiers: idn ? { dnb: idn } : undefined

@@ -4,7 +4,7 @@ import type { Book, SourceId, SourceRef } from '../domain/types';
 export type MetaFields = Partial<Pick<Book,
   | 'title' | 'subtitle' | 'authors' | 'contributors' | 'publisher' | 'publishedYear' | 'firstPublishedYear'
   | 'edition' | 'language' | 'originalLanguage' | 'pageCount' | 'format' | 'isbn10' | 'isbn13'
-  | 'description' | 'cover' | 'genres' | 'subjects' | 'series' | 'seriesNumber' | 'writing' | 'listPrice'
+  | 'description' | 'cover' | 'genres' | 'subjects' | 'series' | 'seriesNumber' | 'line' | 'writing' | 'listPrice'
 >> & { identifiers?: Record<string, string> };
 
 /** One provider's answer: fields plus where each came from. */

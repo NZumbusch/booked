@@ -66,6 +66,7 @@ describe('DNB', () => {
       expect(f.contributors).toEqual(['Barbara Röhl (translator)']);
       expect(f.series).toBeUndefined();
       expect(f.seriesNumber).toBeUndefined();
+      expect(f.line).toBe('Goldmann');
     });
 
     it('older record: DM price preferred over Swiss francs; form terms dropped from subjects', () => {

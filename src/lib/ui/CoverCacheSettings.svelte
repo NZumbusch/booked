@@ -16,7 +16,7 @@
   const update = (patch: { mode?: CacheMode; size?: CoverSize }) => attempt(() => lib.updateSettings({ covers: { ...s, ...patch } }));
   const missingCovers = $derived($lib && booksWithoutCover($lib.books, (u) => cache.isBroken(u)).length);
   // Remember which books the library already answered for, so they aren't asked again.
-  const CHECKED_KEY = 'booked.seriesChecked';
+  const CHECKED_KEY = 'booked.seriesChecked2';
   const checkedIds = (() => {
     try {
       return new Set<string>(JSON.parse(localStorage.getItem(CHECKED_KEY) ?? '[]'));
