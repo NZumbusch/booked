@@ -34,7 +34,7 @@ beforeEach(async () => {
   calls = [];
   conn = { type: 'wifi' };
   fail = new Set();
-  await lib.updateSettings({ covers: { full: 'all' } }); // the large image for every book (the default saves it only when a book is opened)
+  await lib.updateSettings({ covers: { full: 'all' } }); // the large image for every book (the default)
   cache = new CoverCache(lib, processor, () => conn, `covers-${n++}`);
 });
 afterEach(async () => {
@@ -146,9 +146,9 @@ describe('CoverCache', () => {
   });
 });
 
-describe('CoverCache: large images only when a book is opened (default)', () => {
+describe('CoverCache: large images only when a book is opened (optional)', () => {
   beforeEach(async () => {
-    await lib.updateSettings({ covers: {} });
+    await lib.updateSettings({ covers: { full: 'detail' } });
   });
 
   it('downloads only the small image for every book', async () => {

@@ -166,9 +166,9 @@ export class CoverCache {
     return this.lib.state.settings.covers?.size ?? DEFAULT_COVER_SIZE;
   }
 
-  /** 'detail': only small images are saved for everything; the large one is fetched when a book is opened. 'all': large images are saved for every book. */
+  /** 'all' (default): small and large images are saved for every book, so everything works offline. 'detail': large images are only fetched when a book is opened (saves space and data). */
   get fullMode(): 'detail' | 'all' {
-    return this.lib.state.settings.covers?.full ?? 'detail';
+    return this.lib.state.settings.covers?.full ?? 'all';
   }
 
   /** Is there any saved image (small or large) for this cover? */
