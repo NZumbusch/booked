@@ -199,7 +199,9 @@ describe('backup', () => {
     const other = new DexieRepository(`test-${n++}`);
     const lib2 = await Library.open(other);
     await lib2.importSnapshot(snap);
-    expect(lib2.state.books).toEqual(lib.state.books);
+    // Restored records get a fresh timestamp (so sync propagates the restore); content is identical.
+    const strip = (bs: typeof lib.state.books) => bs.map(({ updatedAt: _u, ...rest }) => rest);
+    expect(strip(lib2.state.books)).toEqual(strip(lib.state.books));
     expect(lib2.state.locations).toHaveLength(5);
     await other.destroy();
   });
@@ -327,5 +329,34 @@ describe('importBooks', () => {
     ], { skipDuplicates: true });
     expect(r.added.map((b) => b.title)).toEqual(['B']);
     expect(r.skipped).toBe(2);
+  });
+});
+
+describe('sync bookkeeping', () => {
+  it('records deletion markers for deleted books and locations', async () => {
+    const { study } = await setupFlats();
+    const a = await lib.addBook({ title: 'A' });
+    await lib.deleteBooks([a.id]);
+    await lib.deleteLocation(study.id, null);
+    const data = await lib.exportSyncData();
+    expect(data.deleted.map((t) => [t.kind, t.id]).sort()).toEqual([['book', a.id], ['location', study.id]].sort());
+  });
+
+  it('undo of a delete makes the book newer than its deletion marker', async () => {
+    const a = await lib.addBook({ title: 'A' });
+    await lib.deleteBooks([a.id]);
+    await lib.undo();
+    const data = await lib.exportSyncData();
+    const tomb = data.deleted.find((t) => t.id === a.id)!;
+    expect(data.books[0].updatedAt > tomb.at).toBe(true);
+  });
+
+  it('applies merged data but keeps local settings', async () => {
+    await lib.updateSettings({ theme: 'dark' });
+    const other = await lib.addBook({ title: 'Keep me?' });
+    await lib.applySyncData({ books: [], locations: [], moves: [], deleted: [{ id: other.id, kind: 'book', at: new Date().toISOString() }] });
+    expect(lib.state.books).toEqual([]);
+    expect(lib.state.settings.theme).toBe('dark');
+    expect(await lib.undo()).toBeUndefined();
   });
 });

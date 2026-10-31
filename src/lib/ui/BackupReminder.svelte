@@ -8,7 +8,10 @@
   const lib = library();
 
   let snoozedUntil = $state(readSnooze());
-  const status = $derived(backupStatus($lib.settings.lastBackupAt, $lib.books));
+  // A recent Google Drive sync is a backup too.
+  const lastSafe = $derived([$lib.settings.lastBackupAt, $lib.settings.sync?.enabled ? $lib.settings.sync.lastSyncAt : undefined]
+    .filter((x): x is string => !!x).sort().pop());
+  const status = $derived(backupStatus(lastSafe, $lib.books));
   const visible = $derived(status.due && Date.now() > snoozedUntil);
 
   function readSnooze(): number {

@@ -9,6 +9,7 @@ import type {
 /** Free-form list fields that can be renamed, merged and deleted library-wide. */
 export type TermKind = 'tags' | 'collections' | 'genres';
 const TERM_LABEL: Record<TermKind, string> = { tags: 'tag', collections: 'collection', genres: 'genre' };
+import type { SyncData, Tombstone } from '../domain/sync';
 import type { ChangeSet, LoadedState, Repository } from '../storage/repository';
 
 type Listener = (state: LoadedState) => void;
@@ -321,21 +322,38 @@ export class Library {
   async undo(): Promise<string | undefined> {
     const entry = await this.repo.latestUndo();
     if (!entry) return undefined;
-    await this.commit(
-      {
-        putBooks: entry.booksBefore,
-        deleteBookIds: entry.createdBookIds,
-        putLocations: entry.locationsBefore,
-        deleteLocationIds: entry.createdLocationIds,
-        deleteMoveIds: entry.moveIds,
-        deleteUndoIds: [entry.id]
-      }
-    );
+    // Undo is a new change as far as other devices are concerned: restored records get a fresh
+    // timestamp and removed ones a deletion marker, so sync carries the undo everywhere.
+    const now = this.now();
+    await this.commit({
+      putBooks: entry.booksBefore.map((b) => ({ ...b, updatedAt: now })),
+      deleteBookIds: entry.createdBookIds,
+      putLocations: entry.locationsBefore.map((l) => ({ ...l, updatedAt: now })),
+      deleteLocationIds: entry.createdLocationIds,
+      deleteMoveIds: entry.moveIds,
+      deleteUndoIds: [entry.id],
+      putTombstones: [
+        ...entry.createdBookIds.map((id): Tombstone => ({ id, kind: 'book', at: now })),
+        ...entry.createdLocationIds.map((id): Tombstone => ({ id, kind: 'location', at: now })),
+        ...entry.moveIds.map((id): Tombstone => ({ id, kind: 'move', at: now }))
+      ]
+    });
     return entry.label;
   }
 
   async lastActionLabel(): Promise<string | undefined> {
     return (await this.repo.latestUndo())?.label;
+  }
+
+  exportSyncData(): Promise<SyncData> {
+    return this.repo.exportSyncData();
+  }
+
+  /** Replace books/locations/moves with merged sync data (settings stay; undo history resets). */
+  async applySyncData(data: SyncData): Promise<void> {
+    await this.repo.replaceSyncData(plain(data));
+    const loaded = await this.repo.load();
+    this.set({ ...loaded, settings: this.state.settings });
   }
 
   exportSnapshot(): Promise<Snapshot> {
@@ -377,7 +395,21 @@ export class Library {
   }
 
   private async replaceWith(snapshot: Snapshot): Promise<void> {
-    await this.repo.importSnapshot(snapshot);
+    // A restore is "make it like this" everywhere: restored records get a fresh timestamp and
+    // records missing from the backup get deletion markers, so sync propagates the restore.
+    const now = this.now();
+    const keepBooks = new Set(snapshot.books.map((b) => b.id));
+    const keepLocs = new Set(snapshot.locations.map((l) => l.id));
+    const tombstones: Tombstone[] = [
+      ...this.state.books.filter((b) => !keepBooks.has(b.id)).map((b): Tombstone => ({ id: b.id, kind: 'book', at: now })),
+      ...this.state.locations.filter((l) => !keepLocs.has(l.id)).map((l): Tombstone => ({ id: l.id, kind: 'location', at: now }))
+    ];
+    await this.repo.importSnapshot({
+      ...snapshot,
+      books: snapshot.books.map((b) => ({ ...b, updatedAt: now })),
+      locations: snapshot.locations.map((l) => ({ ...l, updatedAt: now }))
+    });
+    if (tombstones.length) await this.repo.commit({ putTombstones: tombstones });
     this.set(await this.repo.load());
     // The data now matches a backup file, so nothing is "unsaved".
     await this.updateSettings({ lastBackupAt: this.now() });
@@ -431,7 +463,12 @@ export class Library {
       createdLocationIds: putLocIds.filter((id) => !this.locations.has(id)),
       moveIds: action.putMoves?.map((m) => m.id) ?? []
     };
-    await this.commit({ ...action, pushUndo: undo });
+    const at = undo.at;
+    const putTombstones: Tombstone[] = [
+      ...(action.deleteBookIds ?? []).map((id): Tombstone => ({ id, kind: 'book', at })),
+      ...(action.deleteLocationIds ?? []).map((id): Tombstone => ({ id, kind: 'location', at }))
+    ];
+    await this.commit({ ...action, pushUndo: undo, putTombstones });
   }
 
   private async commit(changes: ChangeSet): Promise<void> {

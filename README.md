@@ -40,6 +40,29 @@ A free key gives you **1,000 lookups per day**, and each book uses one. No billi
 
 The key is stored only on your device, and it's included in backups so a restored device keeps it.
 
+## Google Drive sync setup
+
+Sync keeps the library identical on all your devices. It's stored as a single file in Booked's **private app folder** on your Google Drive. That folder doesn't appear in "My Drive", and Booked is only allowed to see that folder.
+Google requires an OAuth *client ID* to identify the app. It's free, and because the app runs entirely in the browser, there's no secret.
+
+1. Open <https://console.cloud.google.com/>, then pick or create a project. The one for the Books API key works.
+2. Go to **APIs & Services → Library**, search for **Google Drive API**, and choose **Enable**.
+3. Set up the **OAuth consent screen** (also called *Google Auth Platform*):
+   - User type **External**, app name "Booked", and your email.
+   - Under **Audience / Test users**, add your own Google account(s). You can leave the app in *Testing*.
+   - The only scope used is `…/auth/drive.appdata`.
+4. Go to **Credentials → Create credentials → OAuth client ID**, with application type **Web application**.
+   - Under **Authorized JavaScript origins**, add `https://<user>.github.io`. Add `http://localhost:5173` too if you develop locally.
+   - No redirect URI is needed.
+5. Copy the client ID (`…apps.googleusercontent.com`) into **Settings → Sync with Google Drive**, then tap **Connect Google Drive**. Do the same on every device.
+
+How it behaves:
+- **Automatic syncing:** when the app opens, about 15 s after changes, when you come back online, and every 5 minutes.
+- **Merging:** changes are merged per book, place and move, and the newer edit wins. Deletions are tracked, so a deleted book doesn't come back from another device. Undo and Restore propagate too.
+- **Sign-in expiry:** Google sign-ins last about an hour. After that, Home shows "Reconnect": one tap, and usually no consent screen.
+- **Settings stay per device:** theme, view, default location and keys aren't synced.
+- **Backups:** a recent sync counts as a backup for the backup reminder. Exporting a file now and then is still a good idea.
+
 ## PWA or Capacitor?
 
 **Recommendation: PWA now. Capacitor stays possible later with no rewrite.**
@@ -71,9 +94,14 @@ src/
       query.ts               search (accent-insensitive) and sorting
     storage/
       repository.ts          storage interface (+ atomic ChangeSet)
-      dexie-repository.ts    IndexedDB implementation
+      dexie-repository.ts    IndexedDB implementation (schema v2: + sync tombstones)
+    metadata/                Open Library, Google Books, Wikidata, geocoding; quick + full lookup
+    exchange/                CSV parse/write, Libib export, CSV import mapping, CSL-JSON/RIS/BibTeX
+    sync/                    Drive sync: target interface, Drive client, Google sign-in, service, controller
+    scanner/                 camera + barcode detection (native or WASM)
     services/
       library.ts             app service: in-memory model + persistence + undo + move history
+      enrich.ts              background completion of book details
     stores/app.ts            Library singleton, toasts, error handling
     ui/                      reusable components (Cover, LocationPicker, BookForm, Dialog…)
     router.ts, format.ts, images.ts
@@ -178,6 +206,7 @@ Labels are snapshots, so renaming a room later doesn't rewrite history. Moving a
     - CSV import with automatic column mapping for Libib, Goodreads and Booked files, which you can adjust before importing
     - Optionally skips duplicates. Missing places/rooms are created, details are filled in in the background, and the whole import is one undo step
   - **Printable list** per place or room, grouped by room/shelf and sorted by author. Print it, or save it as a PDF
-- [ ] **Phase 5: Google Drive sync**
-  - Uses Drive's hidden per-app folder (`appDataFolder`). It's free, but needs a one-time OAuth client ID from a Google Cloud project
-  - Plugs in behind `Repository.exportSnapshot/importSnapshot`
+- [x] **Phase 5: Google Drive sync**
+  - Works through Drive's hidden per-app folder (`appDataFolder`), and needs no backend
+  - Merges per record with deletion markers (tombstones). Optimistic concurrency: if another device writes during a sync, it merges again
+  - See "Google Drive sync setup" above

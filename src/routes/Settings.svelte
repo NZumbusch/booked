@@ -7,6 +7,7 @@
   import BackupButton from '../lib/ui/BackupButton.svelte';
   import Confirm from '../lib/ui/Confirm.svelte';
   import LocationPicker from '../lib/ui/LocationPicker.svelte';
+  import SyncSettings from '../lib/ui/SyncSettings.svelte';
 
   const lib = library();
   const s = $derived($lib.settings);
@@ -95,6 +96,8 @@
         onchange={(e) => update({ googleBooksKey: e.currentTarget.value.trim() || undefined })} />
     </label>
   </section>
+
+  <SyncSettings />
 
   <section class="card stack">
     <h2>Import, export & print</h2>

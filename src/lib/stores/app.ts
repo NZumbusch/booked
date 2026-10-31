@@ -3,9 +3,17 @@ import { lookupCandidate, lookupIsbn } from '../metadata/lookup';
 import { Enricher } from '../services/enrich';
 import { Library } from '../services/library';
 import { DexieRepository } from '../storage/dexie-repository';
+import { SyncController } from '../sync/controller';
 
 let instance: Library | undefined;
 let enricherInstance: Enricher | undefined;
+let syncInstance: SyncController | undefined;
+
+/** Google Drive sync (inactive until configured in Settings). */
+export function sync(): SyncController {
+  if (!syncInstance) throw new Error('Library not opened yet');
+  return syncInstance;
+}
 
 /** Background filler for books added before their online details were known. */
 export function enricher(): Enricher {
@@ -25,6 +33,7 @@ export async function openLibrary(): Promise<Library> {
     enricherInstance = new Enricher(instance, { lookupIsbn: (isbn) => lookupIsbn(isbn), lookupCandidate: (c) => lookupCandidate(c) });
     enricherInstance.resumeAll();
     window.addEventListener('online', () => enricherInstance?.resumeAll());
+    syncInstance = new SyncController(instance);
   }
   // Ask the browser not to evict our data under storage pressure.
   navigator.storage?.persist?.().catch(() => {});

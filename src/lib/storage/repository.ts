@@ -1,3 +1,4 @@
+import type { SyncData, Tombstone } from '../domain/sync';
 import type { Book, Id, Location, MoveRecord, Settings, Snapshot, UndoEntry } from '../domain/types';
 
 /** A set of writes that must be applied atomically. */
@@ -10,6 +11,8 @@ export interface ChangeSet {
   deleteMoveIds?: Id[];
   pushUndo?: UndoEntry;
   deleteUndoIds?: Id[];
+  /** Deletion markers for sync. */
+  putTombstones?: Tombstone[];
 }
 
 export interface LoadedState {
@@ -35,6 +38,10 @@ export interface Repository {
   /** A copy of the library taken right before a restore, so the restore can be undone. */
   saveSafetyCopy(snapshot: Snapshot | undefined): Promise<void>;
   loadSafetyCopy(): Promise<Snapshot | undefined>;
+  /** The synced part of the library (records + deletion markers). */
+  exportSyncData(): Promise<SyncData>;
+  /** Replace the synced part with merged data; settings stay, the undo history is cleared. */
+  replaceSyncData(data: SyncData): Promise<void>;
 }
 
 /** Number of undoable actions kept. */

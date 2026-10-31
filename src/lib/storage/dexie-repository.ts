@@ -1,5 +1,6 @@
 import Dexie, { type Table } from 'dexie';
 import { DEFAULT_SETTINGS, SCHEMA_VERSION } from '../domain/types';
+import type { SyncData, Tombstone } from '../domain/sync';
 import type { Book, Id, Location, MoveRecord, Settings, Snapshot, UndoEntry } from '../domain/types';
 import { UNDO_LIMIT, type ChangeSet, type LoadedState, type Repository } from './repository';
 
@@ -9,6 +10,7 @@ class BookedDb extends Dexie {
   moves!: Table<MoveRecord, Id>;
   undo!: Table<UndoEntry, Id>;
   meta!: Table<{ key: string; value: unknown }, string>;
+  deleted!: Table<Tombstone & { key: string }, string>;
 
   constructor(name: string) {
     super(name);
@@ -19,6 +21,8 @@ class BookedDb extends Dexie {
       undo: 'id, at',
       meta: 'key'
     });
+    // v2: deletion markers for Google Drive sync.
+    this.version(2).stores({ deleted: 'key, at' });
   }
 }
 
@@ -46,7 +50,8 @@ export class DexieRepository implements Repository {
 
   async commit(c: ChangeSet): Promise<void> {
     const db = this.db;
-    await db.transaction('rw', [db.books, db.locations, db.moves, db.undo], async () => {
+    await db.transaction('rw', [db.books, db.locations, db.moves, db.undo, db.deleted], async () => {
+      if (c.putTombstones?.length) await db.deleted.bulkPut(c.putTombstones.map((t) => ({ ...t, key: `${t.kind}:${t.id}` })));
       if (c.deleteBookIds?.length) await db.books.bulkDelete(c.deleteBookIds);
       if (c.putBooks?.length) await db.books.bulkPut(c.putBooks);
       if (c.deleteLocationIds?.length) await db.locations.bulkDelete(c.deleteLocationIds);
@@ -103,6 +108,24 @@ export class DexieRepository implements Repository {
 
   async loadSafetyCopy(): Promise<Snapshot | undefined> {
     return (await this.db.meta.get('safetyCopy'))?.value as Snapshot | undefined;
+  }
+
+  async exportSyncData(): Promise<SyncData> {
+    const [books, locations, moves, deleted] = await Promise.all([
+      this.db.books.toArray(), this.db.locations.toArray(), this.db.moves.toArray(), this.db.deleted.toArray()
+    ]);
+    return { books, locations, moves, deleted: deleted.map(({ id, kind, at }) => ({ id, kind, at })) };
+  }
+
+  async replaceSyncData(data: SyncData): Promise<void> {
+    const db = this.db;
+    await db.transaction('rw', [db.books, db.locations, db.moves, db.undo, db.deleted], async () => {
+      await Promise.all([db.books.clear(), db.locations.clear(), db.moves.clear(), db.undo.clear(), db.deleted.clear()]);
+      await db.books.bulkPut(data.books);
+      await db.locations.bulkPut(data.locations);
+      await db.moves.bulkPut(data.moves);
+      await db.deleted.bulkPut(data.deleted.map((t) => ({ ...t, key: `${t.kind}:${t.id}` })));
+    });
   }
 
   /** For tests. */

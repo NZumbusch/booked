@@ -185,6 +185,8 @@ export interface Settings {
   savedFilters?: SavedFilter[];
   /** Optional free Google Books API key for a reliable 1,000 lookups/day. */
   googleBooksKey?: string;
+  /** Google Drive sync (per device). */
+  sync?: { clientId?: string; enabled?: boolean; lastSyncAt?: Timestamp };
   /** When the last backup file was made (for reminders). */
   lastBackupAt?: Timestamp;
 }
