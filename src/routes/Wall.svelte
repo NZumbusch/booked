@@ -11,6 +11,7 @@
   import Cover from '../lib/ui/Cover.svelte';
   import CoverDownload from '../lib/ui/CoverDownload.svelte';
   import Icon from '../lib/ui/Icon.svelte';
+  import { childrenOf } from '../lib/domain/locations';
   import { cellPos, FIELD_ORDERS, fieldLayout, fieldTopics, hasTopic, RECT, type FieldItem, type FieldOrder, type FieldShape } from '../lib/wall/field';
   import { placeInRect } from '../lib/wall/paint';
 
@@ -40,6 +41,20 @@
       .map((book) => ({ book, analysis: cache.meta(book.cover)?.analysis, nice: cache.meta(book.cover)?.nice }))
       // Unknown (not yet cached) covers stay in; only covers known to be placeholders/odd are hidden.
       .filter((it) => !niceOnly || it.nice !== false);
+  });
+  // Room filter: places, rooms and shelves as an indented list with the number of books in each.
+  const roomOptions = $derived.by(() => {
+    void $lib;
+    const counts = lib.counts();
+    const out: { id: string; label: string }[] = [];
+    const walk = (parent: string | null, depth: number) => {
+      for (const l of childrenOf($lib.locations, parent)) {
+        out.push({ id: l.id, label: `${'\u2003'.repeat(depth)}${l.name} (${counts.get(l.id) ?? 0})` });
+        walk(l.id, depth + 1);
+      }
+    };
+    walk(null, 0);
+    return out;
   });
   const topics = $derived(fieldTopics(baseItems));
   const items = $derived(topic ? baseItems.filter((it) => hasTopic(it.book, topic)) : baseItems);
@@ -518,6 +533,13 @@
     <select value={order} aria-label="Arrange by" onchange={(e) => setQuery({ order: e.currentTarget.value === 'color' ? undefined : e.currentTarget.value })}>
       {#each Object.entries(FIELD_ORDERS) as [k, l]}<option value={k}>{l}</option>{/each}
     </select>
+    {#if roomOptions.length}
+      <select value={filter.loc ?? ''} aria-label="Room" onchange={(e) => setQuery({ loc: e.currentTarget.value || undefined })}>
+        <option value="">All rooms</option>
+        {#each roomOptions as r (r.id)}<option value={r.id}>{r.label}</option>{/each}
+        <option value="none">No room</option>
+      </select>
+    {/if}
     <select value={topic} aria-label="Topic" onchange={(e) => setQuery({ topic: e.currentTarget.value || undefined })}>
       <option value="">All topics</option>
       {#each topics as t (t.name)}<option value={t.name}>{t.name} ({t.count})</option>{/each}
