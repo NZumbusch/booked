@@ -114,6 +114,8 @@ export interface Book {
   subjects?: string[];
   series?: string;
   seriesNumber?: string;
+  /** The publisher's paperback line ("dtv", "Reclam"…): numbered by catalogue, so not a series to complete, but its covers may share a design. */
+  line?: string;
   /** Which volume of a multi-volume work this copy is (several volumes can share one ISBN). */
   volume?: string;
   writing?: WritingInfo;

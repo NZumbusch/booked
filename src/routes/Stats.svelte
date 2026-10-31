@@ -151,7 +151,7 @@
         {#if wide.centuries.length > 1}
           <span class="muted small">Written in</span>
           <BarList items={wide.centuries.map((c) => ({ key: String(c.century), label: `${ordinal(c.century)} century`, count: c.count }))}
-            href={(c) => q({ yearFrom: (Number(c.key) - 1) * 100 + 1, yearTo: Number(c.key) * 100 })} />
+            href={(c) => q({ yearFrom: (Number(c.key) - 1) * 100 + 1, yearTo: Number(c.key) * 100, yearBasis: 'work' })} />
         {/if}
       </section>
     {/if}
@@ -177,7 +177,7 @@
     {#if s.byDecade.length > 1}
       <section class="card stack">
         <h2>When they were first published</h2>
-        <BarList items={s.byDecade} href={(c) => q({ yearFrom: Number(c.key), yearTo: Number(c.key) + 9 })} />
+        <BarList items={s.byDecade} href={(c) => q({ yearFrom: Number(c.key), yearTo: Number(c.key) + 9, yearBasis: 'work' })} />
       </section>
     {/if}
   {/if}

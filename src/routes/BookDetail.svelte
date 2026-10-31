@@ -1,6 +1,6 @@
 <script lang="ts">
   import { filterToQuery, type BookFilter } from '../lib/domain/filters';
-  import { borrowers, copyDraft, fillMissing, isOverdue, lendingFrom, todayIso } from '../lib/domain/book';
+  import { borrowers, displayTitle, copyDraft, fillMissing, isOverdue, lendingFrom, todayIso } from '../lib/domain/book';
   import type { BookDraft, MoveRecord, PlaceBasis, ReadingStatus } from '../lib/domain/types';
   import { lookupIsbn, searchBooks, lookupCandidate } from '../lib/metadata/lookup';
   import { FORMAT_LABEL, STATUS_LABEL, formatDate, formatPrice, languageName } from '../lib/format';
@@ -149,6 +149,7 @@
     ['Pages', book.pageCount, 'pageCount'],
     ['Language', languageName(book.language), 'language'],
     ['Volume', book.volume, ''],
+    ['Publisher line', book.line, ''],
     ['Series', book.series && `${book.series}${book.seriesNumber ? ` #${book.seriesNumber}` : ''}`, 'series'],
     ['ISBN-13', book.isbn13, ''],
     ['ISBN-10', book.isbn10, ''],
@@ -209,7 +210,7 @@
       </button>
       <div class="stack info">
         <div>
-          <h1>{book.title}</h1>
+          <h1>{displayTitle(book)}</h1>
           {#if book.subtitle}<p class="muted sub">{book.subtitle}</p>{/if}
           {#if book.authors.length}<p class="authors">{#each book.authors as a, i}{#if i}, {/if}<a href="#/author/{encodeURIComponent(a)}">{a}</a>{/each}</p>{/if}
         </div>
@@ -363,7 +364,7 @@
           {#each similar as m (m.id)}
             <a href="#/book/{m.id}" class="sim" title={m.book.title}>
               <Cover book={m.book} />
-              <span class="small t">{m.book.title}</span>
+              <span class="small t">{displayTitle(m.book)}</span>
               <span class="muted small why">{m.reasons.join(' · ')}</span>
             </a>
           {/each}

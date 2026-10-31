@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { workYear } from '../lib/domain/book';
   import { influences, KIND_LABEL, seriesStatus, sharedGroups } from '../lib/domain/connections';
   import { facet, filterToQuery } from '../lib/domain/filters';
   import { buildIndex, oddOneOut, topTopics } from '../lib/domain/similar';
@@ -48,7 +49,7 @@
   const decades = $derived.by(() => {
     const m = new Map<number, number>();
     for (const b of owned) {
-      const y = b.writing?.year ?? b.firstPublishedYear ?? b.publishedYear;
+      const y = workYear(b);
       if (y) m.set(Math.floor(y / 10) * 10, (m.get(Math.floor(y / 10) * 10) ?? 0) + 1);
     }
     return [...m.entries()].sort((a, b) => a[0] - b[0]).map(([d, count]) => ({ key: String(d), label: d < 1800 ? `${d}s` : `${d}s`, count }));
@@ -190,7 +191,7 @@
       <section class="card stack">
         <h2>Through time</h2>
         <p class="muted small">When your books were written or first published.</p>
-        <BarList items={decades} href={(c) => link({ yearFrom: Number(c.key), yearTo: Number(c.key) + 9 })} />
+        <BarList items={decades} href={(c) => link({ yearFrom: Number(c.key), yearTo: Number(c.key) + 9, yearBasis: 'work' })} />
       </section>
     {/if}
   {/if}

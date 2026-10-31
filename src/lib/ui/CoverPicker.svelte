@@ -3,7 +3,7 @@
   import { lookDistance, sampleColors } from '../covers/cache';
   import type { CoverAnalysis } from '../covers/colors';
   import { dnbByIsbn } from '../metadata/dnb';
-  import { fold } from '../domain/query';
+  import { siblingLooks } from '../services/seriesCovers';
   import type { Book } from '../domain/types';
   import { fileToCoverDataUrl } from '../images';
   import { alternativeCovers, type CoverOption } from '../metadata/covers';
@@ -43,21 +43,20 @@
 
   // ---- series: volumes of one series usually look alike (e.g. the dark blue stw covers)
   const cache = covers();
-  const sameSeries = (b: Book) => !!book.series && !!b.series && fold(b.series) === fold(book.series);
-  /** Covers of the other books in this series that are saved on this device. */
-  const siblings = $derived(
-    $lib.books.filter((b) => b.id !== book.id && sameSeries(b) && b.cover && cache.meta(b.cover)?.analysis).map((b) => cache.meta(b.cover)!.analysis!)
-  );
+  /** Covers of the other books in this series (or uniform paperback line) that are saved on this device. */
+  const siblings = $derived($lib && siblingLooks(lib.state.books, book, (c) => cache.meta(c)?.analysis));
+  const groupName = $derived(book.series ?? book.line ?? '');
   let matchSeries = $state(true);
   let looks = $state(new Map<string, CoverAnalysis>());
 
   /** Older books may lack their series: ask the German National Library once. */
   async function fillSeries() {
-    if (book.series || !(book.isbn13 || book.isbn10)) return;
+    if (book.series || book.line || !(book.isbn13 || book.isbn10)) return;
     try {
       const r = await dnbByIsbn((book.isbn13 ?? book.isbn10)!, fetch.bind(globalThis));
-      const { series, seriesNumber } = r?.fields ?? {};
+      const { series, seriesNumber, line } = r?.fields ?? {};
       if (series) await lib.enrichBook(book.id, { series, seriesNumber });
+      else if (line) await lib.enrichBook(book.id, { line });
     } catch {
       // not essential
     }
@@ -127,7 +126,7 @@
   {:else}
     <p class="muted small">{visible.length} covers from other editions, yours first. Tap one to pull it out.</p>
     {#if siblings.length}
-      <label class="check"><input type="checkbox" bind:checked={matchSeries} /> Look-alikes of “{book.series}” first</label>
+      <label class="check"><input type="checkbox" bind:checked={matchSeries} /> Look-alikes of “{groupName}” first</label>
     {/if}
     <CoverStack options={visible} onchoose={(o) => use(o.url)} onbroken={(o) => (broken = new Set([...broken, o.thumb]))} />
   {/if}

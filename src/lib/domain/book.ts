@@ -129,6 +129,37 @@ export function placeholderTitle(isbn13: string): string {
   return `ISBN ${isbn13}`;
 }
 
+const COUNT_WORD = '(?:Bd|Bde|Bände|Bänden|Band|Vol|Vols|Volumes?|Tle|Teile?)';
+// "(Werkausgabe, 5)", "(Reihe; Bd. 3)", "(Bd. 2)"
+const TRAILING_NOTE = new RegExp(`\\s*\\((?:[^()]*[,;]\\s*\\d+|[^()]*\\b${COUNT_WORD}\\.?\\s*\\d+[^()]*)\\)\\s*$`, 'i');
+// ". 3 Bd.", ", 2 Bde.", " 3 Bände"
+const TRAILING_COUNT = new RegExp(`[.,:;]?\\s+\\d+\\s*${COUNT_WORD}\\.?\\s*$`, 'i');
+
+/**
+ * A title as it should be shown: the catalogue's volume-count and series notes are dropped
+ * ("Das Prinzip Hoffnung. 3 Bd. (Werkausgabe, 5)" → "Das Prinzip Hoffnung"). Only for display; the stored title is unchanged.
+ */
+export function cleanTitle(title: string): string {
+  let t = title.trim();
+  for (let i = 0; i < 4; i++) {
+    const before = t;
+    t = t.replace(TRAILING_NOTE, '').replace(TRAILING_COUNT, '').replace(/[\s.,:;]+$/, '');
+    if (t === before) break;
+  }
+  return t || title.trim();
+}
+
+/** Title for lists and headings: cleaned, plus the volume if one is set (to tell volumes apart). */
+export function displayTitle(book: Pick<Book, 'title' | 'volume'>): string {
+  const t = cleanTitle(book.title);
+  return book.volume?.trim() ? `${t} · Vol. ${book.volume.trim()}` : t;
+}
+
+/** When the work was written or first published (not this edition): the year the timelines use. */
+export function workYear(b: Pick<Book, 'writing' | 'firstPublishedYear' | 'publishedYear'>): number | undefined {
+  return b.writing?.year ?? b.firstPublishedYear ?? b.publishedYear;
+}
+
 /** Tag for books that no catalogue knew: they need their details typed in by hand. */
 export const MANUAL_TAG = 'enter manually';
 

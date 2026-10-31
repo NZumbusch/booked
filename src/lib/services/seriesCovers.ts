@@ -26,16 +26,38 @@ export interface SeriesCoverContext {
   sample?: typeof sampleImage;
 }
 
-export const seriesOf = (b: Pick<Book, 'series'>) => (b.series ? fold(b.series) : undefined);
+/**
+ * What a book belongs to: its series, else the publisher's paperback line. A line only counts
+ * for cover matching if its covers really look alike (see `isUniform`).
+ */
+export function groupOf(b: Pick<Book, 'series' | 'line'>): { key: string; kind: 'series' | 'line' } | undefined {
+  if (b.series) return { key: `s:${fold(b.series)}`, kind: 'series' };
+  if (b.line) return { key: `l:${fold(b.line)}`, kind: 'line' };
+  return undefined;
+}
 
-/** The cover colours of the other books in the same series. */
+/** A paperback line is worth matching to only when most of its covers share a colour scheme (Reclam yellow, stw dark blue). */
+export const LINE_UNIFORM = 0.3;
+export function isUniform(looks: CoverAnalysis[]): boolean {
+  const sample = looks.slice(0, 30);
+  if (sample.length < 3) return false;
+  let sum = 0, pairs = 0;
+  for (let i = 0; i < sample.length; i++) for (let j = i + 1; j < sample.length; j++) {
+    sum += lookDistance(sample[i], sample[j]);
+    pairs++;
+  }
+  return sum / pairs <= LINE_UNIFORM;
+}
+
+/** The cover colours of the other books in the same series (or a uniform-looking paperback line). */
 export function siblingLooks(books: Book[], book: Book, analysisOf: (cover: string) => CoverAnalysis | undefined): CoverAnalysis[] {
-  const key = seriesOf(book);
-  if (!key) return [];
-  return books
-    .filter((b) => b.id !== book.id && seriesOf(b) === key && b.cover)
+  const g = groupOf(book);
+  if (!g) return [];
+  const looks = books
+    .filter((b) => b.id !== book.id && groupOf(b)?.key === g.key && b.cover)
     .map((b) => analysisOf(b.cover!))
     .filter((a): a is CoverAnalysis => !!a && !looksLikePlaceholder(a));
+  return g.kind === 'line' && !isUniform(looks) ? [] : looks;
 }
 
 async function defaultCandidates(book: Book, ctx: SeriesCoverContext): Promise<Candidate[]> {

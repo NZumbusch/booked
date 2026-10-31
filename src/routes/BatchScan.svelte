@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { hasPlaceholderTitle, MANUAL_TAG, placeholderTitle } from '../lib/domain/book';
+  import { displayTitle, hasPlaceholderTitle, MANUAL_TAG, placeholderTitle } from '../lib/domain/book';
   import { normalizeIsbn } from '../lib/domain/isbn';
   import { classifyScan } from '../lib/domain/scan';
   import type { Book, Id, ListPrice } from '../lib/domain/types';
@@ -214,7 +214,7 @@
           <li class="card item" class:confirm={item.state === 'confirm'} class:gone={item.state === 'undone' || item.state === 'skipped'}>
             <Cover book={{ title: b?.title ?? item.isbn, authors: b?.authors ?? [], cover: b?.cover }} size="sm" />
             <div class="text">
-              {#if b}<a href="#/book/{b.id}"><strong>{b.title}{#if item.volume} · Vol. {item.volume}{/if}</strong></a>{:else}<strong>{item.isbn}</strong>{/if}
+              {#if b}<a href="#/book/{b.id}"><strong>{displayTitle({ title: b.title, volume: item.volume || b.volume })}</strong></a>{:else}<strong>{item.isbn}</strong>{/if}
               {#if b?.authors.length}<span class="small muted">{b.authors.join(', ')}</span>{/if}
               {#if item.state === 'confirm'}
                 <span class="small warn">

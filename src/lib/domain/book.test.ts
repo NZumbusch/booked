@@ -137,3 +137,19 @@ describe('copyDraft', () => {
     for (const k of ['id', 'notes', 'rating', 'locationId', 'tags', 'lending', 'createdAt']) expect(d).not.toHaveProperty(k);
   });
 });
+
+import { cleanTitle, displayTitle } from './book';
+describe('cleanTitle / displayTitle', () => {
+  it('drops volume counts and series notes from catalogue titles', () => {
+    expect(cleanTitle('Das Prinzip Hoffnung. 3 Bd. (Werkausgabe, 5)')).toBe('Das Prinzip Hoffnung');
+    expect(cleanTitle('Gesammelte Werke, 12 Bde.')).toBe('Gesammelte Werke');
+    expect(cleanTitle('Faust (Bd. 2)')).toBe('Faust');
+  });
+  it('leaves normal titles alone', () => {
+    for (const t of ['Fahrenheit 451', 'Neunzehnhundertvierundachtzig', 'Das Leben (1984)', 'Der Herr der Ringe', 'Band of Brothers']) expect(cleanTitle(t)).toBe(t);
+  });
+  it('adds the volume to tell volumes apart', () => {
+    expect(displayTitle({ title: 'Das Prinzip Hoffnung. 3 Bd.', volume: '2' })).toBe('Das Prinzip Hoffnung · Vol. 2');
+    expect(displayTitle({ title: 'Malina' })).toBe('Malina');
+  });
+});
