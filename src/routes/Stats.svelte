@@ -5,6 +5,7 @@
   import { STATUS_LABEL, formatPrice, plural } from '../lib/format';
   import { library } from '../lib/stores/app';
   import BarList from '../lib/ui/BarList.svelte';
+  import PaletteStrip from '../lib/ui/PaletteStrip.svelte';
   import { breadth, readingStats, roomProfiles } from '../lib/domain/reading';
   import { languageName, ordinal } from '../lib/format';
   import { attempt } from '../lib/stores/app';
@@ -166,6 +167,12 @@
         {/each}
       </section>
     {/if}
+
+    <section class="card stack">
+      <h2>Colours of your library</h2>
+      <PaletteStrip height={72} />
+      <a class="small" href="#/wall">Open the cover wall →</a>
+    </section>
 
     {#if s.byDecade.length > 1}
       <section class="card stack">

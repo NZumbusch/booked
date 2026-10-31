@@ -194,6 +194,7 @@
     <header class="row">
       <button class="btn-ghost btn-icon" aria-label="Back" onclick={() => (window.history.length > 1 ? window.history.back() : navigate('/books'))}><Icon name="back" /></button>
       <span class="grow"></span>
+      {#if book.cover}<a class="btn btn-sm btn-ghost" href="#/wall?focus={id}" title="Show on the cover wall">▦</a>{/if}
       <a class="btn btn-sm" href="#/book/{id}?edit=1"><Icon name="edit" size={18} /> Edit</a>
       <button class="btn-sm btn-danger" onclick={() => (deleteOpen = true)} aria-label="Delete"><Icon name="trash" size={18} /></button>
     </header>

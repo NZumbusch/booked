@@ -186,6 +186,7 @@
         onclick={() => { setQuery({ view: 'grid' }); lib.updateSettings({ view: 'grid' }); }}><Icon name="grid" /></button>
       <button class="btn-icon" class:on={view === 'list'} aria-pressed={view === 'list'} aria-label="List view"
         onclick={() => { setQuery({ view: 'list' }); lib.updateSettings({ view: 'list' }); }}><Icon name="list" /></button>
+      <a class="btn btn-icon wall-link" href="#/wall?{new URLSearchParams(filterToQuery(filter))}" aria-label="Cover wall" title="Cover wall">▦</a>
     </div>
   </div>
 
@@ -320,6 +321,7 @@
   .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; margin-left: auto; }
   .seg button { border: none; border-radius: 0; background: transparent; color: var(--muted); min-height: 40px; width: 44px; }
   .seg button.on { background: var(--surface-2); color: var(--text); }
+  .seg .wall-link { border: none; border-radius: 0; background: transparent; color: var(--muted); min-height: 40px; width: 44px; font-size: 1.2rem; }
   .chips { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
   .chip a { text-decoration: none; }
   .x { min-height: 24px; width: 24px; padding: 0; margin-right: -6px; }

@@ -17,6 +17,7 @@
   import Exchange from './routes/Exchange.svelte';
   import Join from './routes/Join.svelte';
   import Discover from './routes/Discover.svelte';
+  import Wall from './routes/Wall.svelte';
   import Topic from './routes/Topic.svelte';
   import Author from './routes/Author.svelte';
   import Lending from './routes/Lending.svelte';
@@ -85,6 +86,8 @@
       {#key param}<Locations id={param ?? null} />{/key}
     {:else if section === 'tags'}
       <Terms kind={param === 'collections' || param === 'genres' ? param : 'tags'} />
+    {:else if section === 'wall'}
+      <Wall />
     {:else if section === 'discover'}
       <Discover />
     {:else if section === 'topic' && param}

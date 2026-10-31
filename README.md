@@ -24,6 +24,12 @@ All data stays on your device (IndexedDB). The app needs no backend and no API k
   - Author pages with a Wikipedia bio in the author's language, influences and notable works
   - Connections: series gaps, shared movements, settings, awards and sources
   - A map of where books were written, where the stories are set, and where your books are
+- **Cover wall**
+  - All your covers on one zoomable, pannable wall (pinch, scroll or drag; tap to zoom; tap again for details)
+  - Arranged by colour (a rainbow field), topic (clustered islands), title, author, decade or room
+  - Zoomed out, every cover becomes its colour block, so the library turns into a colour graphic
+  - "Bubbles" mode like the Apple Watch home screen
+  - Follows your library filter; "Show on wall" from any book; export as a poster image
 - **Reading and analysis**
   - Up next queue, reading progress and a yearly goal
   - Stats: per month, pace, abandon rate, breadth (languages, centuries), what each room is about
@@ -326,3 +332,16 @@ Labels are snapshots, so renaming a room later doesn't rewrite history. Moving a
 - **Google Books:** its print prices are used as a fallback. Its e-book prices are ignored, because they'd be misleading.
 - **Collection value:** uses what you paid where you recorded it, otherwise the list price, summed per currency.
 - **No used-market value:** there's no free source for second-hand prices.
+
+### Covers on this device
+
+- **What's saved:** every cover is downloaded once and stored on the device in its own database, separate from your backups and sync. The colours of each cover are analysed (main colour, palette, "is this a real cover?") for the cover wall.
+- **When it downloads** (Settings → Covers on this device):
+  - **Only on Wi-Fi** (the default), on any connection, or off.
+  - Android Chrome reports whether it's on Wi-Fi. iPhone browsers don't, so Booked asks once ("Download covers now?") instead of guessing.
+  - Data saver is always respected.
+- **Resolution:** small (360 px), medium (540 px, the default), large (900 px) or extra large (1350 px).
+  - The storage estimate is based on your library. After the first downloads, it uses your real average.
+  - Covers are never upscaled beyond what the catalogue has.
+  - Switching up re-downloads in the background; switching down shrinks locally.
+- **Google Books covers:** they don't allow reading their pixels directly. With the Cloudflare helper configured, they go through its `/img` pass-through.

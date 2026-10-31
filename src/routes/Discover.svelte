@@ -8,6 +8,7 @@
   import { knowledge, library } from '../lib/stores/app';
   import BarList from '../lib/ui/BarList.svelte';
   import Cover from '../lib/ui/Cover.svelte';
+  import PaletteStrip from '../lib/ui/PaletteStrip.svelte';
 
   const lib = library();
   const kn = knowledge();
@@ -68,6 +69,14 @@
   {#if owned.length === 0}
     <div class="card empty"><span class="big">🧭</span><p>Add some books, then come back to explore what connects them.</p><a class="btn btn-primary" href="#/add?mode=scan">Scan a book</a></div>
   {:else}
+    <a class="card wall-card" href="#/wall">
+      <span class="stack tight">
+        <strong>Cover wall</strong>
+        <span class="muted small">All your covers on one zoomable wall: by colour, topic, author or time.</span>
+      </span>
+      <PaletteStrip height={40} />
+    </a>
+
     <section class="stack">
       <h2>Pick something</h2>
       <div class="picks">
@@ -189,6 +198,8 @@
 
 <style>
   h2 { margin: 8px 0 0; }
+  .wall-card { display: grid; gap: 10px; text-decoration: none; }
+  .tight { gap: 2px; display: grid; }
   .picks { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
   .pick { display: grid; gap: 8px; align-content: start; }
   .pick-book { display: flex; gap: 10px; align-items: center; text-decoration: none; }
