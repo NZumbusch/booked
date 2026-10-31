@@ -182,6 +182,8 @@
     // Zoomed out: broad groups (or the subgroups, if there is only one broad group anyway).
     const level: 1 | 2 = scale < 40 && layout.labels.some((l) => l.level === 1) ? 1 : 2;
     if (scale >= 150) return;
+    // Same colours as the rest of the app (light or dark), like the floating controls.
+    const t = { surface: css('--surface', '#fff'), text: css('--text', '#222'), muted: css('--muted', '#777'), line: 'rgba(127,127,127,0.25)' };
     const placed: { x0: number; y0: number; x1: number; y1: number }[] = [];
     const list = layout.labels.filter((l) => l.level === level).sort((a, b) => b.count - a.count);
     ctx.textBaseline = 'middle';
@@ -206,25 +208,26 @@
           if (placed.some((p) => p.x0 < box.x1 && box.x0 < p.x1 && p.y0 < box.y1 && box.y0 < p.y1)) continue;
           placed.push(box);
           ctx.save();
-          ctx.shadowColor = 'rgba(0,0,0,0.35)';
+          ctx.shadowColor = 'rgba(0,0,0,0.22)';
           ctx.shadowBlur = 14;
           ctx.shadowOffsetY = 3;
-          ctx.fillStyle = 'rgba(22,20,18,0.78)';
+          ctx.fillStyle = t.surface;
+          ctx.globalAlpha = 0.94;
           ctx.beginPath();
           ctx.roundRect(x, y, w, h, h / 2);
           ctx.fill();
           ctx.restore();
-          ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+          ctx.strokeStyle = t.line;
           ctx.lineWidth = 1;
           ctx.beginPath();
           ctx.roundRect(x + 0.5, y + 0.5, w - 1, h - 1, h / 2);
           ctx.stroke();
           ctx.font = `650 ${size}px system-ui, sans-serif`;
-          ctx.fillStyle = '#fff';
+          ctx.fillStyle = t.text;
           ctx.fillText(name, x + padX, y + h / 2 + 0.5);
           if (countW) {
             ctx.font = `500 ${size * 0.82}px system-ui, sans-serif`;
-            ctx.fillStyle = 'rgba(255,255,255,0.62)';
+            ctx.fillStyle = t.muted;
             ctx.fillText(count, x + padX + nameW + size * 0.5, y + h / 2 + 0.5);
           }
         }
@@ -473,11 +476,13 @@
         const y = pad + (l.y - box.y0) * cell;
         const text = `${l.text} · ${l.count}`;
         const w = ctx.measureText(text).width + size;
-        ctx.fillStyle = 'rgba(20,20,20,0.82)';
+        ctx.fillStyle = css('--surface', '#fff');
+        ctx.globalAlpha = 0.94;
         ctx.beginPath();
         ctx.roundRect(x - w / 2, y - size * 0.8, w, size * 1.6, size * 0.8);
         ctx.fill();
-        ctx.fillStyle = '#fff';
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = css('--text', '#222');
         ctx.fillText(text, x, y);
       }
       const blob = await new Promise<Blob>((res, rej) => out.toBlob((bl) => (bl ? res(bl) : rej(new Error('Export failed'))), 'image/jpeg', 0.9));
@@ -560,28 +565,30 @@
 </div>
 
 <style>
-  /* Covers fill the whole screen; the controls float above them in dark frosted pills with white icons. */
-  .wall { position: fixed; inset: 0 0 calc(var(--nav-h) + env(safe-area-inset-bottom)) 0; background: var(--bg); }
-  .float { position: absolute; z-index: 3; color: #fff; background: rgba(24, 22, 20, 0.93); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.28); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 999px; }
+  /* Covers fill the whole screen; the controls float above them in frosted pills in the app's own theme colours. */
+  .wall { position: fixed; inset: 0 0 calc(var(--nav-h) + env(safe-area-inset-bottom)) 0; background: var(--bg);
+    --pill: color-mix(in srgb, var(--surface) 94%, transparent);
+    --pill-soft: color-mix(in srgb, var(--text) 7%, transparent);
+    --pill-on: color-mix(in srgb, var(--text) 14%, transparent);
+    --pill-line: color-mix(in srgb, var(--text) 12%, transparent); }
+  .float { position: absolute; z-index: 3; color: var(--text); background: var(--pill); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18); border: 1px solid var(--pill-line); border-radius: 999px; }
   .bar { top: 10px; left: 10px; right: 10px; display: flex; gap: 2px; align-items: center; padding: 4px; max-width: 460px; }
-  .back { width: 40px; height: 40px; flex: none; display: grid; place-items: center; border-radius: 50%; color: #fff; }
-  .back:hover { background: rgba(255, 255, 255, 0.1); }
+  .back { width: 40px; height: 40px; flex: none; display: grid; place-items: center; border-radius: 50%; color: var(--text); }
+  .back:hover { background: var(--pill-soft); }
   .bar select { width: auto; min-height: 40px; flex: 1; min-width: 0; padding: 0 28px 0 12px; font-size: 0.95rem; font-weight: 600; border: none; border-radius: 999px;
-    color: #fff; background-color: rgba(255, 255, 255, 0.1);
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    color: var(--text); background-color: var(--pill-soft);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
     background-repeat: no-repeat; background-position: right 10px center; appearance: none; -webkit-appearance: none; }
-  .bar select option { color: #222; background: #fff; }
   .tools { position: absolute; z-index: 3; right: 10px; top: 66px; display: grid; gap: 2px; padding: 5px; }
   .tools button { width: 44px; min-height: 44px; padding: 0; border: none; border-radius: 50%; font-size: 1.15rem;
-    background: transparent; color: #fff; box-shadow: none; display: grid; place-items: center; }
-  .tools button:hover:not(:disabled) { background: rgba(255, 255, 255, 0.1); }
+    background: transparent; color: var(--text); box-shadow: none; display: grid; place-items: center; }
+  .tools button:hover:not(:disabled) { background: var(--pill-soft); }
   .tools button:disabled { opacity: 0.5; }
-  .tools .on { background: rgba(255, 255, 255, 0.2); }
+  .tools .on { background: var(--pill-on); }
   .info { top: 66px; left: 10px; max-width: calc(100% - 90px); display: flex; gap: 6px; flex-wrap: wrap; align-items: center; padding: 6px 12px; border-radius: 18px; }
-  .info .chip { background: rgba(255, 255, 255, 0.14); color: #fff; border-color: transparent; }
-  .info .muted { color: rgba(255, 255, 255, 0.7); }
-  .linkish { min-height: 28px; padding: 0 4px; border: none; background: transparent; color: #fff; text-decoration: underline; font-size: 0.85rem; }
+  .info .chip { background: var(--pill-soft); color: var(--text); border-color: transparent; }
+  .linkish { min-height: 28px; padding: 0 4px; border: none; background: transparent; color: var(--text); text-decoration: underline; font-size: 0.85rem; }
   .stage { position: absolute; inset: 0; }
   canvas { display: block; touch-action: none; cursor: grab; outline: none; }
   canvas:active { cursor: grabbing; }
