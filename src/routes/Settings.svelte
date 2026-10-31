@@ -9,6 +9,7 @@
   import LocationPicker from '../lib/ui/LocationPicker.svelte';
   import SyncSettings from '../lib/ui/SyncSettings.svelte';
   import SharedPlaces from '../lib/ui/SharedPlaces.svelte';
+  import CoverCacheSettings from '../lib/ui/CoverCacheSettings.svelte';
 
   const lib = library();
   const s = $derived($lib.settings);
@@ -97,6 +98,8 @@
         onchange={(e) => update({ googleBooksKey: e.currentTarget.value.trim() || undefined })} />
     </label>
   </section>
+
+  <CoverCacheSettings />
 
   <SyncSettings />
   <SharedPlaces />

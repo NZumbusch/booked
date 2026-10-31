@@ -203,6 +203,8 @@ export interface Settings {
   savedFilters?: SavedFilter[];
   /** Optional free Google Books API key for a reliable 1,000 lookups/day. */
   googleBooksKey?: string;
+  /** Local cover cache: when to download, and at what resolution. */
+  covers?: { mode?: 'wifi' | 'any' | 'off'; size?: 'small' | 'medium' | 'large' | 'xl' };
   /** Books to read per year. */
   readingGoal?: number;
   /** Your name, shown to family on books you add to a shared place. */

@@ -57,3 +57,26 @@ describe('token helper worker', () => {
     expect((await worker.fetch(req('/other', { code: 'x' }), env)).status).toBe(400);
   });
 });
+
+describe('cover image pass-through', () => {
+  it('fetches allowed cover hosts and adds CORS', async () => {
+    const seen: string[] = [];
+    vi.stubGlobal('fetch', async (url: string) => {
+      seen.push(url);
+      return new Response('jpegbytes', { headers: { 'Content-Type': 'image/jpeg' } });
+    });
+    const res = await worker.fetch(req('/img?url=' + encodeURIComponent('https://books.google.com/books/content?id=x&img=1'), null, 'https://me.github.io', 'GET'), env);
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Access-Control-Allow-Origin')).toBe('https://me.github.io');
+    expect(await res.text()).toBe('jpegbytes');
+    expect(seen).toEqual(['https://books.google.com/books/content?id=x&img=1']);
+  });
+
+  it('refuses other hosts and non-images', async () => {
+    vi.stubGlobal('fetch', async () => new Response('<html>', { headers: { 'Content-Type': 'text/html' } }));
+    const other = await worker.fetch(req('/img?url=' + encodeURIComponent('https://evil.example/x.jpg'), null, 'https://me.github.io', 'GET'), env);
+    expect(other.status).toBe(403);
+    const html = await worker.fetch(req('/img?url=' + encodeURIComponent('https://covers.openlibrary.org/b/id/1-M.jpg'), null, 'https://me.github.io', 'GET'), env);
+    expect(html.status).toBe(502);
+  });
+});

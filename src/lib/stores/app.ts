@@ -2,6 +2,7 @@ import { writable } from 'svelte/store';
 import { lookupCandidate, lookupIsbn } from '../metadata/lookup';
 import { Enricher } from '../services/enrich';
 import { KnowledgeStore } from '../services/knowledge';
+import { browserProcessor, CoverCache } from '../covers/cache';
 import { Library } from '../services/library';
 import { DexieRepository } from '../storage/dexie-repository';
 import { SyncController } from '../sync/controller';
@@ -12,6 +13,13 @@ let enricherInstance: Enricher | undefined;
 let syncInstance: SyncController | undefined;
 let spacesInstance: SpacesController | undefined;
 let knowledgeInstance: KnowledgeStore | undefined;
+let coverInstance: CoverCache | undefined;
+
+/** Local cover cache (offline covers, colours for the cover wall). */
+export function covers(): CoverCache {
+  if (!coverInstance) throw new Error('Library not opened yet');
+  return coverInstance;
+}
 
 /** Cached Wikidata knowledge for Discover. */
 export function knowledge(): KnowledgeStore {
@@ -52,6 +60,8 @@ export async function openLibrary(): Promise<Library> {
     syncInstance = new SyncController(instance);
     spacesInstance = new SpacesController(instance);
     knowledgeInstance = new KnowledgeStore(instance);
+    coverInstance = new CoverCache(instance, browserProcessor);
+    startCoverCache(instance, coverInstance);
   }
   // Ask the browser not to evict our data under storage pressure.
   navigator.storage?.persist?.().catch(() => {});
@@ -112,4 +122,27 @@ export async function addToWishlist(draft: { title: string; authors: string[]; o
   );
   if (book?.pendingLookup) enricher().enqueue(book.id);
   return book;
+}
+
+/** Keep the cover cache filled: at start, when books/settings change, and when the connection changes. */
+function startCoverCache(lib: Library, cache: CoverCache) {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let last: unknown[] = [];
+  const kick = (ms: number) => {
+    clearTimeout(timer);
+    timer = setTimeout(() => cache.run().catch(() => {}), ms);
+  };
+  lib.subscribe((s) => {
+    const key = [s.books, s.settings.covers];
+    if (key.some((k, i) => k !== last[i])) {
+      last = key;
+      cache.publish();
+      kick(3000);
+    }
+  });
+  window.addEventListener('online', () => kick(1000));
+  (navigator as Navigator & { connection?: EventTarget }).connection?.addEventListener?.('change', () => {
+    cache.publish();
+    kick(1000);
+  });
 }

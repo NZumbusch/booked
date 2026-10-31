@@ -119,11 +119,32 @@ async function google(url: string, params: Record<string, string>): Promise<{ st
 /** Only pass on what the app needs (never echo the id_token or anything else). */
 const pick = (b: Record<string, unknown>, keys: string[]) => Object.fromEntries(keys.filter((k) => k in b).map((k) => [k, b[k]]));
 
+/** Cover hosts the image pass-through may fetch from (so the app can read pixels for colours). */
+const IMAGE_HOSTS = /(^|\.)(books\.google\.com|googleusercontent\.com|covers\.openlibrary\.org|archive\.org)$/;
+
+async function image(request: Request, origin: string): Promise<Response> {
+  const target = new URL(request.url).searchParams.get('url') ?? '';
+  let url: URL;
+  try {
+    url = new URL(target);
+  } catch {
+    return new Response('Bad url', { status: 400, headers: cors(origin) });
+  }
+  if (url.protocol !== 'https:' || !IMAGE_HOSTS.test(url.hostname)) return new Response('Host not allowed', { status: 403, headers: cors(origin) });
+  const upstream = await fetch(url.toString(), { redirect: 'follow' });
+  const type = upstream.headers.get('Content-Type') ?? '';
+  if (!upstream.ok || !type.startsWith('image/')) return new Response('Not an image', { status: 502, headers: cors(origin) });
+  return new Response(upstream.body, {
+    headers: { ...cors(origin), 'Content-Type': type, 'Cache-Control': 'public, max-age=2592000' }
+  });
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const origin = request.headers.get('Origin') ?? '';
     const allowed = env.ALLOWED_ORIGIN.split(',').map((o) => o.trim()).filter(Boolean);
     if (!allowed.includes(origin)) return new Response('Origin not allowed', { status: 403 });
+    if (request.method === 'GET' && new URL(request.url).pathname === '/img') return image(request, origin);
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors(origin) });
     const path = new URL(request.url).pathname;
     if (path === '/space' || path.startsWith('/space/')) return spaces(request, env, path, origin);

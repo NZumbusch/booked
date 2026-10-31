@@ -7,6 +7,7 @@
   import Cover from '../lib/ui/Cover.svelte';
   import BackupReminder from '../lib/ui/BackupReminder.svelte';
   import SyncBanner from '../lib/ui/SyncBanner.svelte';
+  import CoverPrompt from '../lib/ui/CoverPrompt.svelte';
   import Icon from '../lib/ui/Icon.svelte';
 
   const lib = library();
@@ -48,6 +49,7 @@
 
   <SyncBanner />
   <BackupReminder />
+  <CoverPrompt />
 
   {#if $lib.books.length}
     <nav class="explore" aria-label="Explore">
