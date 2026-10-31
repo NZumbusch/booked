@@ -1,4 +1,4 @@
-import { isValidIsbn13 } from './isbn';
+import { isValidIsbn13, normalizeIsbn } from './isbn';
 
 /** ISBN-13 from an EAN-13 barcode, or undefined for non-book barcodes. */
 export function isbnFromBarcode(raw: string): string | undefined {
@@ -30,4 +30,21 @@ export function classifyScan(_isbn: string, seen: { inSession: number; inLibrary
   if (seen.inSession > 0) return { action: 'confirm', reason: 'session' };
   if (seen.inLibrary > 0) return { action: 'confirm', reason: 'library' };
   return { action: 'add' };
+}
+
+/**
+ * A valid ISBN printed as text (e.g. "ISBN 978-3-518-18869-2" on the imprint page or the back
+ * cover), as read by OCR. Hyphens and spaces are ignored; the check digit rejects misreads.
+ * Returns the ISBN-13, or undefined.
+ */
+export function isbnFromText(text: string): string | undefined {
+  const flat = text.replace(/[‐-―−]/g, '-');
+  // ISBN-13 first (978/979 prefix), then ISBN-10 (last character may be X); hyphens/spaces between digits are fine.
+  for (const re of [/97[89](?:[-\s]?\d){10}/g, /\d(?:[-\s]?\d){8}[-\s]?[\dXx]/g]) {
+    for (const m of flat.matchAll(re)) {
+      const norm = normalizeIsbn(m[0]);
+      if (norm) return norm.isbn13;
+    }
+  }
+  return undefined;
 }

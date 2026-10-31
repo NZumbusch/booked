@@ -46,3 +46,22 @@ describe('classifyScan', () => {
     expect(classifyScan('1', { inSession: 0, inLibrary: 2 })).toEqual({ action: 'confirm', reason: 'library' });
   });
 });
+
+import { isbnFromText } from './scan';
+describe('isbnFromText', () => {
+  it('reads hyphenated and plain ISBNs from OCR text', () => {
+    expect(isbnFromText('ISBN 978-3-518-18869-9')).toBe('9783518188699');
+    expect(isbnFromText('Erste Auflage\nISBN: 9783518188699 \n')).toBe('9783518188699');
+  });
+  it('turns a valid ISBN-10 into an ISBN-13 and rejects misreads', () => {
+    expect(isbnFromText('ISBN 0-306-40615-2')).toBe('9780306406157');
+    expect(isbnFromText('ISBN 978-3-518-18869-2')).toBeUndefined();
+    expect(isbnFromText('Seite 123 456')).toBeUndefined();
+  });
+});
+
+describe('isbnFromText on old paperbacks', () => {
+  it('reads the printed ISBN-10 above a UPC barcode', () => {
+    expect(isbnFromText('US $7.99 / $9.99 CAN\nISBN 0-553-28058-9\n28058')).toBe('9780553280586');
+  });
+});
