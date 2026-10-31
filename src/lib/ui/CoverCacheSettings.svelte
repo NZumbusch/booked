@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { booksWithoutCover, findMissingCovers, type CoverSearchProgress } from '../services/coverSearch';
+  import { booksWithoutCover, booksWithoutSeries, findMissingCovers, type CoverSearchProgress } from '../services/coverSearch';
   import { COVER_SIZES, estimateBytes, formatBytes, type CoverSize } from '../covers/sizes';
   import type { CacheMode } from '../covers/policy';
   import { plural } from '../format';
@@ -15,6 +15,27 @@
 
   const update = (patch: { mode?: CacheMode; size?: CoverSize }) => attempt(() => lib.updateSettings({ covers: { ...s, ...patch } }));
   const missingCovers = $derived($lib && booksWithoutCover($lib.books, (u) => cache.isBroken(u)).length);
+  // Remember which books the library already answered for, so they aren't asked again.
+  const CHECKED_KEY = 'booked.seriesChecked';
+  const checkedIds = (() => {
+    try {
+      return new Set<string>(JSON.parse(localStorage.getItem(CHECKED_KEY) ?? '[]'));
+    } catch {
+      return new Set<string>();
+    }
+  })();
+  const checked = {
+    has: (id: string) => checkedIds.has(id),
+    add: (id: string) => {
+      checkedIds.add(id);
+      try {
+        localStorage.setItem(CHECKED_KEY, JSON.stringify([...checkedIds]));
+      } catch {
+        // fine: they'll just be asked again next time
+      }
+    }
+  };
+  const missingSeries = $derived($lib && booksWithoutSeries($lib.books, checked).length);
   let search = $state<CoverSearchProgress>();
   let searching = $state(false);
   let abort: AbortController | undefined;
@@ -23,7 +44,7 @@
     searching = true;
     try {
       const r = await findMissingCovers(lib, {
-        context: coverContext(), signal: abort.signal, isBroken: (u) => cache.isBroken(u), onProgress: (p) => (search = p)
+        context: coverContext(), seriesChecked: checked, signal: abort.signal, isBroken: (u) => cache.isBroken(u), onProgress: (p) => (search = p)
       });
       toast(r.found ? `Found ${plural(r.found, 'cover')}` : 'No new covers found');
       cache.run().catch(() => {});
@@ -76,16 +97,17 @@
   </div>
 
   <div class="stack find">
-    <strong>Books without a cover</strong>
+    <strong>Books without a cover or series</strong>
     <p class="muted small">
       {missingCovers ? `${plural(missingCovers, 'book')} have no usable cover.` : 'Every book has a cover.'}
-      Searches by ISBN and across other editions, one book after another.
+      {missingSeries ? `${plural(missingSeries, 'book')} may still be missing their series.` : ''}
+      First reads series and volume numbers (German National Library), then searches covers by ISBN and across other editions, so volumes of a series get covers that look alike. One book after another.
     </p>
     {#if searching && search}
-      <p class="small">Searching {search.done + 1} of {search.total} · found {search.found}<br /><span class="muted">{search.current}</span></p>
+      <p class="small">{search.phase === 'series' ? 'Reading series' : 'Searching covers'}: {Math.min(search.done + 1, search.total)} of {search.total} · found {search.found}<br /><span class="muted">{search.current}</span></p>
       <div><button onclick={() => abort?.abort()}>Stop</button></div>
     {:else}
-      <div><button class="btn-primary" disabled={!missingCovers} onclick={findCovers}>Find missing covers</button></div>
+      <div><button class="btn-primary" disabled={!missingCovers && !missingSeries} onclick={findCovers}>Find missing covers &amp; series</button></div>
     {/if}
   </div>
 </section>
