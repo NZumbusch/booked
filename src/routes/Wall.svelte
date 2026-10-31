@@ -76,17 +76,24 @@
   let raf = 0;
   let selected = $state<Book>();
 
+  /**
+   * Furthest zoom-out, in screen px per cover width: covers stay recognisable pictures
+   * (about 15 across a phone) instead of turning into colour blocks.
+   */
+  const MIN_SCALE = 26;
+
   function fit(): boolean {
     if (!width || !layout.tiles.length) return false;
     if (period) {
       // Endless: start at a comfortable zoom in the middle of the field.
-      scale = Math.max(14, Math.min(48, width / 9));
+      scale = Math.max(MIN_SCALE, Math.min(48, width / 9));
       ox = width / 2 - (period.cols * geometry.cellW * scale) / 2;
       oy = height / 2 - (period.rows * geometry.cellH * scale) / 2;
     } else {
       // Keep the round field clear of the floating top bar.
       const top = 60;
-      scale = Math.min(width / (box.x1 - box.x0), (height - top) / (box.y1 - box.y0)) * 0.94;
+      // A big library won't fit at a readable size: start as far out as allowed, centred.
+      scale = Math.max(MIN_SCALE, Math.min(width / (box.x1 - box.x0), (height - top) / (box.y1 - box.y0)) * 0.94);
       ox = width / 2 - ((box.x0 + box.x1) / 2) * scale;
       oy = top + (height - top) / 2 - ((box.y0 + box.y1) / 2) * scale;
     }
@@ -252,8 +259,8 @@
     if (sx + w < 0 || sy + h < 0 || sx > width || sy > height || w < 0.6) return;
     drawn.push({ id, x: sx, y: sy, w, h });
     const url = it.book.cover!;
-    const bmp = w >= 22 ? ready.get(url) : undefined;
-    if (w >= 22 && !bmp && cache.meta(url)?.px) want(url);
+    const bmp = w >= MIN_SCALE - 2 ? ready.get(url) : undefined;
+    if (w >= MIN_SCALE - 2 && !bmp && cache.meta(url)?.px) want(url);
     paintCover(ctx, it, bmp, sx, sy, w, h, o.grey);
     if (id === focusId || id === selected?.id) {
       ctx.strokeStyle = o.ring;
@@ -282,7 +289,7 @@
   let pinch: { d: number; s: number; mx: number; my: number; ox: number; oy: number } | undefined;
 
   function zoomAt(factor: number, x: number, y: number) {
-    const s = Math.max(2, Math.min(600, scale * factor));
+    const s = Math.max(MIN_SCALE, Math.min(600, scale * factor));
     ox = x - ((x - ox) * s) / scale;
     oy = y - ((y - oy) * s) / scale;
     scale = s;
@@ -315,7 +322,7 @@
     if (pinch && pointers.size === 2) {
       const [a, b] = [...pointers.values()];
       const d = Math.hypot(a.x - b.x, a.y - b.y);
-      const s = Math.max(2, Math.min(600, (pinch.s * d) / pinch.d));
+      const s = Math.max(MIN_SCALE, Math.min(600, (pinch.s * d) / pinch.d));
       const mx = (a.x + b.x) / 2;
       const my = (a.y + b.y) / 2;
       ox = mx - ((pinch.mx - pinch.ox) * s) / pinch.s;
@@ -553,8 +560,18 @@
           </svg>
         </button>
       {/if}
-      <button aria-label="Back to the start" title="Back to the start" onclick={fit}>⤢</button>
-      <button aria-label="Save as poster" title="Save as poster" disabled={exporting} onclick={exportPoster}>{exporting ? '…' : '⤓'}</button>
+      <button aria-label="Back to the start" title="Back to the start" onclick={fit}>
+        <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="7" /><circle cx="12" cy="12" r="2.2" fill="currentColor" stroke="none" /><path d="M12 2v3M12 19v3M2 12h3M19 12h3" />
+        </svg>
+      </button>
+      <button aria-label="Save as poster" title="Save as poster" disabled={exporting} onclick={exportPoster}>
+        {#if exporting}…{:else}
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 4v11M7 10l5 5 5-5M5 20h14" />
+          </svg>
+        {/if}
+      </button>
     </div>
     <canvas bind:this={canvas} tabindex="0" aria-label="Cover wall: drag to move, pinch or +/- to zoom, tap a cover"
       onpointerdown={onDown} onpointermove={onMove} onpointerup={onUp} onpointercancel={onUp} onwheel={onWheel} onkeydown={onKey}></canvas>
@@ -586,7 +603,8 @@
     box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18); border: 1px solid var(--pill-line); border-radius: 999px; }
   .bar { top: 10px; left: 10px; right: 10px; display: flex; gap: 2px; align-items: center; padding: 4px; max-width: 460px; }
   .back { width: 40px; height: 40px; flex: none; display: grid; place-items: center; border-radius: 50%; color: var(--text); }
-  .back:hover { background: var(--pill-soft); }
+  /* Hover only where there is a mouse: on phones it would stick after a tap and look like 'switched on'. */
+  @media (hover: hover) { .back:hover { background: var(--pill-soft); } }
   .bar select { width: auto; min-height: 40px; flex: 1; min-width: 0; padding: 0 28px 0 12px; font-size: 0.95rem; font-weight: 600; border: none; border-radius: 999px;
     color: var(--text); background-color: var(--pill-soft);
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
@@ -594,7 +612,7 @@
   .tools { position: absolute; z-index: 3; right: 10px; top: 66px; display: grid; gap: 2px; padding: 5px; }
   .tools button { width: 44px; min-height: 44px; padding: 0; border: none; border-radius: 50%; font-size: 1.15rem;
     background: transparent; color: var(--text); box-shadow: none; display: grid; place-items: center; }
-  .tools button:hover:not(:disabled) { background: var(--pill-soft); }
+  @media (hover: hover) { .tools button:hover:not(:disabled) { background: var(--pill-soft); } }
   .tools button:disabled { opacity: 0.5; }
   .tools .on { background: var(--pill-on); }
   .info { top: 66px; left: 10px; max-width: calc(100% - 90px); display: flex; gap: 6px; flex-wrap: wrap; align-items: center; padding: 6px 12px; border-radius: 18px; }
