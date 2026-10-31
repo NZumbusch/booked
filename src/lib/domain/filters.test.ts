@@ -110,3 +110,18 @@ describe('facet', () => {
     expect(facet(books, (b) => b.authors)).toEqual([{ value: 'Frank Herbert', count: 2 }, { value: 'Hermann Hesse', count: 1 }]);
   });
 });
+
+describe('year filter basis', () => {
+  const reprint = createBook({ title: 'Reprint', firstPublishedYear: 1875, publishedYear: 2010 }, { id: 'r', now: '2026-01-01T00:00:00.000Z' });
+  const ctx = { locations: [], today: '2026-01-01' };
+  it('uses the edition year by default and the year of the work with yearBasis=work', () => {
+    const f = { yearFrom: 1870, yearTo: 1879 };
+    expect(applyFilter([reprint], f, ctx)).toEqual([]);
+    expect(applyFilter([reprint], { ...f, yearBasis: 'work' as const }, ctx)).toHaveLength(1);
+  });
+  it('survives the round trip through the URL and labels the chip', () => {
+    const f = { yearFrom: 1870, yearTo: 1879, yearBasis: 'work' as const };
+    expect(filterFromQuery(filterToQuery(f))).toMatchObject(f);
+    expect(filterChips(f, [])[0].label).toBe('1870–1879 (written)');
+  });
+});

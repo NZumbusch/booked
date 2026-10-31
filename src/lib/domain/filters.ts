@@ -1,4 +1,4 @@
-import { isOverdue, missingMetadata } from './book';
+import { isOverdue, missingMetadata, workYear } from './book';
 import { descendantIds, labelOf, pathOf } from './locations';
 import { fold, matchesText } from './query';
 import type { Book, BookFormat, Id, IsoDate, Location, Ownership, ReadingStatus } from './types';
@@ -19,6 +19,8 @@ export interface BookFilter {
   /** Year range on the edition year (falls back to first publication year). */
   yearFrom?: number;
   yearTo?: number;
+  /** 'work': the year the work was written/first published (what the timelines in Discover and Stats count), not this edition's. */
+  yearBasis?: 'work';
   /** lent = lent out by you; overdue; away = taken out of a shared place by someone. */
   lending?: 'lent' | 'overdue' | 'away';
   ownership?: Ownership;
@@ -65,6 +67,7 @@ export function filterToQuery(f: BookFilter): Record<string, string> {
   if (f.ratingMin) q.rating = String(f.ratingMin);
   if (f.yearFrom) q.from = String(f.yearFrom);
   if (f.yearTo) q.to = String(f.yearTo);
+  if (f.yearBasis === 'work' && (f.yearFrom || f.yearTo)) q.yb = 'work';
   if (f.lending) q.lent = f.lending;
   if (f.ownership) q.own = f.ownership;
   return q;
@@ -82,6 +85,7 @@ export function filterFromQuery(q: Record<string, string | undefined>): BookFilt
   f.ratingMin = int(q.rating);
   f.yearFrom = int(q.from);
   f.yearTo = int(q.to);
+  if (q.yb === 'work') f.yearBasis = 'work';
   if (q.lent === 'lent' || q.lent === 'overdue' || q.lent === 'away') f.lending = q.lent;
   if (q.own === 'owned' || q.own === 'wishlist') f.ownership = q.own;
   return Object.fromEntries(Object.entries(f).filter(([, v]) => v !== undefined)) as BookFilter;
@@ -118,7 +122,7 @@ export function applyFilter(books: Book[], f: BookFilter, ctx: FilterContext): B
     if (f.formats?.length && !(b.format && f.formats.includes(b.format))) return false;
     if (f.languages?.length && !(b.language && f.languages.includes(b.language))) return false;
     if (f.ratingMin && (b.rating ?? 0) < f.ratingMin) return false;
-    const year = b.publishedYear ?? b.firstPublishedYear;
+    const year = f.yearBasis === 'work' ? workYear(b) : b.publishedYear ?? b.firstPublishedYear;
     if (f.yearFrom && !(year && year >= f.yearFrom)) return false;
     if (f.yearTo && !(year && year <= f.yearTo)) return false;
     if (f.lending === 'lent' && !b.lending) return false;
@@ -157,7 +161,7 @@ export function filterChips(f: BookFilter, locations: Location[]): Chip[] {
   list('languages', f.languages, (v) => `Language: ${v}`);
   if (f.ratingMin) chips.push({ key: 'ratingMin', label: `★ ${f.ratingMin}+` });
   if (f.yearFrom || f.yearTo) {
-    chips.push({ key: 'yearFrom', label: f.yearFrom && f.yearTo ? `${f.yearFrom}–${f.yearTo}` : f.yearFrom ? `from ${f.yearFrom}` : `until ${f.yearTo}` });
+    chips.push({ key: 'yearFrom', label: `${f.yearFrom && f.yearTo ? `${f.yearFrom}–${f.yearTo}` : f.yearFrom ? `from ${f.yearFrom}` : `until ${f.yearTo}`}${f.yearBasis === 'work' ? ' (written)' : ''}` });
   }
   if (f.lending) chips.push({ key: 'lending', label: { lent: 'Lent out', overdue: 'Overdue', away: 'Taken out (shared)' }[f.lending] });
   if (f.ownership) chips.push({ key: 'ownership', label: f.ownership === 'wishlist' ? 'Wishlist' : 'Owned' });
@@ -170,6 +174,7 @@ export function removeChip(f: BookFilter, chip: Chip): BookFilter {
   if (chip.key === 'yearFrom') {
     delete next.yearFrom;
     delete next.yearTo;
+    delete next.yearBasis;
   } else if (chip.value !== undefined && Array.isArray(f[chip.key])) {
     const rest = (f[chip.key] as string[]).filter((v) => v !== chip.value);
     if (rest.length) (next as Record<string, unknown>)[chip.key] = rest;

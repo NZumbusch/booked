@@ -1,4 +1,4 @@
-import { isOverdue } from './book';
+import { isOverdue, workYear } from './book';
 import { facet } from './filters';
 import { childrenOf } from './locations';
 import { collectionValue } from './price';
@@ -32,7 +32,7 @@ export interface LibraryStats {
   readPerYear: { year: number; books: number; pages: number }[];
   /** Books added per year. */
   addedPerYear: { year: number; books: number }[];
-  /** Books per decade of first publication. */
+  /** Books per decade in which the work was written or first published. */
   byDecade: Count[];
 }
 
@@ -84,7 +84,7 @@ export function computeStats(books: Book[], locations: Location[], today: IsoDat
   }
   const decades = new Map<number, number>();
   for (const b of owned) {
-    const y = b.firstPublishedYear ?? b.publishedYear;
+    const y = workYear(b);
     if (y) decades.set(Math.floor(y / 10) * 10, (decades.get(Math.floor(y / 10) * 10) ?? 0) + 1);
   }
 

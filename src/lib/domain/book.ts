@@ -155,6 +155,11 @@ export function displayTitle(book: Pick<Book, 'title' | 'volume'>): string {
   return book.volume?.trim() ? `${t} · Vol. ${book.volume.trim()}` : t;
 }
 
+/** When the work was written or first published (not this edition): the year the timelines use. */
+export function workYear(b: Pick<Book, 'writing' | 'firstPublishedYear' | 'publishedYear'>): number | undefined {
+  return b.writing?.year ?? b.firstPublishedYear ?? b.publishedYear;
+}
+
 /** Tag for books that no catalogue knew: they need their details typed in by hand. */
 export const MANUAL_TAG = 'enter manually';
 

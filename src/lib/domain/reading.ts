@@ -1,3 +1,4 @@
+import { workYear } from './book';
 import { fold } from './query';
 import { childrenOf, descendantIds } from './locations';
 import type { Book, IsoDate, Location, ReadingStatus } from './types';
@@ -91,7 +92,7 @@ export function breadth(books: Book[]): { languages: { code: string; count: numb
   for (const b of books) {
     const lang = b.originalLanguage ?? b.language;
     if (lang) langs.set(lang, (langs.get(lang) ?? 0) + 1);
-    const y = b.writing?.year ?? b.firstPublishedYear ?? b.publishedYear;
+    const y = workYear(b);
     if (y) cents.set(Math.floor((y - 1) / 100) + 1, (cents.get(Math.floor((y - 1) / 100) + 1) ?? 0) + 1);
   }
   return {
