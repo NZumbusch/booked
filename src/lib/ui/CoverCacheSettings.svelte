@@ -107,7 +107,11 @@
       <p class="small">{search.phase === 'series' ? 'Reading series' : 'Searching covers'}: {Math.min(search.done + 1, search.total)} of {search.total} · found {search.found}<br /><span class="muted">{search.current}</span></p>
       <div><button onclick={() => abort?.abort()}>Stop</button></div>
     {:else}
-      <div><button class="btn-primary" disabled={!missingCovers && !missingSeries} onclick={findCovers}>Find missing covers &amp; series</button></div>
+      <div class="row">
+        <button class="btn-primary" disabled={!missingCovers && !missingSeries} onclick={findCovers}>Find missing covers &amp; series</button>
+        <a class="btn" href="#/review">Review one by one…</a>
+      </div>
+      <p class="muted small">Prefer to decide yourself? “Review one by one” shows each book with its series, a suggested cover and similar alternatives.</p>
     {/if}
   </div>
 </section>

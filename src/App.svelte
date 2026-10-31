@@ -25,6 +25,7 @@
   import MapView from './routes/MapView.svelte';
   import Print from './routes/Print.svelte';
   import Stats from './routes/Stats.svelte';
+  import CoverReview from './routes/CoverReview.svelte';
 
   let lib = $state<Library>();
   let error = $state('');
@@ -107,6 +108,8 @@
       <Stats />
     {:else if section === 'map'}
       {#key param}<MapView mode={param === 'owned' ? 'owned' : param === 'stories' ? 'stories' : 'written'} />{/key}
+    {:else if section === 'review'}
+      <CoverReview />
     {:else if section === 'settings'}
       <Settings />
     {:else}
