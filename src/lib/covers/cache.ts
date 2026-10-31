@@ -1,6 +1,7 @@
 import Dexie, { type Table } from 'dexie';
 import { helperUrlOf } from '../config';
 import { writable, type Readable } from 'svelte/store';
+import type { Book } from '../domain/types';
 import type { Library } from '../services/library';
 import { analyzePixels, isCoverShape, isNiceCover, looksLikePlaceholder, type CoverAnalysis } from './colors';
 import { currentConnection, downloadDecision, type CacheMode, type ConnectionInfo } from './policy';
@@ -30,6 +31,8 @@ export interface CoverEntry {
   failedAt?: number;
   /** How many downloads failed in a row: the wait before the next try grows (1 min, 5 min, 30 min, 3 h, a day). */
   failures?: number;
+  /** Technical reason of the last failure, e.g. "HTTP 429" or "TypeError: Failed to fetch" (a network or CORS problem). */
+  error?: string;
   /** The source only had a blank "image not available" tile. */
   placeholder?: boolean;
   at: number;
@@ -74,6 +77,34 @@ export type Processor = (input: {
   stored?: ArrayBuffer;
   storedType?: string;
 }) => Promise<Processed>;
+
+export interface CoverReportItem {
+  url: string;
+  /** Titles of the books that use this cover. */
+  titles: string[];
+  kind: 'failed' | 'blank' | 'odd';
+  error: string;
+  failures: number;
+  failedAt?: number;
+  nextTry?: number;
+}
+
+export interface CoverReport {
+  books: number;
+  noCover: number;
+  ownPhotos: number;
+  /** Different cover links among the books. */
+  urls: number;
+  saved: number;
+  large: number;
+  /** Links not tried yet (waiting in the queue). */
+  notYet: number;
+  failed: number;
+  blank: number;
+  oddShape: number;
+  bytes: number;
+  items: CoverReportItem[];
+}
 
 export interface CacheStatus {
   mode: CacheMode;
@@ -202,7 +233,8 @@ export class CoverCache {
     const failed: CoverEntry = {
       ...(prev ?? { url }), failedAt: Date.now(), at: Date.now(),
       failures: permanent ? RETRY_WAIT.length : (prev?.failures ?? 0) + 1,
-      ...(e instanceof PlaceholderError ? { placeholder: true } : {})
+      error: describeError(e),
+      ...(e instanceof PlaceholderError ? { placeholder: true } : { placeholder: undefined })
     };
     await this.db.covers.put(failed);
     this.index.set(url, failed);
@@ -252,6 +284,52 @@ export class CoverCache {
       this.index.delete(url);
       void this.db.covers.delete(url);
     }
+  }
+
+  /** Everything about the state of the saved covers, for the status page. */
+  diagnose(books: Book[]): CoverReport {
+    const now = Date.now();
+    const titles = new Map<string, string[]>();
+    let noCover = 0, own = 0;
+    for (const b of books) {
+      if (!b.cover) noCover++;
+      else if (b.cover.startsWith('data:')) own++;
+      else titles.set(b.cover, [...(titles.get(b.cover) ?? []), b.title]);
+    }
+    const r: CoverReport = { books: books.length, noCover, ownPhotos: own, urls: titles.size, saved: 0, large: 0, notYet: 0, failed: 0, blank: 0, oddShape: 0, bytes: 0, items: [] };
+    for (const [url, names] of titles) {
+      const e = this.index.get(url);
+      if (e?.px || e?.tpx) {
+        r.saved++;
+        if (e.px) r.large++;
+        r.bytes += (e.bytes ?? 0) + (e.tbytes ?? 0);
+        if (this.isBroken(url)) {
+          r.oddShape++;
+          r.items.push({ url, titles: names, kind: 'odd', error: 'Saved, but not a book-shaped image (e.g. a wide title-page scan)', failures: 0 });
+        }
+      } else if (e?.failedAt) {
+        const blank = !!e.placeholder;
+        blank ? r.blank++ : r.failed++;
+        r.items.push({ url, titles: names, kind: blank ? 'blank' : 'failed', error: e.error ?? 'unknown', failures: e.failures ?? 1, failedAt: e.failedAt, nextTry: e.failedAt + this.waitAfter(e) });
+      } else r.notYet++;
+    }
+    void now;
+    return r;
+  }
+
+  /** Forget the failures (all, or just these URLs) so the next run tries them again right away. */
+  retryFailed(urls?: string[]): number {
+    let n = 0;
+    for (const [url, e] of [...this.index]) {
+      if (!e.failedAt || e.px || e.tpx || (urls && !urls.includes(url))) continue;
+      this.index.delete(url);
+      void this.db.covers.delete(url);
+      this.fullFailed.delete(url);
+      n++;
+    }
+    this.publish();
+    this.version.update((v) => v + 1);
+    return n;
   }
 
   meta(url: string | undefined): CoverMeta | undefined {
@@ -518,6 +596,14 @@ export class HttpError extends Error {
   constructor(public status: number) {
     super(`HTTP ${status}`);
   }
+}
+
+/** A short technical description of a failure, for the status page. */
+export function describeError(e: unknown): string {
+  if (e instanceof PlaceholderError) return 'Only a blank "image not available" tile';
+  if (e instanceof HttpError) return `HTTP ${e.status}`;
+  if (e instanceof Error) return `${e.name}: ${e.message}`.slice(0, 160);
+  return String(e).slice(0, 160);
 }
 
 /** The source answered, but only with a blank "image not available" tile. */

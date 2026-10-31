@@ -236,3 +236,27 @@ describe('CoverCache: large images only when a book is opened (optional)', () =>
     expect(cache.has('https://c/a.jpg')).toBe(true); // the small image stays
   });
 });
+
+describe('CoverCache: status report', () => {
+  it('counts saved, failed and missing covers with the technical reason, and retries on request', async () => {
+    await add('https://c/ok.jpg');
+    await add('https://c/limited.jpg');
+    await add('https://c/gone.jpg');
+    await lib.addBook({ title: 'no cover' });
+    await lib.addBook({ title: 'own photo', cover: 'data:image/jpeg;base64,AAAA' });
+    fail.add('https://c/limited.jpg');
+    gone.add('https://c/gone.jpg');
+    await cache.run();
+    const r = cache.diagnose(lib.state.books);
+    expect(r).toMatchObject({ books: 5, noCover: 1, ownPhotos: 1, urls: 3, saved: 1, large: 1, failed: 2, blank: 0, notYet: 0 });
+    const limited = r.items.find((i) => i.url.includes('limited'))!;
+    expect(limited).toMatchObject({ kind: 'failed', error: 'Error: rate limited', failures: 1 });
+    expect(limited.nextTry! - limited.failedAt!).toBe(60_000);
+    expect(r.items.find((i) => i.url.includes('gone'))?.error).toBe('HTTP 404');
+    // retry one: it is tried again at once
+    fail.delete('https://c/limited.jpg');
+    expect(cache.retryFailed(['https://c/limited.jpg'])).toBe(1);
+    await cache.run();
+    expect(cache.diagnose(lib.state.books)).toMatchObject({ saved: 2, failed: 1 });
+  });
+});
