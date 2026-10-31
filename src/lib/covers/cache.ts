@@ -385,16 +385,20 @@ async function processBlob(blob: Blob, size: CoverSize, fromStored: boolean): Pr
   }
 }
 
-/** Dominant colours of a cover image at a URL (small sample; for comparing covers, not stored). */
-export async function sampleColors(url: string, proxy?: string): Promise<CoverAnalysis> {
+/** Size and dominant colours of the image at a URL (small sample; for comparing covers, not stored). */
+export async function sampleImage(url: string, proxy?: string): Promise<{ analysis: CoverAnalysis; w: number; h: number }> {
   const bmp = await createImageBitmap(await fetchImage(url, proxy));
   try {
     const sample = canvas(24, 36).getContext('2d', { willReadFrequently: true })!;
     sample.drawImage(bmp, 0, 0, 24, 36);
-    return analyzePixels(sample.getImageData(0, 0, 24, 36).data);
+    return { analysis: analyzePixels(sample.getImageData(0, 0, 24, 36).data), w: bmp.width, h: bmp.height };
   } finally {
     bmp.close?.();
   }
+}
+
+export async function sampleColors(url: string, proxy?: string): Promise<CoverAnalysis> {
+  return (await sampleImage(url, proxy)).analysis;
 }
 
 /** How far apart two covers look (0 = same dominant colour and lightness). */

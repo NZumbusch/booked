@@ -93,7 +93,11 @@
   // ---- selection
   let selecting = $state(false);
   let selected = $state<Set<Id>>(new Set());
-  const selectedIds = $derived([...selected].filter((id) => lib.book(id)));
+  // In the order shown (so "number the volumes" follows the list), then anything selected but filtered out.
+  const selectedIds = $derived.by(() => {
+    const shown = results.filter((b) => selected.has(b.id)).map((b) => b.id);
+    return [...shown, ...[...selected].filter((id) => lib.book(id) && !shown.includes(id))];
+  });
 
   function toggle(id: Id) {
     const next = new Set(selected);

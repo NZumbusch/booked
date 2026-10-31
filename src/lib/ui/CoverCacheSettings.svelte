@@ -1,10 +1,9 @@
 <script lang="ts">
-  import { booksKeyOf } from '../config';
   import { booksWithoutCover, findMissingCovers, type CoverSearchProgress } from '../services/coverSearch';
   import { COVER_SIZES, estimateBytes, formatBytes, type CoverSize } from '../covers/sizes';
   import type { CacheMode } from '../covers/policy';
   import { plural } from '../format';
-  import { attempt, covers, library, toast } from '../stores/app';
+  import { attempt, coverContext, covers, library, toast } from '../stores/app';
   import Confirm from './Confirm.svelte';
   import CoverDownload from './CoverDownload.svelte';
 
@@ -24,7 +23,7 @@
     searching = true;
     try {
       const r = await findMissingCovers(lib, {
-        key: booksKeyOf($lib.settings), signal: abort.signal, isBroken: (u) => cache.isBroken(u), onProgress: (p) => (search = p)
+        context: coverContext(), signal: abort.signal, isBroken: (u) => cache.isBroken(u), onProgress: (p) => (search = p)
       });
       toast(r.found ? `Found ${plural(r.found, 'cover')}` : 'No new covers found');
       cache.run().catch(() => {});

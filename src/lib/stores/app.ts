@@ -1,6 +1,6 @@
 import { writable } from 'svelte/store';
-import { booksKeyOf } from '../config';
-import { findCover } from '../metadata/covers';
+import { booksKeyOf, helperUrlOf } from '../config';
+import { coverFor, siblingLooks, type SeriesCoverContext } from '../services/seriesCovers';
 import { browserProbe, lookupCandidate, lookupIsbn } from '../metadata/lookup';
 import { Enricher } from '../services/enrich';
 import { KnowledgeStore } from '../services/knowledge';
@@ -157,10 +157,22 @@ async function repairCovers(lib: Library, cache: CoverCache) {
   for (const b of broken.slice(0, 5)) {
     repairTried.add(b.id + b.cover);
     try {
-      const cover = await findCover(b, fetch.bind(globalThis), browserProbe, booksKeyOf(lib.state.settings));
+      const cover = await coverFor(b, coverContext());
       if (cover && cover !== b.cover) await lib.enrichBook(b.id, { cover });
     } catch {
       // offline or catalogues down: try again next start
     }
   }
+}
+
+/** What cover searches need: catalogue access and, for books in a series, the look of the other volumes. */
+export function coverContext(): SeriesCoverContext {
+  const lib = library();
+  const cache = covers();
+  return {
+    key: booksKeyOf(lib.state.settings),
+    proxy: helperUrlOf(lib.state.settings),
+    probe: browserProbe,
+    siblings: (b) => siblingLooks(lib.state.books, b, (c) => cache.meta(c)?.analysis)
+  };
 }
