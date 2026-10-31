@@ -8,6 +8,8 @@
   import { plural } from '../lib/format';
   import { navigate, route } from '../lib/router';
   import { covers, library, toast } from '../lib/stores/app';
+  import Cover from '../lib/ui/Cover.svelte';
+  import CoverDownload from '../lib/ui/CoverDownload.svelte';
   import Icon from '../lib/ui/Icon.svelte';
   import { cellPos, FIELD_ORDERS, fieldLayout, fieldTopics, hasTopic, RECT, type FieldItem, type FieldOrder, type FieldShape } from '../lib/wall/field';
   import { placeInRect } from '../lib/wall/paint';
@@ -74,8 +76,8 @@
   let raf = 0;
   let selected = $state<Book>();
 
-  function fit() {
-    if (!width || !layout.tiles.length) return;
+  function fit(): boolean {
+    if (!width || !layout.tiles.length) return false;
     if (period) {
       // Endless: start at a comfortable zoom in the middle of the field.
       scale = Math.max(14, Math.min(48, width / 9));
@@ -89,6 +91,7 @@
       oy = top + (height - top) / 2 - ((box.y0 + box.y1) / 2) * scale;
     }
     dirty = true;
+    return true;
   }
 
   function focusOn(id: string, cellPx = 150) {
@@ -399,6 +402,7 @@
     canvas.style.width = `${width}px`;
     canvas.style.height = `${height}px`;
     dirty = true;
+    refit();
   }
 
   let ro: ResizeObserver | undefined;
@@ -426,17 +430,22 @@
     ro?.disconnect();
   });
 
-  // Re-fit when the arrangement changes; jump to a focused book once.
+  // Re-fit only when *what* is shown changes (arrangement, shape, topic, filter), not every time
+  // a cover finishes downloading: otherwise the view would keep jumping back while you look around.
   let focusedOnce = false;
+  let fittedFor = '';
+  const viewKey = $derived([order, shape, topic, niceOnly, JSON.stringify(filter)].join('|'));
+  function refit() {
+    if (viewKey !== fittedFor && fit()) fittedFor = viewKey;
+    if (focusId && !focusedOnce && focusOn(focusId, 160)) {
+      focusedOnce = true;
+      selected = byId.get(focusId)?.book;
+    }
+  }
   $effect(() => {
+    void viewKey;
     void layout;
-    untrack(() => {
-      fit();
-      if (focusId && !focusedOnce && focusOn(focusId, 160)) {
-        focusedOnce = true;
-        selected = byId.get(focusId)?.book;
-      }
-    });
+    untrack(refit);
   });
   $effect(() => {
     void $cacheVersion;
@@ -511,8 +520,8 @@
     <div class="info float small">
       {plural(items.length, 'cover')}
       {#each chips as c}<span class="chip">{c.label}</span>{/each}
-      {#if uncached && $cacheStatus.decision !== 'yes'}
-        <button class="linkish" onclick={() => cache.run(true)}>{uncached} covers not saved yet: download</button>
+      {#if uncached && $cacheStatus.decision !== 'yes' && !$cacheStatus.running}
+        <CoverDownload class="linkish">{uncached} covers not saved yet: download</CoverDownload>
       {:else if uncached}<span class="muted">saving {uncached} covers…</span>{/if}
     </div>
   {/if}
@@ -552,13 +561,15 @@
   </div>
 
   {#if selected}
-    <div class="sel card">
+    <a class="sel card" href="#/book/{selected.id}" aria-label="Open {selected.title}">
+      <Cover book={selected} size="sm" />
       <div class="sel-text">
         <strong>{selected.title}</strong>
-        <span class="muted small">{selected.authors.join(', ')}{selected.firstPublishedYear ? ` · ${selected.firstPublishedYear}` : ''} · {lib.label(selected.locationId)}</span>
+        <span class="muted small">{selected.authors.join(', ')}{selected.firstPublishedYear ? ` · ${selected.firstPublishedYear}` : ''}</span>
+        <span class="muted small">{lib.label(selected.locationId)}</span>
       </div>
-      <a class="btn btn-sm btn-primary" href="#/book/{selected.id}">Open</a>
-    </div>
+      <span class="open" aria-hidden="true">Open ›</span>
+    </a>
   {:else if showHint}
     <p class="hint muted small">Pinch or scroll to zoom · drag to move · tap a cover</p>
   {/if}
@@ -588,12 +599,13 @@
   .tools .on { background: var(--pill-on); }
   .info { top: 66px; left: 10px; max-width: calc(100% - 90px); display: flex; gap: 6px; flex-wrap: wrap; align-items: center; padding: 6px 12px; border-radius: 18px; }
   .info .chip { background: var(--pill-soft); color: var(--text); border-color: transparent; }
-  .linkish { min-height: 28px; padding: 0 4px; border: none; background: transparent; color: var(--text); text-decoration: underline; font-size: 0.85rem; }
+  .info :global(.linkish) { min-height: 28px; padding: 0 4px; border: none; background: transparent; color: var(--text); text-decoration: underline; font-size: 0.85rem; }
   .stage { position: absolute; inset: 0; }
   canvas { display: block; touch-action: none; cursor: grab; outline: none; }
   canvas:active { cursor: grabbing; }
   .empty { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; gap: 8px; color: var(--muted); }
-  .sel { position: absolute; left: 10px; right: 10px; bottom: 10px; display: flex; gap: 10px; align-items: center; padding: 10px 12px; }
+  .sel { position: absolute; z-index: 3; left: 10px; right: 10px; bottom: 10px; display: flex; gap: 12px; align-items: center; padding: 10px 12px; text-decoration: none; color: inherit; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18); }
+  .open { font-weight: 600; color: var(--brand); white-space: nowrap; }
   .sel-text { flex: 1; display: grid; min-width: 0; }
   .sel-text strong, .sel-text span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .hint { position: absolute; left: 50%; transform: translateX(-50%); bottom: 8px; margin: 0; pointer-events: none; white-space: nowrap; padding: 4px 12px; border-radius: 999px; background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(6px); }

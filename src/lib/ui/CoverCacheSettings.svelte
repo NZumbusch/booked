@@ -2,8 +2,9 @@
   import { COVER_SIZES, estimateBytes, formatBytes, type CoverSize } from '../covers/sizes';
   import type { CacheMode } from '../covers/policy';
   import { plural } from '../format';
-  import { attempt, covers, library, toast } from '../stores/app';
+  import { attempt, covers, library } from '../stores/app';
   import Confirm from './Confirm.svelte';
+  import CoverDownload from './CoverDownload.svelte';
 
   const lib = library();
   const cache = covers();
@@ -14,11 +15,6 @@
   const update = (patch: { mode?: CacheMode; size?: CoverSize }) => attempt(() => lib.updateSettings({ covers: { ...s, ...patch } }));
   const measured = $derived($status && cache.measured());
 
-  async function downloadNow() {
-    toast('Downloading covers…');
-    await cache.run(true);
-    toast('Covers saved on this device');
-  }
 </script>
 
 <section class="card stack" id="covers">
@@ -57,7 +53,7 @@
     <p class="muted small">Waiting for Wi-Fi.</p>
   {/if}
   <div class="row">
-    <button class="btn-primary" disabled={$status.running || (s.mode ?? 'wifi') === 'off' || $status.current >= $status.total} onclick={downloadNow}>Download now</button>
+    <CoverDownload disabled={$status.running || (s.mode ?? 'wifi') === 'off' || $status.current >= $status.total}>Download now</CoverDownload>
     <button disabled={!$status.cached} onclick={() => (clearOpen = true)}>Remove saved covers</button>
   </div>
 </section>

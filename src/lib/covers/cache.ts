@@ -186,10 +186,12 @@ export class CoverCache {
   }
 
   /**
-   * Download/resize what's missing. `force` = the user tapped "Download now" (skips the
-   * can't-tell-if-Wi-Fi question, but never overrides "off" or data saver).
+   * Download/resize what's missing.
+   * - `true`: the user tapped "Download now" (answers the can't-tell-if-Wi-Fi question).
+   * - `'mobile'`: the user confirmed downloading on mobile data (overrides "Wi-Fi only" and data saver).
+   * Never downloads when offline or when saving covers is turned off.
    */
-  run(force = false): Promise<void> {
+  run(force: boolean | 'mobile' = false): Promise<void> {
     this.running ??= this.doRun(force).finally(() => {
       this.running = undefined;
       this.status$.update((s) => ({ ...s, running: false }));
@@ -198,12 +200,14 @@ export class CoverCache {
     return this.running;
   }
 
-  private allowed(force: boolean): boolean {
-    const d = downloadDecision(this.mode, this.connection(), typeof navigator === 'undefined' || navigator.onLine);
-    return d === 'yes' || (force && d === 'ask');
+  private allowed(force: boolean | 'mobile'): boolean {
+    const online = typeof navigator === 'undefined' || navigator.onLine;
+    if (force === 'mobile') return online && this.mode !== 'off';
+    const d = downloadDecision(this.mode, this.connection(), online);
+    return d === 'yes' || (force === true && d === 'ask');
   }
 
-  private async doRun(force: boolean) {
+  private async doRun(force: boolean | 'mobile') {
     await this.loaded;
     const now = Date.now();
     const queue = this.wanted().filter((u) => this.needs(u, now));

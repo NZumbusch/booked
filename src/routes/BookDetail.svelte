@@ -12,6 +12,7 @@
   import BookForm from '../lib/ui/BookForm.svelte';
   import Confirm from '../lib/ui/Confirm.svelte';
   import Cover from '../lib/ui/Cover.svelte';
+  import CoverPicker from '../lib/ui/CoverPicker.svelte';
   import Dialog from '../lib/ui/Dialog.svelte';
   import Icon from '../lib/ui/Icon.svelte';
   import LocationPicker from '../lib/ui/LocationPicker.svelte';
@@ -42,6 +43,7 @@
   let moveOpen = $state(false);
   let moveTarget = $state<string | null>(null);
   let deleteOpen = $state(false);
+  let coverOpen = $state(false);
 
   $effect(() => {
     if (book) lib.history(book.id).then((h) => (moves = h));
@@ -200,7 +202,10 @@
     </header>
 
     <section class="hero">
-      <Cover {book} size="lg" />
+      <button class="cover-btn" onclick={() => (coverOpen = true)} aria-label="Change cover" title="Change cover">
+        <Cover {book} size="lg" />
+        <span class="cover-edit small">Change cover</span>
+      </button>
       <div class="stack info">
         <div>
           <h1>{book.title}</h1>
@@ -404,11 +409,14 @@
     </form>
   </Dialog>
 
-  <Confirm bind:open={deleteOpen} title="Delete book?" message="“{book.title}” will be removed from your library. You can undo this right after."
+  <CoverPicker {book} bind:open={coverOpen} />
+<Confirm bind:open={deleteOpen} title="Delete book?" message="“{book.title}” will be removed from your library. You can undo this right after."
     onconfirm={doDelete} />
 {/if}
 
 <style>
+  .cover-btn { padding: 0; border: none; background: none; min-height: 0; display: grid; gap: 6px; justify-items: center; align-self: start; cursor: pointer; }
+  .cover-edit { color: var(--muted); text-decoration: underline; }
   .grow { flex: 1; }
   .hero { display: grid; grid-template-columns: auto 1fr; gap: 20px; align-items: start; }
   @media (max-width: 600px) { .hero { grid-template-columns: 1fr; justify-items: center; text-align: center; } .hero .row { justify-content: center; } }

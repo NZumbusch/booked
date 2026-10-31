@@ -68,6 +68,19 @@ describe('CoverCache', () => {
     expect(calls).toHaveLength(1);
   });
 
+  it('downloads on mobile data once the user confirms it, but never when off', async () => {
+    await add('https://c/a.jpg');
+    conn = { type: 'cellular' };
+    await cache.run(true);
+    expect(calls).toHaveLength(0);
+    await lib.updateSettings({ covers: { mode: 'off' } });
+    await cache.run('mobile');
+    expect(calls).toHaveLength(0);
+    await lib.updateSettings({ covers: { mode: 'wifi' } });
+    await cache.run('mobile');
+    expect(calls).toHaveLength(1);
+  });
+
   it('never downloads when off or on data saver, even when asked', async () => {
     await add('https://c/a.jpg');
     await lib.updateSettings({ covers: { mode: 'off' } });
