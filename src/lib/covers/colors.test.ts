@@ -57,3 +57,13 @@ describe('looksLikePlaceholder', () => {
     expect(looksLikePlaceholder({ lightness: 0.5, saturation: 0.6, contrast: 0.3 })).toBe(false);
   });
 });
+
+import { isCoverShape } from './colors';
+describe('isCoverShape', () => {
+  it('accepts portrait covers and rejects wide scans', () => {
+    expect(isCoverShape(400, 600)).toBe(true);
+    expect(isCoverShape(128, 184)).toBe(true);
+    expect(isCoverShape(900, 500)).toBe(false);
+    expect(isCoverShape(0, 0)).toBe(true);
+  });
+});

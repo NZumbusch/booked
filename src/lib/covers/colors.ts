@@ -92,3 +92,10 @@ export function rgbCss([r, g, b]: RGB): string {
 export function looksLikePlaceholder(a: Pick<CoverAnalysis, 'lightness' | 'saturation' | 'contrast'>): boolean {
   return a.lightness > 0.8 && a.saturation < 0.25 && a.contrast < 0.12;
 }
+
+/** Book covers are portrait (about 2:3). Wide title-page scans, strips and thumbnails of other shapes are not covers. */
+export function isCoverShape(width: number, height: number): boolean {
+  if (!width || !height) return true; // unknown: give it the benefit of the doubt
+  const ratio = width / height;
+  return ratio >= 0.5 && ratio <= 0.9;
+}

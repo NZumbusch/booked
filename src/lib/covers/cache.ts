@@ -2,7 +2,7 @@ import Dexie, { type Table } from 'dexie';
 import { helperUrlOf } from '../config';
 import { writable, type Readable } from 'svelte/store';
 import type { Library } from '../services/library';
-import { analyzePixels, isNiceCover, looksLikePlaceholder, type CoverAnalysis } from './colors';
+import { analyzePixels, isCoverShape, isNiceCover, looksLikePlaceholder, type CoverAnalysis } from './colors';
 import { currentConnection, downloadDecision, type CacheMode, type ConnectionInfo } from './policy';
 import { COVER_SIZES, DEFAULT_COVER_SIZE, sourceUrl, type CoverSize } from './sizes';
 
@@ -177,10 +177,10 @@ export class CoverCache {
     }));
   }
 
-  /** The source gave us nothing usable (download failed or only a "not available" tile). */
+  /** The source gave us nothing usable: only a "not available" tile, or an image that isn't book-shaped (a title-page scan…). */
   isBroken(url: string | undefined): boolean {
     const e = url && !url.startsWith('data:') ? this.index.get(url) : undefined;
-    return !!e && !e.px && !!e.placeholder;
+    return !!e && ((!e.px && !!e.placeholder) || (!!e.px && !isCoverShape(e.w ?? 0, e.h ?? 0)));
   }
 
   /** Forget a failed download so it is tried again on the next run. */

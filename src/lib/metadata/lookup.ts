@@ -1,6 +1,7 @@
 import { cleanList } from '../domain/book';
 import { normalizeIsbn } from '../domain/isbn';
 import type { BookDraft, SourceId, SourceRef } from '../domain/types';
+import { isCoverShape } from '../covers/colors';
 import { dnbByIsbn } from './dnb';
 import { isbnCoverUrls } from './covers';
 import { gbByIsbn, gbSearch } from './googlebooks';
@@ -90,7 +91,7 @@ export const browserProbe: ImageProbe = (url) =>
     if (typeof Image === 'undefined') return resolve(true);
     const img = new Image();
     const timer = setTimeout(() => resolve(false), 6000);
-    img.onload = () => { clearTimeout(timer); resolve(img.naturalWidth > 1); };
+    img.onload = () => { clearTimeout(timer); resolve(img.naturalWidth > 1 && isCoverShape(img.naturalWidth, img.naturalHeight)); };
     img.onerror = () => { clearTimeout(timer); resolve(false); };
     img.src = url;
   });
