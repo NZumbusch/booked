@@ -34,9 +34,24 @@ function line(b: Book, n: number): string {
   ].filter(Boolean).join(' | ');
 }
 
+/** The rules every request carries (what makes a topic tree that's good to browse and arrange). */
+function rules(de: boolean): string[] {
+  return [
+    'Rules:',
+    `- Write the topic names in ${de ? 'German' : 'English'}, short and natural (not library-catalogue headings).`,
+    '- Sort by what a book is about, or by its genre. Language or country is never a broad topic: don\'t make "German literature" next to "Fiction". Use a country or language at most as the last, most specific level (e.g. "Fiction > Crime & mystery > Scandinavian").',
+    '- Use one consistent set of about 8–15 broad topics for the whole library, and the same names every time (not "Krimi" once and "Kriminalroman" another time).',
+    '- Keep topics a useful size: when a topic would hold more than about 15 books, split it into sub-topics (up to 3 levels in all). Avoid a topic for a single book when an existing one fits.',
+    '- Books that belong together (same series, same author writing in the same field, similar subject) should get the same path.',
+    '- Use what you know about each book and author. If you are not completely sure what a book is about, search the web for it (title and author) before deciding. The catalogue words are only hints and are often wrong or too general.',
+    '- Answer only with the lines "number: path", one per book, nothing else. Keep the numbers as given.'
+  ];
+}
+
 /**
- * The prompt(s) for these books (numbered within each part). `vocabulary`: topic paths that exist
- * already ("Fiction > Crime & mystery"), offered to the AI to sort into; it may add new ones.
+ * The prompt(s) for these books (numbered within each part). `vocabulary`: your own topic paths that
+ * exist already ("Fiction > Crime & mystery"), offered to sort into; the AI may add new ones.
+ * (Only your own: catalogue headings offered here would be copied into your topics.)
  */
 export function aiTopicPrompts(books: Book[], lang: TopicLanguage, vocabulary: string[] = []): PromptPart[] {
   const parts = Math.max(1, Math.ceil(books.length / PART_SIZE));
@@ -48,7 +63,7 @@ export function aiTopicPrompts(books: Book[], lang: TopicLanguage, vocabulary: s
       ? [
           '',
           'Topics that already exist in my library (broad > specific). Sort books into these wherever they fit, using exactly these names. If a book really doesn\'t fit any of them, make a new topic (or a new sub-topic under an existing one) in the same style:',
-          ...vocabulary.slice(0, 120).map((v) => `  ${v}`)
+          ...vocabulary.slice(0, 150).map((v) => `  ${v}`)
         ]
       : [];
     const text = [
@@ -57,12 +72,7 @@ export function aiTopicPrompts(books: Book[], lang: TopicLanguage, vocabulary: s
       de ? '  13: Philosophie > Politische Philosophie' : '  13: Philosophy > Political philosophy',
       ...known,
       '',
-      'Rules:',
-      `- Write the topic names in ${de ? 'German' : 'English'}.`,
-      '- Use one consistent set of about 8–15 broad topics for the whole library, and the same names every time (not "Krimi" once and "Kriminalroman" another time).',
-      '- Books that belong together (same series, same author writing in the same field, similar subject) should get the same path.',
-      '- Use what you know about each book and author. If you are not completely sure what a book is about, search the web for it (title and author) before deciding. The catalogue words are only hints and are often wrong or too general.',
-      '- Answer only with the lines "number: path", one per book, nothing else. Keep the numbers as given.',
+      ...rules(de),
       '',
       'Books:',
       ...chunk.map((b, i) => line(b, i + 1))
@@ -70,6 +80,48 @@ export function aiTopicPrompts(books: Book[], lang: TopicLanguage, vocabulary: s
     out.push({ ids: chunk.map((b) => b.id), text, part: p + 1, parts });
   }
   return out;
+}
+
+/**
+ * Split one big topic: a request for just its books, asking for sub-topics below it
+ * ("Belletristik > Deutsche Belletristik" with 54 books → Kriminalroman, Gesellschaftsroman…).
+ */
+export function aiSplitPrompts(node: string[], books: Book[], lang: TopicLanguage, siblings: string[] = []): PromptPart[] {
+  const de = lang === 'de';
+  const where = node.join(' > ');
+  const parts = Math.max(1, Math.ceil(books.length / PART_SIZE));
+  const out: PromptPart[] = [];
+  for (let p = 0; p < parts; p++) {
+    const chunk = books.slice(p * PART_SIZE, (p + 1) * PART_SIZE);
+    const text = [
+      `In my home library, these ${books.length} books are all in the topic "${where}", which is too big to browse${parts > 1 ? ` (part ${p + 1} of ${parts})` : ''}. Split it: give every book a path that starts with "${where}" and adds one or two more specific levels, for example:`,
+      `  12: ${where} > ${de ? 'Kriminalroman' : 'Crime & mystery'}`,
+      `  13: ${where} > ${de ? 'Gesellschaftsroman > Nachkriegszeit' : 'Social novel > Post-war'}`,
+      ...(siblings.length ? ['', `Sub-topics that exist already (use them where they fit): ${siblings.join('; ')}`] : []),
+      '',
+      'Aim for groups of about 3–15 books; a book that fits no group stays at "' + where + '".',
+      '',
+      ...rules(de).filter((r) => !r.includes('8–15 broad topics')),
+      '',
+      'Books:',
+      ...chunk.map((b, i) => line(b, i + 1))
+    ].join('\n');
+    out.push({ ids: chunk.map((b) => b.id), text, part: p + 1, parts });
+  }
+  return out;
+}
+
+/** An answer to a split request may leave out the topic it splits: put it back in front. */
+export function underNode(node: string[], path: string[]): string[] {
+  const starts = node.every((x, i) => path[i]?.toLowerCase() === x.toLowerCase());
+  return starts ? [...node, ...path.slice(node.length)] : [...node, ...path];
+}
+
+/** Your own topic paths (and every level of them), for offering to the AI and as suggestions. */
+export function ownVocabulary(books: Pick<Book, 'aiTopics'>[]): string[] {
+  const seen = new Set<string>();
+  for (const b of books) for (let k = 1; k <= (b.aiTopics?.length ?? 0); k++) seen.add(b.aiTopics!.slice(0, k).join(' > '));
+  return [...seen].sort((a, b) => a.localeCompare(b));
 }
 
 /** Which books to ask about. */
@@ -142,4 +194,13 @@ export function aiVocabulary(books: Pick<Book, 'aiTopics'>[]): string[] {
   const n = new Map<string, number>();
   for (const b of books) for (const t of b.aiTopics ?? []) n.set(t, (n.get(t) ?? 0) + 1);
   return [...n.entries()].sort((a, b) => b[1] - a[1]).map(([t]) => t);
+}
+
+/** The language your topics are written in (German or English), if there are any to go by. */
+export function topicLanguage(vocabulary: string[]): TopicLanguage | undefined {
+  if (!vocabulary.length) return undefined;
+  const text = vocabulary.join(' ').toLowerCase();
+  const de = (text.match(/[äöüß]|\b(und|der|die|das|roman|belletristik|geschichte|kinder|sachbuch|literatur|philosophie|politik)\b/g) ?? []).length;
+  const en = (text.match(/\b(and|the|of|fiction|history|children|literature|philosophy|science|politics|essays)\b/g) ?? []).length;
+  return de === en ? undefined : de > en ? 'de' : 'en';
 }

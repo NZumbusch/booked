@@ -1,8 +1,10 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import {
-    aiTopicPrompts, booksFor, parseAiTopics, parsePath, pathText, topLevels, type AiScope, type TopicLanguage
+    aiSplitPrompts, aiTopicPrompts, booksFor, ownVocabulary, parseAiTopics, parsePath, pathText, topicLanguage, topLevels, underNode, type AiScope, type TopicLanguage
   } from '../lib/domain/aiTopics';
+  import { pathTree, flatten } from '../lib/domain/pathTree';
+  import { route } from '../lib/router';
   import { displayTitle } from '../lib/domain/book';
   import type { Book, Id } from '../lib/domain/types';
   import { plural } from '../lib/format';
@@ -20,13 +22,37 @@
 
   let scope = $state<AiScope>('unsorted');
   // svelte-ignore state_referenced_locally
-  let lang = $state<TopicLanguage>(untrack(() => (books.filter((b) => b.language === 'de').length >= books.length / 2 ? 'de' : 'en')));
+  let lang = $state<TopicLanguage>(untrack(() => savedLang() ?? topicLanguage(ownVocabulary(books)) ?? (books.filter((b) => b.language === 'de').length >= books.length / 2 ? 'de' : 'en')));
+  /** The language of your topics stays the same from run to run (a mix of both would split the tree). */
+  function savedLang(): TopicLanguage | undefined {
+    try {
+      const v = localStorage.getItem('booked.aiLang');
+      return v === 'de' || v === 'en' ? v : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+  $effect(() => {
+    try {
+      localStorage.setItem('booked.aiLang', lang);
+    } catch {
+      // fine
+    }
+  });
   let part = $state(0);
   let answer = $state('');
   let copied = $state(false);
 
-  const chosen = $derived(booksFor(scope, books, topics.hasTopic));
-  const prompts = $derived(aiTopicPrompts(chosen, lang, topics.vocabulary));
+  /** Split mode (from the topic editor): one big topic, its books get sub-topics below it. */
+  const split = $derived($route.query.split ? parsePath($route.query.split) : undefined);
+  const splitNode = $derived(split ? flatten(pathTree(books)).find(({ node }) => node.path.join('\u0000') === split.join('\u0000'))?.node : undefined);
+  const inSplit = (b: Book) => !!split && split.every((x, i) => b.aiTopics?.[i] === x);
+  // Only your own topics are offered to the AI: catalogue headings offered there end up copied into your topics.
+  const vocabulary = $derived(ownVocabulary(books));
+  const chosen = $derived(split ? books.filter(inSplit) : booksFor(scope, books, topics.hasTopic));
+  const prompts = $derived(split
+    ? aiSplitPrompts(split, chosen, lang, (splitNode?.children ?? []).map((c) => c.name))
+    : aiTopicPrompts(chosen, lang, vocabulary));
   const current = $derived(prompts[Math.min(part, prompts.length - 1)]);
   const counts = $derived({
     all: books.length,
@@ -57,7 +83,7 @@
   let edits = $state<Record<Id, string>>({});
   $effect(() => {
     const p = parsed;
-    edits = p ? Object.fromEntries([...p.paths].map(([id, path]) => [id, pathText(path)])) : {};
+    edits = p ? Object.fromEntries([...p.paths].map(([id, path]) => [id, pathText(split ? underNode(split, path) : path)])) : {};
   });
   const rows = $derived(parsed ? [...parsed.paths.keys()].map((id) => lib.book(id)).filter((b): b is Book => !!b) : []);
   const missing = $derived(current && parsed ? current.ids.filter((id) => !parsed.paths.has(id)).length : 0);
@@ -92,14 +118,19 @@
   <p class="muted">Booked writes a request listing your books. Paste it into any chat AI (ChatGPT, Claude, Gemini…), then paste the answer back here. Every book gets a topic path like <em>Belletristik › Kriminalroman › Skandinavischer Krimi</em>, which arranges and names the cover wall. You can check and change each one before it’s saved, and change any book later on its page. Nothing is sent anywhere by Booked.</p>
 
   <section class="card stack">
-    <h2>1. Which books?</h2>
-    <label class="radio"><input type="radio" bind:group={scope} value="unsorted" /> Books without topics of my own <span class="muted">({counts.unsorted})</span></label>
-    <label class="radio"><input type="radio" bind:group={scope} value="none" /> Only books with no topic at all <span class="muted">({counts.none})</span></label>
-    <label class="radio"><input type="radio" bind:group={scope} value="all" /> All books, revising my topics too <span class="muted">({counts.all})</span></label>
+    {#if split}
+      <h2>1. Split “{split.join(' › ')}”</h2>
+      <p class="small">{plural(chosen.length, 'book')} in this topic get sub-topics below it; the rest of your topics stay as they are. <a href="#/topics">Other books instead</a></p>
+    {:else}
+      <h2>1. Which books?</h2>
+      <label class="radio"><input type="radio" bind:group={scope} value="unsorted" /> Books without topics of my own <span class="muted">({counts.unsorted})</span></label>
+      <label class="radio"><input type="radio" bind:group={scope} value="none" /> Only books with no topic at all <span class="muted">({counts.none})</span></label>
+      <label class="radio"><input type="radio" bind:group={scope} value="all" /> All books, revising my topics too <span class="muted">({counts.all})</span></label>
+    {/if}
     <label class="field">Topic names in
       <select bind:value={lang}><option value="de">German</option><option value="en">English</option></select>
     </label>
-    {#if topics.vocabulary.length}<p class="muted small">The request lists your {topics.vocabulary.length} existing topics, so books are sorted into those where they fit; the AI adds new ones only where needed, and is asked to search the web when it isn’t sure about a book.</p>{/if}
+    {#if vocabulary.length && !split}<p class="muted small">The request lists your {vocabulary.length} existing topics, so books are sorted into those where they fit; the AI adds new ones only where needed, keeps topics to a browsable size, and is asked to search the web when it isn’t sure about a book.</p>{/if}
   </section>
 
   {#if !chosen.length}

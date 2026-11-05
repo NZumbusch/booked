@@ -79,6 +79,7 @@
     if (n) await apply(removeNode(books, n.path, mode), `Removed “${n.name}”`);
   }
 
+  const splitHref = (n: PathNode) => `#/topics?split=${encodeURIComponent(n.path.join(' > '))}`;
   const parentName = (n: PathNode) => (n.path.length > 1 ? n.path[n.path.length - 2] : '');
   const titleOf = (id: string) => {
     const b = lib.book(id);
@@ -122,8 +123,10 @@
             <button class="btn-sm" type="button" onclick={() => (renaming = undefined)}>Cancel</button>
           </form>
         {:else}
-          <button class="name" onclick={() => toggle(n)}><strong>{n.name}</strong> <span class="muted small">{n.total}</span></button>
+          <button class="name" onclick={() => toggle(n)}><strong>{n.name}</strong> <span class="muted small">{n.total}</span>
+            {#if n.direct.length >= 15}<span class="badge warn" title="Many books with no finer topic: split it">split?</span>{/if}</button>
           <span class="acts">
+            {#if n.total >= 12}<a class="btn btn-sm btn-ghost" href={splitHref(n)} title="Split into sub-topics with AI" aria-label="Split {n.name} with AI">✨</a>{/if}
             <button class="btn-sm btn-ghost" onclick={() => startRename(n)} title="Rename" aria-label="Rename {n.name}">✎</button>
             <button class="btn-sm btn-ghost" onclick={() => choose(n, 'move')} title="Move (with its sub-topics)" aria-label="Move {n.name}">↗</button>
             <button class="btn-sm btn-ghost" onclick={() => choose(n, 'merge')} title="Merge into another topic" aria-label="Merge {n.name}">⤵</button>
@@ -182,7 +185,8 @@
   .name { flex: 1; min-width: 0; justify-content: flex-start; text-align: left; border: none; background: none; padding: 6px 4px; white-space: normal; overflow-wrap: anywhere; }
   .level0 > .node .name strong { font-size: 1.05rem; }
   .acts { display: flex; flex: none; }
-  .acts button { min-width: 34px; padding: 0 6px; }
+  .acts button, .acts a { min-width: 34px; padding: 0 6px; }
+  .name .badge { margin-left: 4px; }
   .rename { display: flex; gap: 6px; flex: 1; min-width: 0; }
   .rename input { flex: 1; min-width: 0; }
   .books { list-style: none; margin: 0 0 6px 36px; padding: 0; display: grid; gap: 2px; font-size: 0.88rem; }
