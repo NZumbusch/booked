@@ -37,11 +37,13 @@
   );
   const ownsWork = (label: string) => $lib.books.find((b) => fold(b.title) === fold(label));
   const LANG: Record<string, string> = { de: 'Deutsch', en: 'English' };
+  /** The portrait didn't load (offline, blocked): no broken-image icon. */
+  let portraitFailed = $state(false);
 </script>
 
 <div class="page stack">
   <header class="hero">
-    {#if bio?.thumbnail}<img src={bio.thumbnail} alt="" class="portrait" />{/if}
+    {#if bio?.thumbnail && !portraitFailed}<img src={bio.thumbnail} alt="" class="portrait" onerror={() => (portraitFailed = true)} />{/if}
     <div>
       <span class="muted small">Author</span>
       <h1>{author?.label ?? name}</h1>

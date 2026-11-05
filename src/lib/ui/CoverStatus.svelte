@@ -164,8 +164,8 @@
   .bad { color: var(--danger); }
   .tech { font-variant-numeric: tabular-nums; }
   summary { cursor: pointer; font-weight: 600; }
-  .list { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 8px; }
-  .list li { display: grid; gap: 2px; border-top: 1px solid var(--line); padding-top: 8px; min-width: 0; }
+  .list { list-style: none; margin: 8px 0 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .list li { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; border-top: 1px solid var(--line); padding-top: 8px; min-width: 0; }
   .top { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
   .top strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   code { font-size: 0.8rem; overflow-wrap: anywhere; }

@@ -5,7 +5,9 @@
 
   type Create = (kind: LocationKind, name: string, parentId: Id | null) => Promise<Location | undefined>;
 
-  let { value = $bindable(null), locations, allowNone = true, exclude = [], oncreate }: {
+  let { value = $bindable(null), locations, allowNone = true, exclude = [], oncreate, noneLabel = 'No location' }: {
+    /** Wording of the empty choice (e.g. "All books" where no choice means everything). */
+    noneLabel?: string;
     value?: Id | null;
     locations: Location[];
     allowNone?: boolean;
@@ -64,7 +66,7 @@
 <div class="picker">
   <label class="field">Place
     <select value={adding?.kind === 'place' ? NEW : placeId} onchange={(e) => pick(e.currentTarget.value, null, 'place', null)}>
-      {#if allowNone || !placeId}<option value="">{allowNone ? 'No location' : 'Choose a place…'}</option>{/if}
+      {#if allowNone || !placeId}<option value="">{allowNone ? noneLabel : 'Choose a place…'}</option>{/if}
       {#each places as p (p.id)}<option value={p.id}>{p.name}</option>{/each}
       {#if create}<option value={NEW}>+ New place…</option>{/if}
     </select>

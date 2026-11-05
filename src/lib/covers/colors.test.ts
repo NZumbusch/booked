@@ -68,3 +68,12 @@ describe('isCoverShape', () => {
     expect(isCoverShape(0, 0)).toBe(true);
   });
 });
+
+describe('isKnownPlaceholder', () => {
+  it('recognises Google’s 128×184 "image not available" picture, and only Google’s', async () => {
+    const { isKnownPlaceholder } = await import('./colors');
+    expect(isKnownPlaceholder('https://books.google.com/books/content?id=x&img=1&zoom=1', 128, 184)).toBe(true);
+    expect(isKnownPlaceholder('https://books.google.com/books/content?id=x&img=1&zoom=1', 128, 205)).toBe(false);
+    expect(isKnownPlaceholder('https://covers.openlibrary.org/b/id/1-M.jpg', 128, 184)).toBe(false);
+  });
+});

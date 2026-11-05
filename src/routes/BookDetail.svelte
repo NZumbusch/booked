@@ -48,6 +48,7 @@
   let moveTarget = $state<string | null>(null);
   let deleteOpen = $state(false);
   let coverOpen = $state(false);
+  let descOpen = $state(false);
 
   $effect(() => {
     if (book) lib.history(book.id).then((h) => (moves = h));
@@ -229,9 +230,8 @@
     ['Series', book.series && `${book.series}${book.seriesNumber ? ` #${book.seriesNumber}` : ''}`, 'series'],
     ['ISBN-13', book.isbn13, ''],
     ['ISBN-10', book.isbn10, ''],
-    ['Contributors', book.contributors?.join(', '), 'contributors'],
-    ['Genres', book.genres.join(', '), 'genres'],
-    ['Subjects', book.subjects?.join(', '), 'subjects']
+    ['Contributors', book.contributors?.join(', '), 'contributors']
+    // genres and subjects are the topic chips below (clickable), not repeated here
   ] as const).filter(([, v]) => v !== undefined && v !== '') : []);
 
   const links = $derived(book?.identifiers ? ([
@@ -275,7 +275,7 @@
     <header class="row">
       <button class="btn-ghost btn-icon" aria-label="Back" onclick={() => (window.history.length > 1 ? window.history.back() : navigate('/books'))}><Icon name="back" /></button>
       <span class="grow"></span>
-      {#if book.cover}<a class="btn btn-sm btn-ghost" href="#/wall?focus={id}" title="Show on the cover wall">▦</a>{/if}
+      {#if book.cover}<a class="btn btn-sm" href="#/wall?focus={id}" title="Show on the cover wall">▦ Wall</a>{/if}
       <a class="btn btn-sm" href="#/book/{id}?edit=1"><Icon name="edit" size={18} /> Edit</a>
       <button class="btn-sm btn-danger" onclick={() => (deleteOpen = true)} aria-label="Delete"><Icon name="trash" size={18} /></button>
     </header>
@@ -415,7 +415,10 @@
     </section>
 
     {#if book.description}
-      <section class="card"><h2>About <SourceInfo ref={book.provenance?.description} /></h2><p class="desc">{book.description}</p></section>
+      <section class="card"><h2>About <SourceInfo ref={book.provenance?.description} /></h2>
+        <p class="desc" class:folded={!descOpen && book.description.length > 600}>{book.description}</p>
+        {#if book.description.length > 600}<button class="btn-sm btn-ghost more" onclick={() => (descOpen = !descOpen)}>{descOpen ? 'Less' : 'More'}</button>{/if}
+      </section>
     {/if}
 
 
@@ -597,6 +600,8 @@
   .lend.borrowed.soon { border-left-color: var(--warn); }
   .lend.borrowed.overdue { border-left-color: var(--danger); }
   .desc { white-space: pre-line; margin: 0; }
+  .desc.folded { display: -webkit-box; -webkit-line-clamp: 8; line-clamp: 8; -webkit-box-orient: vertical; overflow: hidden; }
+  .more { margin-top: 4px; padding-left: 0; }
   dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 0; }
   dt { color: var(--muted); }
   dd { margin: 0; overflow-wrap: anywhere; }

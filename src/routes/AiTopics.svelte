@@ -153,7 +153,8 @@
 <style>
   h2 { font-size: 1.05rem; margin: 0; }
   p { margin: 0; }
-  .radio { display: flex; gap: 8px; align-items: center; }
+  .radio { display: flex; gap: 10px; align-items: center; justify-content: flex-start; text-align: left; }
+  .radio input { width: auto; min-height: 0; flex: none; margin: 0; }
   textarea { width: 100%; font: inherit; font-size: 0.85rem; }
   .rows { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 8px; }
   .rows li { display: grid; gap: 4px; }

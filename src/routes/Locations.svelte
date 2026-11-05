@@ -141,10 +141,10 @@
 
 <div class="page stack">
   <header class="stack tight">
-    <nav class="crumbs small" aria-label="Breadcrumb">
+    {#if id}<nav class="crumbs small" aria-label="Breadcrumb">
       <a href="#/locations">All places</a>
       {#each crumbs as c (c.id)}<span class="muted">›</span><a href="#/locations/{c.id}">{c.name}</a>{/each}
-    </nav>
+    </nav>{/if}
     {#if id && !current}
       <h1>Location not found</h1>
     {:else}
@@ -160,7 +160,7 @@
 
   {#if kidKind}
     <section class="stack">
-      {#if kids.length}<h2>{KIND_LABEL[kidKind]}s</h2>{/if}
+      {#if kids.length && id}<h2>{KIND_LABEL[kidKind]}s</h2>{/if}
       <ul class="list">
         {#each kids as loc, i (loc.id)}
           <li class="card item">

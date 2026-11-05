@@ -62,7 +62,7 @@
 
   <label class="field">Download
     <select value={s.mode ?? 'wifi'} onchange={(e) => update({ mode: e.currentTarget.value as CacheMode })}>
-      <option value="wifi">Large images only on Wi-Fi (recommended)</option>
+      <option value="wifi">Large ones on Wi-Fi only</option>
       <option value="any">On any connection</option>
       <option value="off">Off (always load from the internet)</option>
     </select>

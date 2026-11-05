@@ -33,7 +33,8 @@ describe('library-wide', () => {
     expect(oddOneOut(books, index)?.id).toBe('cook');
   });
   it('lists topics and the books on a topic', () => {
-    expect(topTopics(books).slice(0, 2)).toEqual([{ name: 'Identity', count: 3 }, { name: 'Novel', count: 3 }]);
+    // "Novel" counts as Fiction (catalogue synonyms are merged)
+    expect(topTopics(books).slice(0, 2)).toEqual([{ name: 'Fiction', count: 3 }, { name: 'Identity', count: 3 }]);
     expect(booksOnTopic(books, 'ecology').map((x) => x.id)).toEqual(['dune', 'messiah']);
   });
 });

@@ -338,6 +338,18 @@ export class CoverCache {
     return !!e && ((!e.px && !!e.placeholder) || (!!e.px && !isCoverShape(e.w ?? 0, e.h ?? 0)));
   }
 
+  /**
+   * The browser showed this cover and it is a known "image not available" picture (see
+   * isKnownPlaceholder): remember it as blank, so the cover gets replaced like other blank tiles.
+   */
+  markPlaceholder(url: string | undefined): void {
+    if (!url || this.has(url) || this.index.get(url)?.placeholder) return;
+    void this.recordFailure(url, new PlaceholderError()).then(() => {
+      this.publish();
+      this.version.update((v) => v + 1);
+    });
+  }
+
   /** Forget a failed download so it is tried again on the next run. */
   retry(url: string): void {
     const e = this.index.get(url);

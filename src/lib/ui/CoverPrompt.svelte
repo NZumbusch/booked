@@ -28,7 +28,7 @@
 
 {#if show}
   <div class="card prompt">
-    <p class="small">Save {plural(missing, 'cover')} on this device for offline use and the cover wall? About {formatBytes(estimateBytes(missing, $lib.settings.covers?.size ?? 'medium', cache.measured()))}. Best on Wi-Fi.</p>
+    <p class="small">Small covers are saved on their own. Also save {plural(missing, 'cover')} in full size, for sharp book pages offline? About {formatBytes(estimateBytes(missing, $lib.settings.covers?.size ?? 'medium', cache.measured()))}. Best on Wi-Fi.</p>
     <div class="row">
       <button class="btn-sm btn-primary" onclick={go}>Download now</button>
       <button class="btn-sm btn-ghost" onclick={later}>Not now</button>

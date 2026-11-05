@@ -31,7 +31,7 @@
 <div class="page stack">
   <div class="no-print stack">
     <h1>Printable list</h1>
-    <LocationPicker bind:value={scope} locations={$lib.locations} oncreate={null} />
+    <LocationPicker bind:value={scope} locations={$lib.locations} oncreate={null} noneLabel="All books" />
     <div class="row"><button class="btn-primary" onclick={() => window.print()}>Print / save as PDF</button></div>
   </div>
 
@@ -48,9 +48,9 @@
           <tbody>
             {#each list as b (b.id)}
               <tr>
-                <td>{b.authors.join(', ')}</td>
+                <td>{b.authors.length > 3 ? `${b.authors.slice(0, 2).join(', ')} et al.` : b.authors.join(', ')}</td>
                 <td>{b.title}{b.subtitle ? `: ${b.subtitle}` : ''}{b.lending ? ` (lent to ${b.lending.to})` : ''}</td>
-                <td>{b.publishedYear ?? ''}</td>
+                <td class="year">{b.publishedYear ?? ''}</td>
                 <td class="isbn">{b.isbn13 ?? b.isbn10 ?? ''}</td>
               </tr>
             {/each}
@@ -68,6 +68,9 @@
   .sheet h1 { font-size: 1.4rem; margin: 0; }
   .sheet h2 { font-size: 1rem; margin: 20px 0 6px; }
   table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  /* on a phone screen the ISBN column doesn't fit: it stays on paper */
+  .year { white-space: nowrap; }
+  @media screen and (max-width: 520px) { th:nth-child(4), .isbn { display: none; } td { overflow-wrap: anywhere; } }
   th, td { text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
   th { font-weight: 600; color: var(--muted); }
   .isbn { font-variant-numeric: tabular-nums; white-space: nowrap; }

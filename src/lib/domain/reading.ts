@@ -12,7 +12,8 @@ export function statusPatch(book: Pick<Book, 'status' | 'startedOn' | 'finishedO
   if (status === 'reading' && !book.startedOn) patch.startedOn = today;
   if (status === 'read') {
     if (!book.finishedOn) patch.finishedOn = today;
-    if (!book.startedOn) patch.startedOn = today;
+    // No start date is made up: a book marked read straight away (often while cataloguing) wasn't
+    // started today, and it would make every book look read within a day.
     patch.currentPage = undefined;
   }
   if (status === 'unread') patch.currentPage = undefined;
@@ -57,7 +58,8 @@ export function readingStats(books: Book[], today: IsoDate, goal?: number): Read
     return { month, books: list.length, pages: list.reduce((n, b) => n + (b.pageCount ?? 0), 0) };
   });
   const durations = read
-    .filter((b) => b.startedOn && b.startedOn <= b.finishedOn!)
+    // same-day start and finish is almost always "marked read" in one go (older versions set both), not a pace
+    .filter((b) => b.startedOn && b.startedOn < b.finishedOn!)
     .map((b) => (Date.parse(b.finishedOn!) - Date.parse(b.startedOn!)) / 86400000)
     .sort((a, b) => a - b);
   const started = new Map<string, { genre: string; started: number; abandoned: number }>();

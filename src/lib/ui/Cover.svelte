@@ -2,7 +2,7 @@
   import { cleanTitle } from '../domain/book';
   import type { Book } from '../domain/types';
 
-  import { isCoverShape } from '../covers/colors';
+  import { isCoverShape, isKnownPlaceholder } from '../covers/colors';
   import { covers } from '../stores/app';
   import { coverRetry } from './coverRetry';
   import { isOwnPhoto, isPhotoRef } from '../domain/photos';
@@ -111,6 +111,14 @@
   function onLoad(e: Event) {
     const img = e.currentTarget as HTMLImageElement;
     if (!isOwnPhoto(book.cover) && !isCoverShape(img.naturalWidth, img.naturalHeight)) failed = true;
+    if (isKnownPlaceholder(book.cover, img.naturalWidth, img.naturalHeight)) {
+      failed = true; // Google's "image not available": the title instead, and the cover gets replaced
+      try {
+        covers().markPlaceholder(book.cover);
+      } catch {
+        /* no app (component tests) */
+      }
+    }
   }
   function onError() {
     if (isPhotoRef(book.cover)) {
