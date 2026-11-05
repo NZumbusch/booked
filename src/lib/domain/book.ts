@@ -41,7 +41,18 @@ function normalize(book: Book): Book {
   }
   if (out.subjects) out.subjects = cleanList(out.subjects);
   if (out.contributors) out.contributors = cleanList(out.contributors);
+  if (out.ownership === 'wishlist') {
+    // A wished-for book isn't on any shelf: no room, not lent out, not taken out of a shared room.
+    out.locationId = null;
+    delete out.lending;
+    delete out.away;
+  }
   return out;
+}
+
+/** On the wishlist (not owned yet): kept apart from the library everywhere. */
+export function onWishlist(book: Pick<Book, 'ownership'>): boolean {
+  return book.ownership === 'wishlist';
 }
 
 export function createBook(draft: BookDraft, { id, now }: { id: Id; now: Timestamp }): Book {

@@ -10,6 +10,10 @@ All data stays on your device (IndexedDB). The app needs no backend and no API k
   - ISBN entry, title/author search, or a full manual form
   - Details come from Open Library, Google Books and Wikidata, filled in the background so adding never waits
   - Repeated ISBNs ask "another copy?" before adding
+- **Wishlist, kept apart**
+  - Its own page (Home › Wishlist): add a wish by title search or by hand, remove it, or tap **Bought it** and choose the room
+  - Wishes have no room and never appear in the library, room counts, stats, the wall or the map
+  - Scanning a book that's on your wishlist moves it into the library instead of adding a second entry
 - **Know where everything is**
   - Place › room (› optional shelf), with counts at every level
   - Move single books, a selection, or a whole room. Every move goes into the book's history
@@ -259,7 +263,7 @@ A place has no parent, a room's parent is a place, and a shelf's parent is a roo
 
 **Book**
 - *Bibliographic:* `title, subtitle, authors[], contributors[], publisher, publishedYear, firstPublishedYear, edition, language, originalLanguage, pageCount, format, isbn10, isbn13, identifiers{olid,gbid,oclc,lccn,wikidata…}, description, cover, genres[], subjects[], series, seriesNumber, writing{year,yearEnd,place{lat,lon,label},placeBasis}, sources[], provenance{field → {source,url,note}}`
-- *Mine:* `ownership: owned|wishlist, locationId, tags[], collections[], status: unread|reading|read|abandoned, rating 1–5, startedOn, finishedOn, notes, condition, purchasedOn, price, signed, copies, lending{to,lentOn,dueOn}`
+- *Mine:* `ownership: owned|wishlist` (a wishlist book always has `locationId: null`; older data is migrated on open), `locationId, tags[], collections[], status: unread|reading|read|abandoned, rating 1–5, startedOn, finishedOn, notes, condition, purchasedOn, price, signed, copies, lending{to,lentOn,dueOn}`
 - *Meta:* `createdAt, updatedAt`
 
 **MoveRecord** (location history): `{ id, bookId, fromId, toId, fromLabel, toLabel, at, batchId }`.

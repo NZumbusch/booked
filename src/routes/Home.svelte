@@ -16,10 +16,12 @@
 
   const places = $derived($lib && lib.children(null));
   const counts = $derived($lib && lib.counts());
-  const recent = $derived(sortBooks($lib.books, 'added', 'desc').slice(0, 12));
+  const owned = $derived($lib && lib.owned());
+  const wishes = $derived($lib && lib.wishlist().length);
+  const recent = $derived(sortBooks(owned, 'added', 'desc').slice(0, 12));
   const unplaced = $derived(counts.get(null) ?? 0);
-  const reading = $derived($lib.books.filter((b) => b.status === 'reading'));
-  const upNext = $derived($lib.books.filter((b) => b.queuedAt && b.status !== 'read').sort((a, b) => a.queuedAt!.localeCompare(b.queuedAt!)));
+  const reading = $derived(owned.filter((b) => b.status === 'reading'));
+  const upNext = $derived(owned.filter((b) => b.queuedAt && b.status !== 'read').sort((a, b) => a.queuedAt!.localeCompare(b.queuedAt!)));
   const lent = $derived($lib.books.filter((b) => b.lending || b.away).length);
   const overdue = $derived($lib.books.filter((b) => isOverdue(b, todayIso())).length);
 </script>
@@ -28,7 +30,7 @@
   <header class="spread">
     <h1>Booked</h1>
     <div class="row">
-      <span class="muted small">{plural($lib.books.length, 'book')}</span>
+      <span class="muted small">{plural(owned.length, 'book')}</span>
       <a class="btn btn-ghost btn-icon" href="#/settings" aria-label="Settings"><Icon name="settings" /></a>
     </div>
   </header>
@@ -57,6 +59,7 @@
       <a class="card" href="#/map"><span>🗺️</span>Map</a>
       <a class="card" href="#/lending"><span>🤝</span>Lending{#if overdue}<b class="badge danger">{overdue}</b>{:else if lent}<b class="badge">{lent}</b>{/if}</a>
       <a class="card" href="#/tags"><span>#</span>Tags</a>
+      <a class="card" href="#/wishlist"><span>🎁</span>Wishlist{#if wishes}<b class="badge">{wishes}</b>{/if}</a>
     </nav>
   {/if}
 
@@ -144,8 +147,8 @@
   .scan { min-height: 72px; font-size: 1.2rem; border-radius: 20px; }
   .more-ways { margin-top: -6px; justify-content: center; gap: 0; color: var(--muted); }
   .more-ways .btn { padding: 0 10px; color: var(--muted); }
-  .explore { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-  .explore a { display: grid; justify-items: center; gap: 2px; padding: 10px 4px; text-decoration: none; font-size: 0.85rem; position: relative; }
+  .explore { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+  .explore a { display: grid; justify-items: center; gap: 2px; padding: 10px 2px; text-decoration: none; font-size: 0.78rem; position: relative; min-width: 0; }
   .explore span { font-size: 1.3rem; line-height: 1.4; font-weight: 700; }
   .explore b { position: absolute; top: 6px; right: 6px; }
   .places { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { normalizeIsbn } from '../lib/domain/isbn';
+  import { onWishlist, todayIso } from '../lib/domain/book';
   import type { Book, BookDraft, ListPrice } from '../lib/domain/types';
   import { mergeResults, quickLookupIsbn, searchBooks, type LookupResult } from '../lib/metadata/lookup';
   import type { Candidate } from '../lib/metadata/types';
@@ -14,7 +15,8 @@
   import Scanner from '../lib/ui/Scanner.svelte';
 
   type Mode = 'scan' | 'isbn' | 'search';
-  let { mode: initialMode = 'isbn' }: { mode?: Mode } = $props();
+  /** `wish`: adding to the wishlist (no room; not part of the library). */
+  let { mode: initialMode = 'isbn', wish = false }: { mode?: Mode; wish?: boolean } = $props();
 
   const lib = library();
   // svelte-ignore state_referenced_locally
@@ -47,7 +49,9 @@
   const SOURCE_NAMES: Record<string, string> = { openlibrary: 'Open Library', googlebooks: 'Google Books', dnb: 'DNB', wikidata: 'Wikidata' };
 
   function openForm(prefill: Partial<Book>, result?: LookupResult) {
-    initial = { locationId: $lib.settings.defaultLocationId, status: 'unread', ownership: 'owned', copies: 1, ...prefill };
+    initial = wish
+      ? { locationId: null, status: 'unread', copies: 1, ...prefill, ownership: 'wishlist' }
+      : { locationId: $lib.settings.defaultLocationId, status: 'unread', ownership: 'owned', copies: 1, ...prefill };
     formKey++;
     const later = 'More details (description, genres, where it was written…) are added automatically after you save.';
     if (!result) notice = undefined;
@@ -141,10 +145,12 @@
     const pendingLookup = !!(draft.isbn13 || draft.isbn10 || draft.identifiers?.olwork) || undefined;
     const scanned = draft.isbn13 ? scannedPrices.get(draft.isbn13) : undefined;
     if (scanned && !draft.listPrice) draft = { ...draft, listPrice: scanned };
-    const book = await attempt(() => lib.addBook({ ...draft, pendingLookup }), `Added “${draft.title}”`, { undo: true });
+    const toWishlist = draft.ownership === 'wishlist';
+    const book = await attempt(() => lib.addBook({ ...draft, pendingLookup }),
+      toWishlist ? `“${draft.title}” is on your wishlist` : `Added “${draft.title}”`, { undo: true });
     if (!book) return;
     if (pendingLookup) enricher().enqueue(book.id);
-    navigate(`/book/${book.id}`);
+    navigate(toWishlist && wish ? '/wishlist' : `/book/${book.id}`);
   }
 
   /** The user confirmed it's really another copy: always a separate entry. */
@@ -155,6 +161,18 @@
       confirmedIsbn = pendingAfterLookup;
       await lookup(pendingAfterLookup);
     }
+  }
+
+  /** The scanned book was on the wishlist: it's bought now, so it moves into the library (no second entry). */
+  const wished = $derived(wish ? undefined : dups.find(onWishlist));
+  async function boughtWished() {
+    const b = wished;
+    dupOpen = false;
+    if (!b) return;
+    const where = $lib.settings.defaultLocationId ?? null;
+    const done = await attempt(() => lib.updateBook(b.id, { ownership: 'owned', locationId: where, purchasedOn: b.purchasedOn ?? todayIso() }),
+      `“${b.title}” moved from your wishlist into ${lib.label(where)}`, { undo: true });
+    if (done) navigate(`/book/${b.id}`);
   }
 
   function cancelDup() {
@@ -174,9 +192,9 @@
       {#if initial}
         <button class="btn-ghost btn-icon" aria-label="Back" onclick={backToStart}><Icon name="back" /></button>
       {/if}
-      <h1>Add a book</h1>
+      <h1>{wish ? 'Add to your wishlist' : 'Add a book'}</h1>
     </div>
-    {#if !initial}<a class="btn btn-sm" href="#/scan"><Icon name="scan" size={18} /> Batch scan</a>{/if}
+    {#if !initial && !wish}<a class="btn btn-sm" href="#/scan"><Icon name="scan" size={18} /> Batch scan</a>{/if}
   </header>
 
   {#if busy}
@@ -238,22 +256,33 @@
       </div>
     {/if}
     {#key formKey}
-      <BookForm {initial} locations={$lib.locations} submitLabel="Add to library" onsubmit={submit} />
+      <BookForm {initial} locations={$lib.locations} submitLabel={initial.ownership === 'wishlist' ? 'Add to wishlist' : 'Add to library'} onsubmit={submit} />
     {/key}
   {/if}
 </div>
 
-<Dialog bind:open={dupOpen} title="Another copy?">
-  <p>You already have {dups.length === 1 ? 'a copy' : `${dups.length} copies`} of this ISBN:</p>
-  <ul class="dups">
-    {#each dups as d (d.id)}
-      <li><strong>{d.title}</strong> <span class="muted small">· {lib.label(d.locationId)}</span></li>
-    {/each}
-  </ul>
-  <p class="muted small">Is this really another copy, or the same book scanned twice?</p>
+<Dialog bind:open={dupOpen} title={wished ? 'On your wishlist' : wish ? 'Already yours?' : 'Another copy?'}>
+  {#if wished}
+    <p><strong>{wished.title}</strong> is on your wishlist. Did you buy it?</p>
+    <p class="muted small">It moves into your library ({lib.label($lib.settings.defaultLocationId ?? null)}) with everything it already has.</p>
+  {:else}
+    <p>{wish ? 'This ISBN is already in your books:' : `You already have ${dups.length === 1 ? 'a copy' : `${dups.length} copies`} of this ISBN:`}</p>
+    <ul class="dups">
+      {#each dups as d (d.id)}
+        <li><strong>{d.title}</strong> <span class="muted small">· {onWishlist(d) ? 'on your wishlist' : lib.label(d.locationId)}</span></li>
+      {/each}
+    </ul>
+    {#if !wish}<p class="muted small">Is this really another copy, or the same book scanned twice?</p>{/if}
+  {/if}
   {#snippet actions()}
-    <button onclick={cancelDup}>Same book, cancel</button>
-    <button class="btn-primary" onclick={confirmCopy}>Add another copy</button>
+    {#if wished}
+      <button onclick={cancelDup}>Cancel</button>
+      <button onclick={confirmCopy}>Add separately</button>
+      <button class="btn-primary" onclick={boughtWished}>🛍️ Bought it</button>
+    {:else}
+      <button onclick={cancelDup}>{wish ? 'Cancel' : 'Same book, cancel'}</button>
+      <button class="btn-primary" onclick={confirmCopy}>{wish ? 'Add to wishlist anyway' : 'Add another copy'}</button>
+    {/if}
   {/snippet}
 </Dialog>
 

@@ -36,7 +36,7 @@
   // ---- data
   const baseItems = $derived.by((): FieldItem[] => {
     void $cacheVersion;
-    const books = applyFilter($lib.books, filter, { locations: $lib.locations, today: todayIso() }).filter((b) => b.cover);
+    const books = applyFilter(lib.owned(), { ...filter, ownership: undefined }, { locations: $lib.locations, today: todayIso() }).filter((b) => b.cover);
     return books
       .map((book) => ({ book, analysis: cache.meta(book.cover)?.analysis, nice: cache.meta(book.cover)?.nice }))
       // Unknown (not yet cached) covers stay in; only covers known to be placeholders/odd are hidden.
@@ -62,7 +62,7 @@
   const layout = $derived(fieldLayout(items, order, shape, $lib.locations, 7, geometry));
   const period = $derived(layout.wrap);
   const byId = $derived(new Map(items.map((it) => [it.book.id, it])));
-  const hiddenCount = $derived($lib.books.filter((b) => b.cover).length - items.length);
+  const hiddenCount = $derived($lib && lib.owned().filter((b) => b.cover).length - items.length);
   const uncached = $derived(items.filter((it) => !cache.has(it.book.cover)).length);
 
   // ---- geometry (world units: a cover is 1 wide and 1.5 high; cells add a small gap)

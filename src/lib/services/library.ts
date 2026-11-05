@@ -1,4 +1,4 @@
-import { applyPatch, cleanList, createBook, findDuplicates } from '../domain/book';
+import { applyPatch, cleanList, createBook, findDuplicates, onWishlist } from '../domain/book';
 import { fold } from '../domain/query';
 import { newId } from '../domain/ids';
 import { bookCounts, canParent, childrenOf, descendantIds, labelOf, nextOrder, reorder } from '../domain/locations';
@@ -32,6 +32,8 @@ export class Library {
   private books = new Map<Id, Book>();
   private locations = new Map<Id, Location>();
   private countsCache?: Map<Id | null, number>;
+  private ownedCache?: Book[];
+  private wishlistCache?: Book[];
   private lastTime = 0;
   private lock: Promise<unknown> = Promise.resolve();
 
@@ -40,7 +42,19 @@ export class Library {
   }
 
   static async open(repo: Repository): Promise<Library> {
-    return new Library(repo, await repo.load());
+    const lib = new Library(repo, await repo.load());
+    await lib.migrate();
+    return lib;
+  }
+
+  /**
+   * Bring older data in line with current rules (idempotent, not undoable):
+   * - wishlist books have no room (earlier versions kept one, so they showed up in that room).
+   */
+  private async migrate() {
+    const now = this.now();
+    const fix = this.state.books.filter((b) => onWishlist(b) && (b.locationId !== null || b.lending || b.away));
+    if (fix.length) await this.commit({ putBooks: fix.map((b) => applyPatch(b, {}, now)) });
   }
 
   subscribe(fn: Listener): () => void {
@@ -67,8 +81,19 @@ export class Library {
     return labelOf(this.state.locations, id);
   }
 
+  /** Book counts per location: books you own only (the wishlist lives nowhere). */
   counts(): Map<Id | null, number> {
-    return (this.countsCache ??= bookCounts(this.state.locations, this.state.books));
+    return (this.countsCache ??= bookCounts(this.state.locations, this.owned()));
+  }
+
+  /** The library proper: every book you own. */
+  owned(): Book[] {
+    return (this.ownedCache ??= this.state.books.filter((b) => !onWishlist(b)));
+  }
+
+  /** Books you'd like to have. */
+  wishlist(): Book[] {
+    return (this.wishlistCache ??= this.state.books.filter(onWishlist));
   }
 
   duplicatesOf(candidate: { id?: Id; isbn10?: string; isbn13?: string }): Book[] {
@@ -233,7 +258,7 @@ export class Library {
     const now = this.now();
     const pairs = ids
       .map((id) => this.mustBook(id))
-      .filter((b) => b.locationId !== toId)
+      .filter((b) => b.locationId !== toId && !onWishlist(b)) // wishlist books live nowhere
       .map((b): [Book, Book] => [b, { ...b, locationId: toId, updatedAt: now }]);
     if (!pairs.length) return 0;
     const n = pairs.length;
@@ -522,6 +547,8 @@ export class Library {
     this.books = new Map(this.state.books.map((b) => [b.id, b]));
     this.locations = new Map(this.state.locations.map((l) => [l.id, l]));
     this.countsCache = undefined;
+    this.ownedCache = undefined;
+    this.wishlistCache = undefined;
   }
 }
 

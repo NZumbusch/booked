@@ -67,6 +67,19 @@
     await attempt(() => lib.moveBooks([id], moveTarget), `Moved to ${lib.label(moveTarget)}`, { undo: true });
   }
 
+  // ---- wishlist: "Bought it" puts it on a shelf and into the library
+  let buyOpen = $state(false);
+  function openBuy() {
+    moveTarget = $lib.settings.defaultLocationId ?? null;
+    buyOpen = true;
+  }
+  async function doBuy() {
+    buyOpen = false;
+    const where = moveTarget;
+    await attempt(() => lib.updateBook(id, { ownership: 'owned', locationId: where, purchasedOn: book?.purchasedOn ?? todayIso() }),
+      `In your library: ${lib.label(where)}`, { undo: true });
+  }
+
   let fetching = $state(false);
 
   // Inline notes editing
@@ -126,7 +139,10 @@
 
   async function doDelete() {
     const title = book?.title;
-    if (await attempt(() => lib.deleteBooks([id]).then(() => true), `Deleted “${title}”`, { undo: true })) navigate('/books');
+    const wish = book?.ownership === 'wishlist';
+    if (await attempt(() => lib.deleteBooks([id]).then(() => true), wish ? `Removed “${title}” from your wishlist` : `Deleted “${title}”`, { undo: true })) {
+      navigate(wish ? '/wishlist' : '/books');
+    }
   }
 
   const written = $derived.by(() => {
@@ -222,13 +238,26 @@
           {#each book.tags as tag}<a class="chip" href={filterLink({ tags: [tag] })}>#{tag}</a>{/each}
           {#each book.collections as c}<a class="chip" href={filterLink({ collections: [c] })}>▣ {c}</a>{/each}
         </div>
-        <div class="loc card">
-          <div class="stack tight">
-            <span class="muted small">Location</span>
-            <a href="#/books?loc={book.locationId ?? 'none'}" class="strong">{lib.label(book.locationId)}</a>
+        {#if book.ownership === 'wishlist'}
+          <div class="loc card wish">
+            <div class="stack tight">
+              <span class="muted small">Not in your library yet</span>
+              <a href="#/wishlist" class="strong">🎁 On your wishlist</a>
+            </div>
+            <div class="row">
+              <button class="btn-primary" onclick={openBuy}>🛍️ Bought it</button>
+              <button onclick={() => (deleteOpen = true)}>Remove</button>
+            </div>
           </div>
-          <button class="btn-primary" onclick={openMove}><Icon name="move" size={18} /> Move</button>
-        </div>
+        {:else}
+          <div class="loc card">
+            <div class="stack tight">
+              <span class="muted small">Location</span>
+              <a href="#/books?loc={book.locationId ?? 'none'}" class="strong">{lib.label(book.locationId)}</a>
+            </div>
+            <button class="btn-primary" onclick={openMove}><Icon name="move" size={18} /> Move</button>
+          </div>
+        {/if}
         <div class="row">
           <select class="status" value={book.status} aria-label="Reading status"
             onchange={(e) => quick(statusPatch(book!, e.currentTarget.value as ReadingStatus, todayIso()))}>
@@ -253,12 +282,12 @@
             <button class="btn-sm" class:queued={!!book.queuedAt} aria-pressed={!!book.queuedAt}
               onclick={() => quick({ queuedAt: book!.queuedAt ? undefined : new Date().toISOString() })}>{book.queuedAt ? '✓ Up next' : '＋ Up next'}</button>
           {/if}
-          {#if book.ownership === 'wishlist'}
-            <button class="btn-sm btn-primary" onclick={() => quick({ ownership: 'owned', purchasedOn: book.purchasedOn ?? todayIso() })}>🛍️ Bought it</button>
-          {:else if !book.lending}
-            <button class="btn-sm" onclick={() => { lendTo = ''; lendDue = ''; lendOpen = true; }}>🤝 Lend…</button>
+          {#if book.ownership !== 'wishlist'}
+            {#if !book.lending}
+              <button class="btn-sm" onclick={() => { lendTo = ''; lendDue = ''; lendOpen = true; }}>🤝 Lend…</button>
+            {/if}
+            <button class="btn-sm" onclick={addCopy}>＋ Another copy</button>
           {/if}
-          <button class="btn-sm" onclick={addCopy}>＋ Another copy</button>
         </div>
       </div>
     </section>
@@ -411,8 +440,17 @@
     </form>
   </Dialog>
 
+  <Dialog bind:open={buyOpen} title="Where does “{book.title}” go?">
+    <LocationPicker bind:value={moveTarget} locations={$lib.locations} />
+    {#snippet actions()}
+      <button onclick={() => (buyOpen = false)}>Cancel</button>
+      <button class="btn-primary" onclick={doBuy}>Put it here</button>
+    {/snippet}
+  </Dialog>
+
   <CoverPicker {book} bind:open={coverOpen} />
-<Confirm bind:open={deleteOpen} title="Delete book?" message="“{book.title}” will be removed from your library. You can undo this right after."
+<Confirm bind:open={deleteOpen} title={book.ownership === 'wishlist' ? 'Remove from wishlist?' : 'Delete book?'}
+    message="“{book.title}” will be removed from your {book.ownership === 'wishlist' ? 'wishlist' : 'library'}. You can undo this right after."
     onconfirm={doDelete} />
 {/if}
 
@@ -425,7 +463,7 @@
   .info { width: 100%; }
   .sub { margin: 0; }
   .authors { margin: 4px 0 0; font-size: 1.05rem; }
-  .loc { display: flex; justify-content: space-between; align-items: center; gap: 12px; text-align: left; }
+  .loc { display: flex; justify-content: space-between; align-items: center; gap: 12px; text-align: left; flex-wrap: wrap; }
   .tight { gap: 0; }
   .strong { font-weight: 600; text-decoration: none; }
   .status { width: auto; border-radius: 999px; }

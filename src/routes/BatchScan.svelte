@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { displayTitle, hasPlaceholderTitle, MANUAL_TAG, placeholderTitle } from '../lib/domain/book';
+  import { displayTitle, hasPlaceholderTitle, MANUAL_TAG, onWishlist, placeholderTitle, todayIso } from '../lib/domain/book';
   import { normalizeIsbn } from '../lib/domain/isbn';
   import { classifyScan } from '../lib/domain/scan';
   import type { Book, Id, ListPrice } from '../lib/domain/types';
@@ -22,6 +22,8 @@
     reason?: 'session' | 'library';
     /** Volume of a multi-volume work sharing this ISBN (asked when an ISBN is scanned again). */
     volume?: string;
+    /** It was on the wishlist and moved into the library (undo puts it back there instead of deleting it). */
+    fromWishlist?: boolean;
   }
 
   const lib = library();
@@ -74,7 +76,18 @@
 
   function scanned(isbn: string) {
     const inSession = items.filter((i) => i.isbn === isbn && i.state === 'added').length;
-    const decision = classifyScan(isbn, { inSession, inLibrary: lib.duplicatesOf({ isbn13: isbn }).length });
+    const known = lib.duplicatesOf({ isbn13: isbn });
+    const wished = known.find(onWishlist);
+    if (wished && !inSession && known.every(onWishlist)) {
+      // On the wishlist, and now it's on the shelf: it moves into the library (no second entry).
+      feedback('ok');
+      const item: Item = { n: ++n, isbn, state: 'added', bookId: wished.id, fromWishlist: true };
+      items.unshift(item);
+      lib.updateBook(wished.id, { ownership: 'owned', locationId: target, purchasedOn: wished.purchasedOn ?? todayIso() })
+        .catch((e) => { toast(e instanceof Error ? e.message : String(e)); update(item.n, { state: 'skipped' }); });
+      return;
+    }
+    const decision = classifyScan(isbn, { inSession, inLibrary: known.filter((b) => !onWishlist(b)).length });
     if (decision.action === 'confirm') {
       feedback('ask');
       // Already waiting for an answer about this ISBN: bring that prompt to the top instead of adding another.
@@ -133,7 +146,8 @@
   }
 
   async function undo(item: Item) {
-    if (item.bookId && book(item.bookId)) await lib.deleteBooks([item.bookId]);
+    if (item.fromWishlist && item.bookId && book(item.bookId)) await lib.updateBook(item.bookId, { ownership: 'wishlist', purchasedOn: undefined });
+    else if (item.bookId && book(item.bookId)) await lib.deleteBooks([item.bookId]);
     update(item.n, { state: 'undone' });
   }
 
@@ -158,6 +172,7 @@
     if (item.state === 'skipped') return 'Skipped';
     if (item.state === 'undone') return 'Removed';
     if (!b) return 'Adding…';
+    if (item.fromWishlist) return `From your wishlist, now in ${lib.label(b.locationId)}`;
     if (b.pendingLookup) return $fetching.has(b.id) ? 'Fetching details…' : 'Details pending (offline), retried automatically';
     if (hasPlaceholderTitle(b)) return 'Not found online. Take a photo of the cover, it’s on your list to enter by hand.';
     return 'Added';

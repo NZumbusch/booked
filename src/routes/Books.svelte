@@ -23,7 +23,14 @@
 
   // ---- URL state: filter + sort + view + group, so back/forward and saved filters just work
   const query = $derived($route.query);
-  const filter = $derived(filterFromQuery(query));
+  // The wishlist has its own page now: old links (saved filters, Stats) that asked for it go there.
+  $effect(() => {
+    if (query.own === 'wishlist') navigate('/wishlist', {}, true);
+  });
+  /** The library is what you own; the wishlist is kept apart. */
+  const owned = $derived($lib && lib.owned());
+  // Owned books only: an old "owned" filter (saved filters) is simply what the library shows now.
+  const filter = $derived({ ...filterFromQuery(query), ownership: undefined });
   const sort = $derived((query.sort as SortKey) in SORT_LABELS ? (query.sort as SortKey) : 'title');
   const dir = $derived<SortDir>(query.dir === 'desc' ? 'desc' : 'asc');
   const group = $derived<GroupBy>((query.group as GroupBy) in GROUP_LABELS ? (query.group as GroupBy) : 'none');
@@ -60,7 +67,7 @@
   });
 
   // ---- results
-  const results = $derived(sortBooks(applyFilter($lib.books, filter, { locations: $lib.locations, today: todayIso() }), sort, dir, (id) => lib.label(id)));
+  const results = $derived(sortBooks(applyFilter(owned, filter, { locations: $lib.locations, today: todayIso() }), sort, dir, (id) => lib.label(id)));
   const groups = $derived(groupBooks(results, group, $lib.locations));
   const chips = $derived(filterChips(filter, $lib.locations));
   const filterCount = $derived(chips.filter((c) => c.key !== 'q').length);
@@ -217,13 +224,13 @@
   {/if}
 
   <div class="spread">
-    <span class="muted small">{plural(results.length, 'book')}{results.length !== $lib.books.length ? ` of ${$lib.books.length.toLocaleString()}` : ''}</span>
+    <span class="muted small">{plural(results.length, 'book')}{results.length !== owned.length ? ` of ${owned.length.toLocaleString()}` : ''}</span>
     {#if selecting}
       <button class="btn-sm" onclick={selectAll}>{allSelected ? 'Select none' : `Select all ${results.length.toLocaleString()}`}</button>
     {/if}
   </div>
 
-  {#if $lib.books.length === 0}
+  {#if owned.length === 0}
     <div class="card empty">
       <span class="big">📚</span>
       <p>Your library is empty. Scan a barcode or add your first book by hand.</p>
@@ -304,7 +311,7 @@
   <BulkBar ids={selectedIds} ondone={stopSelect} />
 {/if}
 
-<FilterSheet bind:open={filtersOpen} {filter} books={$lib.books} locations={$lib.locations} onapply={setFilter} />
+<FilterSheet bind:open={filtersOpen} {filter} books={owned} locations={$lib.locations} onapply={setFilter} />
 
 <Dialog bind:open={saveOpen} title="Save this filter">
   <form class="row save" onsubmit={(e) => { e.preventDefault(); save(); }}>

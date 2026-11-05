@@ -98,8 +98,8 @@
   </section>
 
   <section class="card stack">
-    <h3>Where is it?</h3>
-    <LocationPicker bind:value={b.locationId} {locations} />
+    <h3>{b.ownership === 'wishlist' ? 'On your wishlist' : 'Where is it?'}</h3>
+    {#if b.ownership !== 'wishlist'}<LocationPicker bind:value={b.locationId} {locations} />{/if}
     <div class="grid">
       <label class="field">Status
         <select bind:value={b.status}>
