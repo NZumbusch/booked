@@ -20,6 +20,9 @@
   let tick = $state(0);
   let timer: ReturnType<typeof setTimeout> | undefined;
 
+  /** What the cache knew about this cover last time we looked (so unrelated cache updates cost nothing). */
+  let seen: string | undefined;
+
   /** Look in the cache again: a cover that wasn't saved yet may be now. */
   function refresh(url: string | undefined) {
     let cache;
@@ -28,6 +31,10 @@
     } catch {
       return; // e.g. in component tests without the app
     }
+    const m = cache.meta(url);
+    const sig = `${m?.at}|${m?.px}|${m?.tpx}|${m?.failedAt}`;
+    if (sig === seen) return; // another cover changed, not this one
+    seen = sig;
     broken = cache.isBroken(url);
     (async () => {
       // Grids and lists use the small saved image; the big view (a book's page) uses the large one,
@@ -42,6 +49,7 @@
       if (url !== book.cover) return;
       if (!u) {
         saved = false; // nothing readable after all: the network image it is
+        seen = undefined; // look again next time
         return;
       }
       if (u === local) return;
@@ -58,6 +66,7 @@
     tries = 0;
     broken = false;
     saved = false;
+    seen = undefined;
     clearTimeout(timer);
     if (isPhotoRef(url)) {
       // Your own photo, from the photo store on this device (it may still be on its way from Drive).
@@ -113,6 +122,7 @@
       const url = book.cover;
       local = undefined;
       saved = false;
+      seen = undefined;
       try {
         covers().dropUrl(url);
       } catch {
