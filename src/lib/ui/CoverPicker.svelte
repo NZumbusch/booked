@@ -6,7 +6,8 @@
   import { siblingLooks } from '../services/seriesCovers';
   import type { Book } from '../domain/types';
   import { alternativeCovers, type CoverOption } from '../metadata/covers';
-  import { attempt, covers, library, photoCover, toast } from '../stores/app';
+  import { attempt, coverFromLink, covers, library, photoCover, toast } from '../stores/app';
+  import { googleImagesUrl, pasteImage, rememberCoverSearch } from './sharedCover';
   import CoverStack from './CoverStack.svelte';
   import Dialog from './Dialog.svelte';
 
@@ -96,6 +97,17 @@
     await attempt(() => lib.updateBook(book.id, { cover }), message, { undo: true });
   }
 
+  /** An image copied in another app (long-press › Copy image), or a copied image address. */
+  async function paste() {
+    try {
+      const got = await pasteImage();
+      if (!got) return toast('Nothing to paste: long-press the image and choose “Copy image” first');
+      await use(typeof got === 'string' ? await coverFromLink(got) : await photoCover(got), 'Cover changed');
+    } catch (e) {
+      toast(e instanceof Error && e.message.includes('Share image') ? e.message : 'The clipboard couldn’t be read. Allow it, or share the image to Booked instead.');
+    }
+  }
+
   async function upload(e: Event & { currentTarget: HTMLInputElement }) {
     const file = e.currentTarget.files?.[0];
     e.currentTarget.value = '';
@@ -114,6 +126,15 @@
     <input type="file" accept="image/*" onchange={upload} />
   </label>
   <p class="muted small">Tip: photograph the cover straight on and fill the frame.</p>
+
+  <div class="row web">
+    <a class="btn" href={googleImagesUrl(book)} target="_blank" rel="noopener" onclick={() => rememberCoverSearch(book.id)}>🔎 Google Images</a>
+    {#if book.isbn13 || book.isbn10}
+      <a class="btn btn-sm" href={googleImagesUrl(book, 'isbn')} target="_blank" rel="noopener" onclick={() => rememberCoverSearch(book.id)}>by ISBN</a>
+    {/if}
+    <button class="btn-sm" onclick={paste}>📋 Paste image</button>
+  </div>
+  <p class="muted small">Found it? Long-press the image › <strong>Share</strong> › Booked; it becomes this book’s cover. (Or “Copy image”, then Paste image.)</p>
 
   {#if loading}
     <p class="muted">Looking for other editions…</p>
@@ -134,4 +155,5 @@
   .upload { position: relative; overflow: hidden; justify-self: start; }
   .upload input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
   p { margin: 0; }
+  .web { flex-wrap: wrap; gap: 8px; }
 </style>

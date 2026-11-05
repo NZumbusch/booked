@@ -355,6 +355,7 @@ Labels are snapshots, so renaming a room later doesn't rewrite history. Moving a
 
 Tap the cover on a book's page to see the covers of its other editions (Open Library and Google Books): your own edition first, then the same language.
 - The covers lie in loose piles. Tap one to pull it out and see it full size, swipe sideways to flip through, swipe down to put it back, and tap **Use this cover** to take it.
+- **Google Images** opens an image search for the book (by title, or by ISBN). Long-press the right picture › **Share** › **Booked** (Android, installed app) and it becomes that book's cover; or **Copy image** and tap **Paste image**. Booked remembers which book you were looking for (for an hour); otherwise it asks.
 - **Use my own photo** takes a picture (or picks one from your photos) and uses that instead.
   - Your photos are saved as real JPEG files (up to 1600 px) in their own store on the device; the book only keeps a short reference (`photo:<id>`, the id comes from the file's contents)
   - **Backups** include them (a backup file is complete on its own)

@@ -2,6 +2,7 @@ import { writable } from 'svelte/store';
 import { isOwnPhoto, PHOTO_PX } from '../domain/photos';
 import { fileToJpeg } from '../images';
 import { initPhotoUrls, photoUrl } from '../ui/photoUrls';
+import { loadsAsImage } from '../ui/sharedCover';
 import { booksKeyOf } from '../config';
 import { olCoverByIsbn, olCoverId, olEditionCoverIds } from '../metadata/openlibrary';
 import { gbByIsbn } from '../metadata/googlebooks';
@@ -116,6 +117,22 @@ export async function undoLast() {
 export async function photoCover(file: Blob): Promise<string> {
   const { data, type } = await fileToJpeg(file, PHOTO_PX);
   return library().addPhoto(data, type);
+}
+
+/**
+ * A cover from an image address (copied or shared from a web page): saved as your own photo when the
+ * site lets us read it (then it's on the device and syncs), otherwise used as the address itself.
+ */
+export async function coverFromLink(url: string): Promise<string> {
+  try {
+    const res = await fetch(url, { mode: 'cors', signal: AbortSignal.timeout?.(15_000) });
+    const blob = res.ok ? await res.blob() : undefined;
+    if (blob?.type.startsWith('image/')) return await photoCover(blob);
+  } catch {
+    // the site doesn't allow reading it from here: use the address as is
+  }
+  if (await loadsAsImage(url)) return url;
+  throw new Error('That link isn’t an image. Long-press the picture and choose “Share image” or “Copy image”.');
 }
 
 /** Put a book you don't own yet on the wishlist; details are filled in in the background. */
