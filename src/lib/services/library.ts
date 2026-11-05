@@ -526,15 +526,30 @@ export class Library {
     await this.commit({ ...action, pushUndo: undo, putTombstones });
   }
 
+  /**
+   * Apply a change: memory first (synchronously), then storage.
+   * Every action computes its result from the in-memory state without awaiting first, so updating
+   * memory right away means the next action (a background fill-in, another tap) always builds on this
+   * one. Before, memory changed only after the database write, so two writes to the same book in flight
+   * at once both started from the old state and the second silently undid the first.
+   * Storage writes run in the order they were started (IndexedDB queues them); if one fails, memory is
+   * reloaded from storage so it never shows something that wasn't saved.
+   */
   private async commit(changes: ChangeSet): Promise<void> {
-    await this.repo.commit(plain(changes));
+    const data = plain(changes);
     const books = new Map(this.books);
-    changes.deleteBookIds?.forEach((id) => books.delete(id));
-    changes.putBooks?.forEach((b) => books.set(b.id, b));
+    data.deleteBookIds?.forEach((id) => books.delete(id));
+    data.putBooks?.forEach((b) => books.set(b.id, b));
     const locations = new Map(this.locations);
-    changes.deleteLocationIds?.forEach((id) => locations.delete(id));
-    changes.putLocations?.forEach((l) => locations.set(l.id, l));
+    data.deleteLocationIds?.forEach((id) => locations.delete(id));
+    data.putLocations?.forEach((l) => locations.set(l.id, l));
     this.set({ ...this.state, books: [...books.values()], locations: [...locations.values()] });
+    try {
+      await this.repo.commit(data);
+    } catch (e) {
+      this.set(await this.repo.load());
+      throw e;
+    }
   }
 
   private set(state: LoadedState) {

@@ -397,3 +397,21 @@ describe('Library: wishlist', () => {
     await repo.destroy();
   });
 });
+
+describe('Library: writes at the same moment', () => {
+  it('keeps both when a background fill-in and an edit of the same book overlap', async () => {
+    const repo = new DexieRepository(`race-${Math.random()}`);
+    const lib = await Library.open(repo);
+    const b = await lib.addBook({ title: 'Race' });
+    // not awaited one after the other: both are in flight together
+    await Promise.all([
+      lib.enrichBook(b.id, { description: 'from the catalogue' }),
+      lib.updateBook(b.id, { rating: 5 }),
+      lib.enrichBook(b.id, { cover: 'https://c/x.jpg' })
+    ]);
+    expect(lib.book(b.id)).toMatchObject({ description: 'from the catalogue', rating: 5, cover: 'https://c/x.jpg' });
+    const reopened = await Library.open(repo);
+    expect(reopened.book(b.id)).toMatchObject({ description: 'from the catalogue', rating: 5, cover: 'https://c/x.jpg' });
+    await repo.destroy();
+  });
+});
