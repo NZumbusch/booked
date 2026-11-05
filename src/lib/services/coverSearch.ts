@@ -1,3 +1,4 @@
+import { isOwnPhoto } from '../domain/photos';
 import type { Book } from '../domain/types';
 import { dnbByIsbn } from '../metadata/dnb';
 import type { Fetcher } from '../metadata/http';
@@ -63,7 +64,7 @@ export async function fillMissingSeries(lib: Library, opts: CoverSearchOptions, 
 
 /** Books worth searching a cover for: none at all, or a cover known to be unusable. */
 export function booksWithoutCover(books: Book[], isBroken?: (cover: string) => boolean): Book[] {
-  return books.filter((b) => !b.cover || (!b.cover.startsWith('data:') && !!isBroken?.(b.cover)));
+  return books.filter((b) => !b.cover || (!isOwnPhoto(b.cover) && !!isBroken?.(b.cover)));
 }
 
 /**

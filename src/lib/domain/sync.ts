@@ -1,3 +1,4 @@
+import { photoIdsIn, type PhotoFile } from './photos';
 import type { Book, Id, Location, MoveRecord, Timestamp } from './types';
 
 /** A deleted record, remembered so the deletion wins over older copies on other devices. */
@@ -13,6 +14,11 @@ export interface SyncData {
   locations: Location[];
   moves: MoveRecord[];
   deleted: Tombstone[];
+  /**
+   * Own cover photos, only where the target can't hold them separately (shared places). Google Drive
+   * keeps each photo as its own file instead (see sync/photos), so its library file stays small.
+   */
+  photos?: PhotoFile[];
 }
 
 export interface MergeResult {
@@ -82,15 +88,23 @@ export function mergeSyncData(local: SyncData, remote: SyncData, now: Timestamp)
     moves: byIdSort(moves),
     deleted: [...tomb.values()].sort((a, b) => (a.id < b.id ? -1 : 1))
   };
-  const norm = (d: SyncData): SyncData => ({
+  // Photos travelling inline (shared places): every photo a merged book still uses, from either side.
+  if (local.photos || remote.photos) {
+    const used = photoIdsIn(books);
+    const byId = new Map([...(remote.photos ?? []), ...(local.photos ?? [])].map((p) => [p.id, p]));
+    merged.photos = [...byId.values()].filter((p) => used.has(p.id)).sort((a, b) => (a.id < b.id ? -1 : 1));
+  }
+  const photoKeys = (d: SyncData) => (d.photos ?? []).map((p) => p.id).sort();
+  const norm = (d: SyncData) => ({
     books: byIdSort(d.books), locations: byIdSort(d.locations), moves: byIdSort(d.moves),
-    deleted: [...d.deleted].sort((a, b) => (a.id < b.id ? -1 : 1))
+    deleted: [...d.deleted].sort((a, b) => (a.id < b.id ? -1 : 1)),
+    photos: photoKeys(d)
   });
-  const dataOnly = (d: SyncData) => ({ books: d.books, locations: d.locations, moves: d.moves });
+  const dataOnly = (d: { books: Book[]; locations: Location[]; moves: MoveRecord[] }) => ({ books: d.books, locations: d.locations, moves: d.moves });
   return {
     merged,
     localChanged: !same(dataOnly(norm(local)), dataOnly(merged)),
-    remoteChanged: !same(norm(remote), merged)
+    remoteChanged: !same(norm(remote), { ...merged, photos: photoKeys(merged) })
   };
 }
 

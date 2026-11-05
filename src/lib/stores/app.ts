@@ -1,4 +1,7 @@
 import { writable } from 'svelte/store';
+import { isOwnPhoto, PHOTO_PX } from '../domain/photos';
+import { fileToJpeg } from '../images';
+import { initPhotoUrls, photoUrl } from '../ui/photoUrls';
 import { booksKeyOf } from '../config';
 import { olCoverByIsbn, olCoverId, olEditionCoverIds } from '../metadata/openlibrary';
 import { gbByIsbn } from '../metadata/googlebooks';
@@ -64,7 +67,8 @@ export async function openLibrary(): Promise<Library> {
     syncInstance = new SyncController(instance);
     spacesInstance = new SpacesController(instance);
     knowledgeInstance = new KnowledgeStore(instance);
-    coverInstance = new CoverCache(instance, browserProcessor);
+    initPhotoUrls(instance);
+    coverInstance = new CoverCache(instance, browserProcessor, undefined, undefined, photoUrl);
     startCoverCache(instance, coverInstance);
   }
   // Ask the browser not to evict our data under storage pressure.
@@ -106,6 +110,12 @@ export async function attempt<T>(fn: () => Promise<T>, success?: string, opts: {
 export async function undoLast() {
   const label = await library().undo();
   toast(label ? `Undone: ${label}` : 'Nothing to undo');
+}
+
+/** A photo you took or picked, saved as an own cover; returns what to put in the book's `cover`. */
+export async function photoCover(file: Blob): Promise<string> {
+  const { data, type } = await fileToJpeg(file, PHOTO_PX);
+  return library().addPhoto(data, type);
 }
 
 /** Put a book you don't own yet on the wishlist; details are filled in in the background. */
@@ -157,7 +167,7 @@ const repairTried = new Set<string>();
 async function repairCovers(lib: Library, cache: CoverCache) {
   await migrateIsbnCovers(lib);
   await recheckEditionCovers(lib);
-  const broken = lib.state.books.filter((b) => b.cover && !b.cover.startsWith('data:') && cache.isBroken(b.cover) && !repairTried.has(b.id + b.cover));
+  const broken = lib.state.books.filter((b) => b.cover && !isOwnPhoto(b.cover) && cache.isBroken(b.cover) && !repairTried.has(b.id + b.cover));
   for (const b of broken.slice(0, 5)) {
     repairTried.add(b.id + b.cover);
     try {

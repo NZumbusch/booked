@@ -1,3 +1,4 @@
+import { photoIdsIn } from '../domain/photos';
 import { get, writable, type Readable } from 'svelte/store';
 import { helperUrlOf } from '../config';
 import { descendantIds } from '../domain/locations';
@@ -117,7 +118,8 @@ export class SpacesController {
     const helperUrl = helperUrlOf(this.lib.state.settings);
     if (!helperUrl) throw new Error('Sharing needs the Cloudflare helper. Set it up under Settings › Sync › Stay signed in (see README).');
     const key = generateKey();
-    const data = exportSpace(await this.lib.exportSyncData(), rootLocationId, EMPTY_BOOKKEEPING);
+    const shared = exportSpace(await this.lib.exportSyncData(), rootLocationId, EMPTY_BOOKKEEPING);
+    const data = { ...shared, photos: await this.lib.photoFiles(photoIdsIn(shared.books)) };
     const { id, adminToken } = await SpaceTarget.create(helperUrl, data, key);
     const cfg: SpaceConfig = {
       id, key, helperUrl, adminToken, rootLocationId, role: 'owner', name: this.lib.label(rootLocationId), lastSyncAt: new Date().toISOString()

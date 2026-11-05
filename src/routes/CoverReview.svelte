@@ -6,12 +6,11 @@
   import { facet } from '../lib/domain/filters';
   import type { Book, Id } from '../lib/domain/types';
   import { plural } from '../lib/format';
-  import { fileToCoverDataUrl } from '../lib/images';
   import { alternativeCovers, isbnCovers, type CoverOption } from '../lib/metadata/covers';
   import { dnbByIsbn } from '../lib/metadata/dnb';
   import { reviewQueue, type ReviewScope } from '../lib/services/coverReview';
   import { groupOf, LOOK_LIMIT, siblingLooks } from '../lib/services/seriesCovers';
-  import { covers, library, toast } from '../lib/stores/app';
+  import { covers, library, photoCover, toast } from '../lib/stores/app';
   import Cover from '../lib/ui/Cover.svelte';
   import Icon from '../lib/ui/Icon.svelte';
 
@@ -189,7 +188,7 @@
     e.currentTarget.value = '';
     if (!file) return;
     try {
-      const url = await fileToCoverDataUrl(file, 900);
+      const url = await photoCover(file);
       options = [{ url, thumb: url, label: 'Your photo', source: 'openlibrary', sameEdition: true }, ...options];
       selected = url;
       picked = true;

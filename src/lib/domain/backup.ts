@@ -51,6 +51,7 @@ export function parseBackup(text: string): Snapshot {
     books: data.books,
     locations: data.locations,
     moves: data.moves ?? [],
-    settings: { ...DEFAULT_SETTINGS, ...data.settings }
+    settings: { ...DEFAULT_SETTINGS, ...data.settings },
+    photos: Array.isArray(data.photos) ? data.photos.filter((p) => p && typeof p.id === 'string' && typeof p.data === 'string') : undefined
   };
 }

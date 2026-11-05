@@ -1,5 +1,8 @@
 import { applyPatch, cleanList, createBook, findDuplicates, onWishlist } from '../domain/book';
 import { fold } from '../domain/query';
+import {
+  base64ToBytes, bytesToBase64, decodeDataUrl, isInlinePhoto, photoIdFor, photoRef, type PhotoFile, type StoredPhoto
+} from '../domain/photos';
 import { newId } from '../domain/ids';
 import { bookCounts, canParent, childrenOf, descendantIds, labelOf, nextOrder, reorder } from '../domain/locations';
 import type {
@@ -55,6 +58,85 @@ export class Library {
     const now = this.now();
     const fix = this.state.books.filter((b) => onWishlist(b) && (b.locationId !== null || b.lending || b.away));
     if (fix.length) await this.commit({ putBooks: fix.map((b) => applyPatch(b, {}, now)) });
+    await this.migratePhotos();
+  }
+
+  // ------------------------------------------------------------- own cover photos
+
+  /** Save a photo file; returns the reference to put in a book's `cover`. */
+  async addPhoto(data: ArrayBuffer, type = 'image/jpeg'): Promise<string> {
+    const id = await photoIdFor(data);
+    if (!(await this.repo.getPhoto(id))) await this.repo.putPhotos([{ id, type, data, at: new Date().toISOString() }]);
+    return photoRef(id);
+  }
+
+  /** A photo file with a known id (downloaded from another device's upload). */
+  async putPhoto(id: string, data: ArrayBuffer, type: string): Promise<void> {
+    await this.repo.putPhotos([{ id, type, data, at: new Date().toISOString() }]);
+    this.photoListeners.forEach((fn) => fn(id));
+  }
+
+  private photoListeners = new Set<(id: string) => void>();
+  /** Called when a photo arrives that books may be waiting for. */
+  onPhoto(fn: (id: string) => void): () => void {
+    this.photoListeners.add(fn);
+    return () => this.photoListeners.delete(fn);
+  }
+
+  photo(id: string): Promise<StoredPhoto | undefined> {
+    return this.repo.getPhoto(id);
+  }
+
+  photoIds(): Promise<string[]> {
+    return this.repo.photoIds();
+  }
+
+  /** Photos received from elsewhere (another device, a shared place). */
+  async storePhotos(files: PhotoFile[]): Promise<void> {
+    const have = new Set(await this.repo.photoIds());
+    const at = new Date().toISOString();
+    const fresh = files.filter((f) => !have.has(f.id));
+    await this.repo.putPhotos(fresh.map((f) => ({ id: f.id, type: f.type, data: base64ToBytes(f.data), at })));
+    fresh.forEach((f) => this.photoListeners.forEach((fn) => fn(f.id)));
+  }
+
+  /** These photos as base64, for JSON transports. */
+  async photoFiles(ids: Iterable<string>): Promise<PhotoFile[]> {
+    const out: PhotoFile[] = [];
+    for (const id of ids) {
+      const p = await this.repo.getPhoto(id);
+      if (p) out.push({ id: p.id, type: p.type, data: bytesToBase64(p.data) });
+    }
+    return out;
+  }
+
+  private migratingPhotos: Promise<void> | undefined;
+
+  /**
+   * Photos stored inside books (`data:` covers, from earlier versions, old backups, older devices or
+   * undo) move into the photo store; the book keeps a short reference. Not undoable, and the book's
+   * edit time is kept, so this never looks like an edit to sync (every device converts on its own).
+   */
+  migratePhotos(): Promise<void> {
+    this.migratingPhotos ??= (async () => {
+      // (cleared below, on the outer promise: a `finally` in here could run before the assignment)
+      {
+        const todo = this.state.books.filter((b) => isInlinePhoto(b.cover));
+        if (!todo.length) return;
+        const put: Book[] = [];
+        for (const b of todo) {
+          const file = decodeDataUrl(b.cover!);
+          if (!file) continue;
+          const ref = await this.addPhoto(file.data, file.type);
+          const current = this.books.get(b.id);
+          if (current && current.cover === b.cover) put.push({ ...current, cover: ref });
+        }
+        if (put.length) await this.commit({ putBooks: put });
+      }
+    })().finally(() => {
+      this.migratingPhotos = undefined;
+    });
+    return this.migratingPhotos;
   }
 
   subscribe(fn: Listener): () => void {
@@ -556,6 +638,8 @@ export class Library {
     this.state = state;
     this.index();
     this.listeners.forEach((fn) => fn(state));
+    // A photo inside a book arrived (sync from an older device, a restore, undo): move it to the photo store.
+    if (!this.migratingPhotos && state.books.some((b) => isInlinePhoto(b.cover))) queueMicrotask(() => void this.migratePhotos().catch(() => {}));
   }
 
   private index() {

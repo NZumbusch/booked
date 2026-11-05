@@ -1,3 +1,4 @@
+import type { PhotoFile } from './photos';
 /**
  * Booked data schema (v1).
  *
@@ -270,6 +271,9 @@ export interface Snapshot {
   locations: Location[];
   moves: MoveRecord[];
   settings: Settings;
+  /** Your own cover photos used by the books (v2+; in v1 they were inside the books' `cover`). */
+  photos?: PhotoFile[];
 }
 
-export const SCHEMA_VERSION = 1;
+/** v2: own cover photos in `photos`, referenced from books as `photo:<id>`. */
+export const SCHEMA_VERSION = 2;

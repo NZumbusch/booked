@@ -2,7 +2,7 @@
   import { splitList } from '../domain/book';
   import type { Book, BookDraft, BookFormat, Location, ReadingStatus } from '../domain/types';
   import { FORMAT_LABEL, STATUS_LABEL } from '../format';
-  import { fileToCoverDataUrl } from '../images';
+  import { photoCover } from '../stores/app';
   import Cover from './Cover.svelte';
   import LocationPicker from './LocationPicker.svelte';
   import Rating from './Rating.svelte';
@@ -68,7 +68,7 @@
 
   async function upload(e: Event) {
     const file = (e.currentTarget as HTMLInputElement).files?.[0];
-    if (file) b.cover = await fileToCoverDataUrl(file);
+    if (file) b.cover = await photoCover(file);
   }
 </script>
 

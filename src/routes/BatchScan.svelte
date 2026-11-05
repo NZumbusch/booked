@@ -4,9 +4,8 @@
   import { classifyScan } from '../lib/domain/scan';
   import type { Book, Id, ListPrice } from '../lib/domain/types';
   import { plural } from '../lib/format';
-  import { fileToCoverDataUrl } from '../lib/images';
   import { feedback } from '../lib/scanner/camera';
-  import { enricher, library, toast } from '../lib/stores/app';
+  import { enricher, library, photoCover, toast } from '../lib/stores/app';
   import Cover from '../lib/ui/Cover.svelte';
   import CoverPicker from '../lib/ui/CoverPicker.svelte';
   import Icon from '../lib/ui/Icon.svelte';
@@ -65,7 +64,7 @@
     e.currentTarget.value = '';
     if (!file) return;
     try {
-      await lib.enrichBook(b.id, { cover: await fileToCoverDataUrl(file, 900) });
+      await lib.enrichBook(b.id, { cover: await photoCover(file) });
       toast('Photo saved. It’s on your “enter manually” list.');
     } catch {
       toast('That image couldn’t be read');

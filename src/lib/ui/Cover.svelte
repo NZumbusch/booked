@@ -5,6 +5,8 @@
   import { isCoverShape } from '../covers/colors';
   import { covers } from '../stores/app';
   import { coverRetry } from './coverRetry';
+  import { isOwnPhoto, isPhotoRef } from '../domain/photos';
+  import { photoArrived, photoUrl } from './photoUrls';
 
   let { book, size = 'md' }: { book: Pick<Book, 'title' | 'authors' | 'cover'>; size?: 'sm' | 'md' | 'lg' } = $props();
   let failed = $state(false);
@@ -57,6 +59,14 @@
     broken = false;
     saved = false;
     clearTimeout(timer);
+    if (isPhotoRef(url)) {
+      // Your own photo, from the photo store on this device (it may still be on its way from Drive).
+      return photoArrived.subscribe(() => {
+        photoUrl(url).then((u) => {
+          if (u && url === book.cover) local = u;
+        });
+      });
+    }
     let cache;
     try {
       cache = covers();
@@ -81,19 +91,23 @@
       clearTimeout(timer);
     };
   });
-  const src = $derived(broken ? undefined : (local ?? (book.cover && !saved ? withRetry(book.cover, tick) : undefined)));
+  const src = $derived(broken ? undefined : (local ?? (book.cover && !saved && !isPhotoRef(book.cover) ? withRetry(book.cover, tick) : undefined)));
 
   /** A different address makes the browser load the image again instead of reusing a failed one. */
   function withRetry(url: string, n: number): string {
-    if (!n || url.startsWith('data:')) return url;
+    if (!n || isOwnPhoto(url)) return url;
     return url + (url.includes('?') ? '&' : '?') + `r=${n}`;
   }
   /** A wide title-page scan or similar isn't a cover: show the title instead of a zoomed-in crop. */
   function onLoad(e: Event) {
     const img = e.currentTarget as HTMLImageElement;
-    if (!book.cover?.startsWith('data:') && !isCoverShape(img.naturalWidth, img.naturalHeight)) failed = true;
+    if (!isOwnPhoto(book.cover) && !isCoverShape(img.naturalWidth, img.naturalHeight)) failed = true;
   }
   function onError() {
+    if (isPhotoRef(book.cover)) {
+      failed = true; // a damaged photo file: show the title
+      return;
+    }
     if (local) {
       // The saved copy can't be shown (its temporary address was released): make a fresh one, else use the network image.
       const url = book.cover;

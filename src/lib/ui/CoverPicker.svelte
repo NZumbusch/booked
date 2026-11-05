@@ -5,9 +5,8 @@
   import { dnbByIsbn } from '../metadata/dnb';
   import { siblingLooks } from '../services/seriesCovers';
   import type { Book } from '../domain/types';
-  import { fileToCoverDataUrl } from '../images';
   import { alternativeCovers, type CoverOption } from '../metadata/covers';
-  import { attempt, covers, library, toast } from '../stores/app';
+  import { attempt, covers, library, photoCover, toast } from '../stores/app';
   import CoverStack from './CoverStack.svelte';
   import Dialog from './Dialog.svelte';
 
@@ -102,7 +101,7 @@
     e.currentTarget.value = '';
     if (!file) return;
     try {
-      await use(await fileToCoverDataUrl(file, 900), 'Your photo is now the cover');
+      await use(await photoCover(file), 'Your photo is now the cover');
     } catch {
       toast('That image couldn’t be read');
     }

@@ -2,6 +2,7 @@ import Dexie, { type Table } from 'dexie';
 import { helperUrlOf } from '../config';
 import { writable, type Readable } from 'svelte/store';
 import type { Book } from '../domain/types';
+import { isInlinePhoto, isOwnPhoto, isPhotoRef } from '../domain/photos';
 import type { Library } from '../services/library';
 import { analyzePixels, isCoverShape, isNiceCover, looksLikePlaceholder, type CoverAnalysis } from './colors';
 import { currentConnection, downloadDecision, type CacheMode, type ConnectionInfo } from './policy';
@@ -198,7 +199,9 @@ export class CoverCache {
     private lib: Library,
     private process: Processor,
     private connection: () => ConnectionInfo | undefined = currentConnection,
-    dbName = 'booked-covers'
+    dbName = 'booked-covers',
+    /** Where an own photo (`photo:<id>`) can be read from on this device; undefined = not here (yet). */
+    private resolve: (url: string) => Promise<string | undefined> = async (u) => u
   ) {
     this.db = new CoverDb(dbName);
     this.loaded = this.db.meta.toArray().then((all) => {
@@ -331,7 +334,7 @@ export class CoverCache {
 
   /** The source gave us nothing usable: only a "not available" tile, or an image that isn't book-shaped (a title-page scan…). */
   isBroken(url: string | undefined): boolean {
-    const e = url && !url.startsWith('data:') ? this.index.get(url) : undefined;
+    const e = url && !isOwnPhoto(url) ? this.index.get(url) : undefined;
     return !!e && ((!e.px && !!e.placeholder) || (!!e.px && !isCoverShape(e.w ?? 0, e.h ?? 0)));
   }
 
@@ -348,7 +351,7 @@ export class CoverCache {
     let noCover = 0, own = 0;
     for (const b of books) {
       if (!b.cover) noCover++;
-      else if (b.cover.startsWith('data:')) own++;
+      else if (isOwnPhoto(b.cover)) own++;
       else titles.set(b.cover, [...(titles.get(b.cover) ?? []), b.title]);
     }
     const r: CoverReport = { books: books.length, noCover, ownPhotos: own, urls: titles.size, saved: 0, large: 0, notYet: 0, failed: 0, blank: 0, oddShape: 0, bytes: 0, items: [] };
@@ -471,7 +474,7 @@ export class CoverCache {
    * is offline or on data saver, or it failed recently.
    */
   warm(url: string | undefined): void {
-    if (!url || url.startsWith('data:') || this.has(url) || this.warming.has(url) || this.mode === 'off') return;
+    if (!url || isInlinePhoto(url) || this.has(url) || this.warming.has(url) || this.mode === 'off') return;
     if (typeof navigator !== 'undefined' && !navigator.onLine) return;
     if (this.connection()?.saveData) return;
     const e = this.index.get(url);
@@ -498,7 +501,9 @@ export class CoverCache {
     if (this.has(url)) return;
     const proxy = this.lib.state.settings.covers?.helper === 'off' ? undefined : helperUrlOf(this.lib.state.settings);
     try {
-      await this.save(url, await this.process({ url, size: this.size, want: 'thumb', proxy }), undefined);
+      const src = await this.sourceOf(url);
+      if (!src) return;
+      await this.save(url, await this.process({ url: src, size: this.size, want: 'thumb', proxy }), undefined);
     } catch (e) {
       await this.recordFailure(url, e);
     }
@@ -509,6 +514,11 @@ export class CoverCache {
   private smallAllowed(): boolean {
     const online = typeof navigator === 'undefined' || navigator.onLine;
     return online && this.mode !== 'off' && !this.connection()?.saveData;
+  }
+
+  /** The address to read a cover from: own photos come from the photo store. */
+  private async sourceOf(url: string): Promise<string | undefined> {
+    return isPhotoRef(url) ? this.resolve(url) : url;
   }
 
   private allowed(force: boolean | 'mobile'): boolean {
@@ -535,7 +545,7 @@ export class CoverCache {
         // Large images follow the Wi-Fi setting; the small grid image (a few KB) comes on any connection,
         // so covers show up offline even where the connection type can't be told (iPhone) or on mobile data.
         let thumbOnly = false;
-        if (kind === 'download' && !this.allowed(force)) {
+        if (kind === 'download' && !isOwnPhoto(url) && !this.allowed(force)) {
           if (this.has(url) || !this.smallAllowed()) continue;
           thumbOnly = true;
         }
@@ -543,7 +553,9 @@ export class CoverCache {
         const local = kind === 'shrink' || kind === 'thumb';
         try {
           const want = this.fullMode === 'all' && kind !== 'thumb' && !thumbOnly ? 'full' : 'thumb';
-          const p = await this.process({ url, size: this.size, want, proxy, stored: local ? prev?.data : undefined, storedType: prev?.type });
+          const src = local ? url : await this.sourceOf(url);
+          if (!src) continue; // an own photo that hasn't arrived on this device yet
+          const p = await this.process({ url: src, size: this.size, want, proxy, stored: local ? prev?.data : undefined, storedType: prev?.type });
           await this.save(url, p, kind === 'download' ? undefined : prev);
         } catch (e) {
           await this.recordFailure(url, e);
@@ -588,7 +600,7 @@ export class CoverCache {
    */
   ensureFull(url: string | undefined): Promise<void> {
     const known = url ? this.index.get(url) : undefined;
-    if (!url || url.startsWith('data:') || known?.px || this.fullFailed.has(url) || (known && this.fullWaiting(known, Date.now()))) return Promise.resolve();
+    if (!url || isOwnPhoto(url) || known?.px || this.fullFailed.has(url) || (known && this.fullWaiting(known, Date.now()))) return Promise.resolve();
     if (this.mode === 'off' || (typeof navigator !== 'undefined' && !navigator.onLine)) return Promise.resolve();
     const running = this.fullJobs.get(url);
     if (running) return running;
@@ -597,7 +609,9 @@ export class CoverCache {
       const prev = await this.db.covers.get(url);
       const proxy = this.lib.state.settings.covers?.helper === 'off' ? undefined : helperUrlOf(this.lib.state.settings);
       try {
-        const p = await this.process({ url, size: this.size, want: 'full', proxy });
+        const src = await this.sourceOf(url);
+        if (!src) return;
+        const p = await this.process({ url: src, size: this.size, want: 'full', proxy });
         await this.save(url, p, prev);
         this.publish();
         this.version.update((v) => v + 1);
@@ -670,6 +684,9 @@ export class CoverCache {
 
 // ------------------------------------------------------------- browser image processing
 
+/** An image already on this device (own photo), not something to download. */
+const isLocalUrl = (url: string) => url.startsWith('data:') || url.startsWith('blob:');
+
 /** The source answered with an error status. */
 export class HttpError extends Error {
   constructor(public status: number) {
@@ -726,7 +743,7 @@ export const browserProcessor: Processor = async ({ url, size, want, proxy, stor
   for (const candidate of candidates) {
     try {
       const done = await processBlob(await fetchDirect(candidate), size, want);
-      if (looksLikePlaceholder(done.analysis) && !url.startsWith('data:')) {
+      if (looksLikePlaceholder(done.analysis) && !isLocalUrl(url)) {
         last = new PlaceholderError();
         continue; // try the smaller rendition before giving up
       }
@@ -736,7 +753,7 @@ export const browserProcessor: Processor = async ({ url, size, want, proxy, stor
     }
   }
   // 2. The source doesn't allow that: the helper passes on the small stored image, once (never the large one).
-  if (proxy && !url.startsWith('data:') && !(last instanceof PlaceholderError)) {
+  if (proxy && !isLocalUrl(url) && !(last instanceof PlaceholderError)) {
     const done = await processBlob(await fetchViaHelper(url, proxy), size, want);
     if (looksLikePlaceholder(done.analysis)) throw new PlaceholderError();
     return done;

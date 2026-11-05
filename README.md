@@ -254,9 +254,9 @@ The writing place uses the best available evidence, in this order:
 The book page says which of these was used, and the "?" links to the Wikidata record.
 A field you edit by hand loses its source marker.
 
-## Data schema (v1)
+## Data schema (v2)
 
-All records are plain JSON. A backup is `{ app, schemaVersion, books, locations, moves, settings }`.
+All records are plain JSON. A backup is `{ app, schemaVersion, books, locations, moves, settings, photos }` (schema v2: own cover photos in `photos` as base64, referenced from books as `photo:<id>`).
 
 **Location**: `{ id, kind: 'place'|'room'|'shelf', name, parentId, order, geo?, createdAt, updatedAt }`.
 A place has no parent, a room's parent is a place, and a shelf's parent is a room. Shelves are optional and stay out of the way: the shelf picker only appears once a room has shelves.
@@ -356,6 +356,11 @@ Labels are snapshots, so renaming a room later doesn't rewrite history. Moving a
 Tap the cover on a book's page to see the covers of its other editions (Open Library and Google Books): your own edition first, then the same language.
 - The covers lie in loose piles. Tap one to pull it out and see it full size, swipe sideways to flip through, swipe down to put it back, and tap **Use this cover** to take it.
 - **Use my own photo** takes a picture (or picks one from your photos) and uses that instead.
+  - Your photos are saved as real JPEG files (up to 1600 px) in their own store on the device; the book only keeps a short reference (`photo:<id>`, the id comes from the file's contents)
+  - **Backups** include them (a backup file is complete on its own)
+  - **Google Drive sync** uploads each photo once as its own file in Booked's hidden app folder, and other devices download it once; the library file itself stays small
+  - **Shared places** carry the photos of their books inside the encrypted shared copy
+  - Photos stored inside books by earlier versions (and in older backups) are converted automatically
 - Changing a cover can be undone right away.
 
 ### Covers on this device
