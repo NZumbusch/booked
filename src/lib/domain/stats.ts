@@ -16,6 +16,8 @@ export interface LibraryStats {
   books: number;
   owned: number;
   wishlist: number;
+  /** Borrowed books on your shelves (not counted as owned or in the collection value). */
+  borrowed: number;
   copies: number;
   pages: number;
   lent: number;
@@ -94,7 +96,8 @@ export function computeStats(books: Book[], locations: Location[], today: IsoDat
   return {
     books: books.length,
     owned: owned.length,
-    wishlist: books.length - owned.length,
+    wishlist: books.filter((b) => b.ownership === 'wishlist').length,
+    borrowed: books.filter((b) => b.ownership === 'borrowed').length,
     copies: owned.reduce((n, b) => n + (b.copies || 1), 0),
     pages: owned.reduce((n, b) => n + (b.pageCount ?? 0), 0),
     lent: owned.filter((b) => b.lending).length,

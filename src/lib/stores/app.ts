@@ -3,6 +3,7 @@ import { isOwnPhoto, PHOTO_PX } from '../domain/photos';
 import { fileToJpeg } from '../images';
 import { initPhotoUrls, photoUrl } from '../ui/photoUrls';
 import { loadsAsImage } from '../ui/sharedCover';
+import { checkDueNotice } from '../ui/dueReminders';
 import { booksKeyOf } from '../config';
 import { olCoverByIsbn, olCoverId, olEditionCoverIds } from '../metadata/openlibrary';
 import { gbByIsbn } from '../metadata/googlebooks';
@@ -71,6 +72,10 @@ export async function openLibrary(): Promise<Library> {
     initPhotoUrls(instance);
     coverInstance = new CoverCache(instance, browserProcessor, undefined, undefined, photoUrl);
     startCoverCache(instance, coverInstance);
+    // Borrowed books due soon: one notification a day, when the app opens or comes back to the front.
+    const lib = instance;
+    void checkDueNotice(lib);
+    document.addEventListener('visibilitychange', () => document.visibilityState === 'visible' && void checkDueNotice(lib));
   }
   // Ask the browser not to evict our data under storage pressure.
   navigator.storage?.persist?.().catch(() => {});

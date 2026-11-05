@@ -19,6 +19,11 @@ All data stays on your device (IndexedDB). The app needs no backend and no API k
 - **Know where everything is**
   - Place › room (› optional shelf), with counts at every level
   - Move single books, a selection, or a whole room. Every move goes into the book's history
+- **Borrowed books** (from a library or a friend)
+  - Lending › **＋ Borrowed book**: scan or type it, set where it's from; due back after your usual loan period (4 weeks, changeable)
+  - They sit in your library and rooms with a "back 03.12." badge, but don't count as owned or in the collection value
+  - Reminders: a banner on Home and the Lending badge (due in 3 days, then overdue), a notification when you open Booked (once a day, if allowed), and **📅 Calendar** adds an event with an alarm to your phone's calendar
+  - **Given back**: remove it, keep it on your wishlist, or keep it because you bought it; **Extend** moves the due date
 - **Find and organise**
   - Search plus combinable filters as chips, which you can save
   - Grid or list, sorting and grouping

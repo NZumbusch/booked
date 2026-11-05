@@ -1,6 +1,8 @@
 <script lang="ts">
   import { filterToQuery, type BookFilter } from '../lib/domain/filters';
   import { borrowers, displayTitle, copyDraft, fillMissing, isOverdue, lendingFrom, todayIso } from '../lib/domain/book';
+  import { addDays, DEFAULT_LOAN_DAYS, dueOf, dueText, lenders } from '../lib/domain/borrowing';
+  import { addReturnToCalendar, enableDueNotifications, notificationsOn, notificationsSupported } from '../lib/ui/dueReminders';
   import type { BookDraft, MoveRecord, PlaceBasis, ReadingStatus } from '../lib/domain/types';
   import { lookupIsbn, searchBooks, lookupCandidate } from '../lib/metadata/lookup';
   import { FORMAT_LABEL, STATUS_LABEL, formatDate, formatPrice, languageName } from '../lib/format';
@@ -65,6 +67,38 @@
   async function doMove() {
     moveOpen = false;
     await attempt(() => lib.moveBooks([id], moveTarget), `Moved to ${lib.label(moveTarget)}`, { undo: true });
+  }
+
+  // ---- borrowed: give it back, extend the loan, reminders
+  const due = $derived(book ? dueOf(book, todayIso()) : { state: 'open' as const });
+  let backOpen = $state(false);
+  let extendOpen = $state(false);
+  let extendTo = $state('');
+  let notifyOn = $state(notificationsOn());
+  function openExtend() {
+    const base = book?.borrowed?.dueOn && book.borrowed.dueOn > todayIso() ? book.borrowed.dueOn : todayIso();
+    extendTo = addDays(base, $lib.settings.loanDays ?? DEFAULT_LOAN_DAYS);
+    extendOpen = true;
+  }
+  async function doExtend() {
+    extendOpen = false;
+    const b = book;
+    if (b?.borrowed && extendTo) await attempt(() => lib.updateBook(id, { borrowed: { ...b.borrowed!, dueOn: extendTo } }), `Now due ${formatDate(extendTo, s.dateFormat)}`, { undo: true });
+  }
+  async function givenBack(then: 'remove' | 'wishlist' | 'bought') {
+    backOpen = false;
+    const title = book?.title;
+    if (then === 'remove') {
+      if (await attempt(() => lib.deleteBooks([id]).then(() => true), `“${title}” is given back`, { undo: true })) navigate('/lending');
+    } else if (then === 'wishlist') {
+      await attempt(() => lib.updateBook(id, { ownership: 'wishlist' }), `Given back; “${title}” is on your wishlist`, { undo: true });
+    } else {
+      await attempt(() => lib.updateBook(id, { ownership: 'owned', purchasedOn: todayIso() }), `“${title}” is yours now`, { undo: true });
+    }
+  }
+  async function turnOnNotify() {
+    notifyOn = await enableDueNotifications();
+    if (!notifyOn) toast('Notifications are blocked for Booked in the browser settings');
   }
 
   // ---- wishlist: "Bought it" puts it on a shelf and into the library
@@ -207,7 +241,8 @@
       <a class="btn btn-ghost btn-icon" href="#/book/{id}" aria-label="Back"><Icon name="back" /></a>
       <h1>Edit book</h1>
     </header>
-    <BookForm initial={book} locations={$lib.locations} onsubmit={save} oncancel={() => navigate(`/book/${id}`)} />
+    <BookForm initial={book} locations={$lib.locations} onsubmit={save} oncancel={() => navigate(`/book/${id}`)}
+      loanDays={$lib.settings.loanDays ?? DEFAULT_LOAN_DAYS} lenderNames={lenders($lib.books)} />
   </div>
 {:else}
   <div class="page stack">
@@ -282,7 +317,7 @@
             <button class="btn-sm" class:queued={!!book.queuedAt} aria-pressed={!!book.queuedAt}
               onclick={() => quick({ queuedAt: book!.queuedAt ? undefined : new Date().toISOString() })}>{book.queuedAt ? '✓ Up next' : '＋ Up next'}</button>
           {/if}
-          {#if book.ownership !== 'wishlist'}
+          {#if book.ownership === 'owned'}
             {#if !book.lending}
               <button class="btn-sm" onclick={() => { lendTo = ''; lendDue = ''; lendOpen = true; }}>🤝 Lend…</button>
             {/if}
@@ -291,6 +326,24 @@
         </div>
       </div>
     </section>
+
+    {#if book.ownership === 'borrowed'}
+      <section class="card lend borrowed" class:overdue={due.state === 'overdue' || due.state === 'today'} class:soon={due.state === 'soon'}>
+        <div>
+          <strong>Borrowed{book.borrowed?.from ? ` from ${book.borrowed.from}` : ''}</strong>
+          <div class="small muted">
+            {#if book.borrowed?.on}since {formatDate(book.borrowed.on, s.dateFormat)} · {/if}
+            {#if book.borrowed?.dueOn}back by {formatDate(book.borrowed.dueOn, s.dateFormat)} ({dueText(due)}){:else}no due date{/if}
+          </div>
+        </div>
+        <div class="row">
+          <button class="btn-sm btn-primary" onclick={() => (backOpen = true)}>Given back</button>
+          <button class="btn-sm" onclick={openExtend}>Extend</button>
+          {#if book.borrowed?.dueOn}<button class="btn-sm" onclick={() => addReturnToCalendar(book!)} title="Add a reminder to your calendar">📅 Calendar</button>{/if}
+          {#if notificationsSupported() && !notifyOn}<button class="btn-sm" onclick={turnOnNotify} title="A notification when something is due soon">🔔 Notify me</button>{/if}
+        </div>
+      </section>
+    {/if}
 
     {#if book.away}
       <section class="card lend away">
@@ -448,6 +501,23 @@
     {/snippet}
   </Dialog>
 
+  <Dialog bind:open={backOpen} title="“{book.title}” is given back">
+    <p class="muted small">What should Booked do with it?</p>
+    <div class="stack">
+      <button onclick={() => givenBack('remove')}>Remove it from Booked</button>
+      <button onclick={() => givenBack('wishlist')}>🎁 Keep it on my wishlist</button>
+      <button onclick={() => givenBack('bought')}>🛍️ I bought it after all (it stays, as mine)</button>
+    </div>
+  </Dialog>
+
+  <Dialog bind:open={extendOpen} title="Extend the loan">
+    <label class="field">New due date<input type="date" bind:value={extendTo} /></label>
+    {#snippet actions()}
+      <button onclick={() => (extendOpen = false)}>Cancel</button>
+      <button class="btn-primary" onclick={doExtend} disabled={!extendTo}>Save</button>
+    {/snippet}
+  </Dialog>
+
   <CoverPicker {book} bind:open={coverOpen} />
 <Confirm bind:open={deleteOpen} title={book.ownership === 'wishlist' ? 'Remove from wishlist?' : 'Delete book?'}
     message="“{book.title}” will be removed from your {book.ownership === 'wishlist' ? 'wishlist' : 'library'}. You can undo this right after."
@@ -470,6 +540,9 @@
   .lend { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
   .lend.overdue { border-left: 4px solid var(--danger); }
   .lend.away { border-left: 4px solid var(--brand); }
+  .lend.borrowed { flex-wrap: wrap; border-left: 4px solid var(--ok); }
+  .lend.borrowed.soon { border-left-color: var(--warn); }
+  .lend.borrowed.overdue { border-left-color: var(--danger); }
   .desc { white-space: pre-line; margin: 0; }
   dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 0; }
   dt { color: var(--muted); }

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { isOverdue, todayIso } from '../lib/domain/book';
+  import { dueOf, dueSoon, dueText } from '../lib/domain/borrowing';
   import { sortBooks } from '../lib/domain/query';
   import { plural } from '../lib/format';
   import { navigate } from '../lib/router';
@@ -23,7 +24,8 @@
   const reading = $derived(owned.filter((b) => b.status === 'reading'));
   const upNext = $derived(owned.filter((b) => b.queuedAt && b.status !== 'read').sort((a, b) => a.queuedAt!.localeCompare(b.queuedAt!)));
   const lent = $derived($lib.books.filter((b) => b.lending || b.away).length);
-  const overdue = $derived($lib.books.filter((b) => isOverdue(b, todayIso())).length);
+  const toReturn = $derived(dueSoon($lib.books, todayIso()));
+  const overdue = $derived($lib.books.filter((b) => isOverdue(b, todayIso())).length + toReturn.filter((b) => dueOf(b, todayIso()).state !== 'soon').length);
 </script>
 
 <div class="page stack">
@@ -52,6 +54,19 @@
   <SyncBanner />
   <BackupReminder />
   <CoverPrompt />
+
+  {#if toReturn.length}
+    <a class="card due" class:late={toReturn.some((b) => dueOf(b, todayIso()).state !== 'soon')} href={toReturn.length === 1 ? `#/book/${toReturn[0].id}` : '#/lending'}>
+      <span class="big-icon">⏰</span>
+      <span class="due-text">
+        <strong>{toReturn.length === 1 ? 'Give back soon' : `${toReturn.length} books to give back`}</strong>
+        {#each toReturn.slice(0, 3) as b (b.id)}
+          <span class="small">{b.title}{b.borrowed?.from ? ` → ${b.borrowed.from}` : ''}: <b>{dueText(dueOf(b, todayIso()))}</b></span>
+        {/each}
+        {#if toReturn.length > 3}<span class="small muted">and {toReturn.length - 3} more</span>{/if}
+      </span>
+    </a>
+  {/if}
 
   {#if $lib.books.length}
     <nav class="explore" aria-label="Explore">
@@ -147,6 +162,10 @@
   .scan { min-height: 72px; font-size: 1.2rem; border-radius: 20px; }
   .more-ways { margin-top: -6px; justify-content: center; gap: 0; color: var(--muted); }
   .more-ways .btn { padding: 0 10px; color: var(--muted); }
+  .due { display: flex; gap: 12px; align-items: center; text-decoration: none; color: inherit; border-left: 4px solid var(--warn); }
+  .due.late { border-left-color: var(--danger); }
+  .due-text { display: grid; gap: 2px; min-width: 0; }
+  .big-icon { font-size: 1.6rem; }
   .explore { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
   .explore a { display: grid; justify-items: center; gap: 2px; padding: 10px 2px; text-decoration: none; font-size: 0.78rem; position: relative; min-width: 0; }
   .explore span { font-size: 1.3rem; line-height: 1.4; font-weight: 700; }

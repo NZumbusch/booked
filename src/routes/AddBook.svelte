@@ -1,6 +1,7 @@
 <script lang="ts">
   import { normalizeIsbn } from '../lib/domain/isbn';
   import { onWishlist, todayIso } from '../lib/domain/book';
+  import { DEFAULT_LOAN_DAYS, lenders } from '../lib/domain/borrowing';
   import type { Book, BookDraft, ListPrice } from '../lib/domain/types';
   import { mergeResults, quickLookupIsbn, searchBooks, type LookupResult } from '../lib/metadata/lookup';
   import type { Candidate } from '../lib/metadata/types';
@@ -16,7 +17,8 @@
 
   type Mode = 'scan' | 'isbn' | 'search';
   /** `wish`: adding to the wishlist (no room; not part of the library). */
-  let { mode: initialMode = 'isbn', wish = false }: { mode?: Mode; wish?: boolean } = $props();
+  /** `borrow`: a book borrowed from a library or a friend (on your shelf, to give back by a date). */
+  let { mode: initialMode = 'isbn', wish = false, borrow = false }: { mode?: Mode; wish?: boolean; borrow?: boolean } = $props();
 
   const lib = library();
   // svelte-ignore state_referenced_locally
@@ -51,7 +53,9 @@
   function openForm(prefill: Partial<Book>, result?: LookupResult) {
     initial = wish
       ? { locationId: null, status: 'unread', copies: 1, ...prefill, ownership: 'wishlist' }
-      : { locationId: $lib.settings.defaultLocationId, status: 'unread', ownership: 'owned', copies: 1, ...prefill };
+      : borrow
+        ? { locationId: $lib.settings.defaultLocationId, status: 'unread', copies: 1, ...prefill, ownership: 'borrowed' }
+        : { locationId: $lib.settings.defaultLocationId, status: 'unread', ownership: 'owned', copies: 1, ...prefill };
     formKey++;
     const later = 'More details (description, genres, where it was written…) are added automatically after you save.';
     if (!result) notice = undefined;
@@ -192,9 +196,9 @@
       {#if initial}
         <button class="btn-ghost btn-icon" aria-label="Back" onclick={backToStart}><Icon name="back" /></button>
       {/if}
-      <h1>{wish ? 'Add to your wishlist' : 'Add a book'}</h1>
+      <h1>{wish ? 'Add to your wishlist' : borrow ? 'Add a borrowed book' : 'Add a book'}</h1>
     </div>
-    {#if !initial && !wish}<a class="btn btn-sm" href="#/scan"><Icon name="scan" size={18} /> Batch scan</a>{/if}
+    {#if !initial && !wish && !borrow}<a class="btn btn-sm" href="#/scan"><Icon name="scan" size={18} /> Batch scan</a>{/if}
   </header>
 
   {#if busy}
@@ -256,7 +260,8 @@
       </div>
     {/if}
     {#key formKey}
-      <BookForm {initial} locations={$lib.locations} submitLabel={initial.ownership === 'wishlist' ? 'Add to wishlist' : 'Add to library'} onsubmit={submit} />
+      <BookForm {initial} locations={$lib.locations} loanDays={$lib.settings.loanDays ?? DEFAULT_LOAN_DAYS} lenderNames={lenders($lib.books)}
+        submitLabel={initial.ownership === 'wishlist' ? 'Add to wishlist' : initial.ownership === 'borrowed' ? 'Add as borrowed' : 'Add to library'} onsubmit={submit} />
     {/key}
   {/if}
 </div>

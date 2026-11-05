@@ -43,13 +43,20 @@ export interface GeoPoint {
 
 export type BookFormat = 'hardcover' | 'paperback' | 'ebook' | 'audiobook' | 'other';
 export type ReadingStatus = 'unread' | 'reading' | 'read' | 'abandoned';
-export type Ownership = 'owned' | 'wishlist';
+/** owned = yours; wishlist = not yet yours (kept apart); borrowed = on your shelf for a while, to give back. */
+export type Ownership = 'owned' | 'wishlist' | 'borrowed';
 
 /** Publisher's list price (e.g. the fixed German book price), not what you paid. */
 export interface ListPrice {
   amount: number;
   currency: string;
   source: 'dnb' | 'googlebooks' | 'barcode' | 'manual';
+}
+
+export interface Borrowing {
+  from: string;
+  on: IsoDate;
+  dueOn?: IsoDate;
 }
 
 export interface Lending {
@@ -154,6 +161,8 @@ export interface Book {
   signed: boolean;
   copies: number;
   lending?: Lending;
+  /** Borrowed from a library or a person (ownership 'borrowed'): from whom, since when, due back when. */
+  borrowed?: Borrowing;
   /** Shared places: someone took this book out of the shared place (into their own room). */
   away?: { by: string; since: Timestamp };
 
@@ -216,6 +225,10 @@ export interface Settings {
   covers?: { mode?: 'wifi' | 'any' | 'off'; size?: 'small' | 'medium' | 'large' | 'xl'; helper?: 'small' | 'off'; full?: 'detail' | 'all' };
   /** Books to read per year. */
   readingGoal?: number;
+  /** Usual loan period for borrowed books, in days (default 28). */
+  loanDays?: number;
+  /** Day a "due soon" notification was last shown (one a day at most). */
+  lastDueNotice?: IsoDate;
   /** Your name, shown to family on books you add to a shared place. */
   userName?: string;
   /** Places/rooms shared with family (per device; the key never leaves the share link). */

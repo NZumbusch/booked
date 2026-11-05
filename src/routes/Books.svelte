@@ -1,13 +1,14 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import { displayTitle, isOverdue, todayIso } from '../lib/domain/book';
+  import { dueOf } from '../lib/domain/borrowing';
   import {
     applyFilter, filterChips, filterFromQuery, filterToQuery, GROUP_LABELS, groupBooks, isEmptyFilter, removeChip,
     type BookFilter, type Chip, type GroupBy
   } from '../lib/domain/filters';
   import { sortBooks, SORT_LABELS, type SortDir, type SortKey } from '../lib/domain/query';
   import type { Book, Id } from '../lib/domain/types';
-  import { STATUS_LABEL, plural } from '../lib/format';
+  import { formatDate, STATUS_LABEL, plural } from '../lib/format';
   import { navigate, route } from '../lib/router';
   import { attempt, library } from '../lib/stores/app';
   import BulkBar from '../lib/ui/BulkBar.svelte';
@@ -254,6 +255,8 @@
                 <Cover {book} />
                 {#if selecting}<span class="check" aria-hidden="true">{selected.has(book.id) ? '✓' : ''}</span>{/if}
                 {#if book.lending}<span class="badge lent" class:danger={isOverdue(book, today)}>lent</span>
+                {:else if book.ownership === 'borrowed'}<span class="badge lent borrowed" class:danger={['overdue', 'today'].includes(dueOf(book, today).state)}
+                  class:warn={dueOf(book, today).state === 'soon'}>{book.borrowed?.dueOn ? `back ${formatDate(book.borrowed.dueOn, $lib.settings.dateFormat)}` : 'borrowed'}</span>
                 {:else if book.away}<span class="badge lent away">with {book.away.by}</span>{/if}
               </span>
               <span class="t">{displayTitle(book)}</span>
@@ -289,6 +292,8 @@
                   <td class="c-cover"><Cover {book} size="sm" /></td>
                   <td class="c-title"><a href="#/book/{book.id}" onclick={(e) => { e.stopPropagation(); open(book, e); }}>{displayTitle(book)}</a>
                     {#if book.lending}<span class="badge" class:danger={isOverdue(book, today)}>lent</span>
+                    {:else if book.ownership === 'borrowed'}<span class="badge" class:danger={['overdue', 'today'].includes(dueOf(book, today).state)}
+                      class:warn={dueOf(book, today).state === 'soon'}>borrowed{book.borrowed?.dueOn ? ` · back ${formatDate(book.borrowed.dueOn, $lib.settings.dateFormat)}` : ''}</span>
                     {:else if book.away}<span class="badge away">with {book.away.by}</span>{/if}
                     <div class="muted small mobile-only">{book.authors.join(', ')}</div></td>
                   <td class="c-author">{book.authors.join(', ')}</td>

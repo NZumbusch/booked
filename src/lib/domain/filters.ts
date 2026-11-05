@@ -22,7 +22,7 @@ export interface BookFilter {
   /** 'work': the year the work was written/first published (what the timelines in Discover and Stats count), not this edition's. */
   yearBasis?: 'work';
   /** lent = lent out by you; overdue; away = taken out of a shared place by someone. */
-  lending?: 'lent' | 'overdue' | 'away';
+  lending?: 'lent' | 'overdue' | 'away' | 'borrowed';
   ownership?: Ownership;
   missing?: ('cover' | 'metadata')[];
 }
@@ -86,7 +86,7 @@ export function filterFromQuery(q: Record<string, string | undefined>): BookFilt
   f.yearFrom = int(q.from);
   f.yearTo = int(q.to);
   if (q.yb === 'work') f.yearBasis = 'work';
-  if (q.lent === 'lent' || q.lent === 'overdue' || q.lent === 'away') f.lending = q.lent;
+  if (q.lent === 'lent' || q.lent === 'overdue' || q.lent === 'away' || q.lent === 'borrowed') f.lending = q.lent;
   if (q.own === 'owned' || q.own === 'wishlist') f.ownership = q.own;
   return Object.fromEntries(Object.entries(f).filter(([, v]) => v !== undefined)) as BookFilter;
 }
@@ -128,6 +128,7 @@ export function applyFilter(books: Book[], f: BookFilter, ctx: FilterContext): B
     if (f.lending === 'lent' && !b.lending) return false;
     if (f.lending === 'overdue' && !isOverdue(b, ctx.today)) return false;
     if (f.lending === 'away' && !b.away) return false;
+    if (f.lending === 'borrowed' && b.ownership !== 'borrowed') return false;
     if (f.ownership && b.ownership !== f.ownership) return false;
     if (f.missing?.includes('cover') && b.cover) return false;
     if (f.missing?.includes('metadata') && !missingMetadata(b)) return false;
@@ -163,7 +164,7 @@ export function filterChips(f: BookFilter, locations: Location[]): Chip[] {
   if (f.yearFrom || f.yearTo) {
     chips.push({ key: 'yearFrom', label: `${f.yearFrom && f.yearTo ? `${f.yearFrom}–${f.yearTo}` : f.yearFrom ? `from ${f.yearFrom}` : `until ${f.yearTo}`}${f.yearBasis === 'work' ? ' (written)' : ''}` });
   }
-  if (f.lending) chips.push({ key: 'lending', label: { lent: 'Lent out', overdue: 'Overdue', away: 'Taken out (shared)' }[f.lending] });
+  if (f.lending) chips.push({ key: 'lending', label: { lent: 'Lent out', overdue: 'Overdue', away: 'Taken out (shared)', borrowed: 'Borrowed' }[f.lending] });
   if (f.ownership) chips.push({ key: 'ownership', label: f.ownership === 'wishlist' ? 'Wishlist' : 'Owned' });
   list('missing', f.missing, (v) => (v === 'cover' ? 'Missing cover' : 'Missing details'));
   return chips;

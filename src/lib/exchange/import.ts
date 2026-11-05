@@ -155,7 +155,7 @@ export function rowsToImport(rows: string[][], mapping: (ImportField | '')[]): I
       condition: get('condition') || undefined,
       copies: num(get('copies')) || 1,
       signed: yes(get('signed')),
-      ownership: (norm(get('ownership')) === 'wishlist' ? 'wishlist' : 'owned') as Ownership,
+      ownership: (['wishlist', 'borrowed'].includes(norm(get('ownership'))) ? norm(get('ownership')) : 'owned') as Ownership,
       cover: /^https?:\/\//.test(get('cover')) ? get('cover') : undefined,
       lending: lentTo ? { to: lentTo, lentOn: parseDate(get('lentOn')) ?? new Date().toISOString().slice(0, 10), dueOn: parseDate(get('dueOn')) } : undefined
     };

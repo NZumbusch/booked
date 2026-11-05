@@ -83,7 +83,7 @@
     {:else if section === 'book' && param}
       {#key param}<BookDetail id={param} edit={$route.query.edit === '1'} />{/key}
     {:else if section === 'add'}
-      {#key `${$route.query.mode}/${$route.query.to}`}<AddBook mode={$route.query.mode === 'scan' || $route.query.mode === 'search' ? $route.query.mode : 'isbn'} wish={$route.query.to === 'wishlist'} />{/key}
+      {#key `${$route.query.mode}/${$route.query.to}`}<AddBook mode={$route.query.mode === 'scan' || $route.query.mode === 'search' ? $route.query.mode : 'isbn'} wish={$route.query.to === 'wishlist'} borrow={$route.query.to === 'borrowed'} />{/key}
     {:else if section === 'scan'}
       <BatchScan />
     {:else if section === 'locations'}

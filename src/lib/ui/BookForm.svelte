@@ -3,13 +3,19 @@
   import type { Book, BookDraft, BookFormat, Location, ReadingStatus } from '../domain/types';
   import { FORMAT_LABEL, STATUS_LABEL } from '../format';
   import { photoCover } from '../stores/app';
+  import { addDays, DEFAULT_LOAN_DAYS } from '../domain/borrowing';
+  import { todayIso } from '../domain/book';
   import Cover from './Cover.svelte';
   import LocationPicker from './LocationPicker.svelte';
   import Rating from './Rating.svelte';
 
-  let { initial, locations, submitLabel = 'Save', onsubmit, oncancel }: {
+  let { initial, locations, submitLabel = 'Save', onsubmit, oncancel, loanDays = DEFAULT_LOAN_DAYS, lenderNames = [] }: {
     initial: Partial<Book>;
     locations: Location[];
+    /** Usual loan period, for the due date of a borrowed book. */
+    loanDays?: number;
+    /** Where you borrowed from before (suggestions). */
+    lenderNames?: string[];
     submitLabel?: string;
     onsubmit: (draft: BookDraft) => void;
     oncancel?: () => void;
@@ -30,6 +36,12 @@
   let listCurrency = $state(initial.listPrice?.currency ?? 'EUR');
   // svelte-ignore state_referenced_locally
   let lending = $state({ to: initial.lending?.to ?? '', lentOn: initial.lending?.lentOn ?? '', dueOn: initial.lending?.dueOn ?? '' });
+
+  // svelte-ignore state_referenced_locally
+  let borrowing = $state({
+    from: initial.borrowed?.from ?? '', on: initial.borrowed?.on ?? todayIso(),
+    dueOn: initial.borrowed?.dueOn ?? addDays(initial.borrowed?.on ?? todayIso(), loanDays)
+  });
 
   const num = (v: unknown) => (v === '' || v === null || v === undefined || Number.isNaN(Number(v)) ? undefined : Number(v));
   const str = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : undefined);
@@ -57,6 +69,9 @@
         : undefined,
       lending: lending.to.trim()
         ? { to: lending.to.trim(), lentOn: lending.lentOn || new Date().toISOString().slice(0, 10), dueOn: str(lending.dueOn) }
+        : undefined,
+      borrowed: b.ownership === 'borrowed'
+        ? { from: borrowing.from.trim(), on: borrowing.on || todayIso(), dueOn: str(borrowing.dueOn) }
         : undefined
     };
     for (const k of ['subtitle', 'publisher', 'edition', 'language', 'description', 'notes', 'condition', 'isbn10', 'isbn13',
@@ -106,13 +121,22 @@
           {#each Object.entries(STATUS_LABEL) as [v, l]}<option value={v as ReadingStatus}>{l}</option>{/each}
         </select>
       </label>
-      <label class="field">Owned / wishlist
+      <label class="field">Mine?
         <select bind:value={b.ownership}>
-          <option value="owned">Owned</option>
+          <option value="owned">Mine</option>
+          <option value="borrowed">Borrowed (to give back)</option>
           <option value="wishlist">Wishlist</option>
         </select>
       </label>
     </div>
+    {#if b.ownership === 'borrowed'}
+      <div class="grid">
+        <label class="field">Borrowed from<input bind:value={borrowing.from} placeholder="e.g. Stadtbibliothek, Anna" list="lenders" /></label>
+        <datalist id="lenders">{#each lenderNames as name}<option value={name}></option>{/each}</datalist>
+        <label class="field">Since<input type="date" bind:value={borrowing.on} /></label>
+        <label class="field">Due back<input type="date" bind:value={borrowing.dueOn} /></label>
+      </div>
+    {/if}
     <div class="field-like"><span class="muted small">Rating</span><Rating bind:value={b.rating} /></div>
     <label class="field">Tags <span class="hint">comma-separated</span><input bind:value={lists.tags} /></label>
   </section>
@@ -161,7 +185,7 @@
     </div>
   </details>
 
-  <details class="card" open={!!lending.to}>
+  <details class="card" open={!!lending.to} hidden={b.ownership === 'borrowed'}>
     <summary>Lending</summary>
     <div class="grid inner">
       <label class="field">Lent to<input bind:value={lending.to} placeholder="Name" /></label>

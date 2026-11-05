@@ -47,6 +47,7 @@
       <div class="tile"><span class="v">{s.pages.toLocaleString()}</span><span class="k">pages</span></div>
       <div class="tile"><span class="v">{s.byStatus.read.toLocaleString()}</span><span class="k">read ({s.owned ? Math.round((s.byStatus.read / s.owned) * 100) : 0}%)</span></div>
       <a class="tile" href={q({ lending: 'lent' })}><span class="v">{s.lent}</span><span class="k">lent out{#if s.overdue} · <strong class="danger">{s.overdue} overdue</strong>{/if}</span></a>
+      {#if s.borrowed}<a class="tile" href="#/lending"><span class="v">{s.borrowed}</span><span class="k">borrowed (not counted as owned)</span></a>{/if}
       <a class="tile" href="#/wishlist"><span class="v">{s.wishlist}</span><span class="k">on wishlist</span></a>
       {#if s.totalValue.books}
         <div class="tile"><span class="v">{s.totalValue.converted.length ? '≈ ' : ''}{formatPrice(s.totalValue.amount, s.totalValue.currency)}</span>

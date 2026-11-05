@@ -22,3 +22,18 @@ self.addEventListener('fetch', (event) => {
     return Response.redirect(back, 303);
   })());
 });
+
+// Tapping a "books to return" notification opens (or focuses) Booked on the Lending page.
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const target = new URL(event.notification.data?.url || './#/lending', self.registration.scope).href;
+  event.waitUntil((async () => {
+    const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    const win = wins.find((w) => w.url.startsWith(self.registration.scope));
+    if (win) {
+      await win.focus();
+      return win.navigate(target);
+    }
+    return self.clients.openWindow(target);
+  })());
+});
