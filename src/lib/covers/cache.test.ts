@@ -66,31 +66,34 @@ describe('CoverCache', () => {
     expect(calls).toHaveLength(2); // nothing new
   });
 
-  it('waits for Wi-Fi by default, and asks when the device can’t tell', async () => {
+  it('off Wi-Fi only fetches the small images; large ones wait for Wi-Fi, or ask when the device can’t tell', async () => {
     await add('https://c/a.jpg');
     conn = { type: 'cellular' };
     await cache.run();
-    expect(calls).toHaveLength(0);
+    expect(calls.map((c) => c.want)).toEqual(['thumb']); // the small one, on any connection
+    expect(cache.has('https://c/a.jpg')).toBe(true);
+    await cache.run();
+    expect(calls).toHaveLength(1); // the large one waits
     conn = undefined; // iPhone: unknown
     await cache.run();
-    expect(calls).toHaveLength(0);
+    expect(calls).toHaveLength(1);
     cache.publish();
     expect(get(cache.status).decision).toBe('ask');
     await cache.run(true); // user tapped "Download now"
-    expect(calls).toHaveLength(1);
+    expect(calls.map((c) => c.want)).toEqual(['thumb', 'full']);
   });
 
-  it('downloads on mobile data once the user confirms it, but never when off', async () => {
+  it('downloads large images on mobile data once the user confirms it, but nothing when off', async () => {
     await add('https://c/a.jpg');
-    conn = { type: 'cellular' };
-    await cache.run(true);
-    expect(calls).toHaveLength(0);
     await lib.updateSettings({ covers: { full: 'all', mode: 'off' } });
+    conn = { type: 'cellular' };
     await cache.run('mobile');
     expect(calls).toHaveLength(0);
     await lib.updateSettings({ covers: { full: 'all', mode: 'wifi' } });
+    await cache.run(true); // "Download now" on mobile data isn't enough for the large ones
+    expect(calls.map((c) => c.want)).toEqual(['thumb']);
     await cache.run('mobile');
-    expect(calls).toHaveLength(1);
+    expect(calls.map((c) => c.want)).toEqual(['thumb', 'full']);
   });
 
   it('never downloads when off or on data saver, even when asked', async () => {

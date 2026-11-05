@@ -362,7 +362,7 @@ Tap the cover on a book's page to see the covers of its other editions (Open Lib
 
 - **What's saved:** every cover is downloaded once and stored on the device in its own database, separate from your backups and sync. The colours of each cover are analysed (main colour, palette, "is this a real cover?") for the cover wall.
 - **When it downloads** (Settings → Covers on this device):
-  - **Only on Wi-Fi** (the default), on any connection, or off.
+  - **Large images only on Wi-Fi** (the default), on any connection, or off. The small grid images (a few KB each) are saved on any connection unless saving is off or data saver is on.
   - Android Chrome reports whether it's on Wi-Fi. iPhone browsers don't, so Booked asks once ("Download covers now?") instead of guessing.
   - Data saver is respected for automatic downloads.
   - **Downloading on mobile data:** tapping *Download* when not on Wi-Fi asks first and shows the estimated size; confirm and it downloads anyway.

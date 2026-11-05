@@ -505,6 +505,12 @@ export class CoverCache {
     this.bumpSoon();
   }
 
+  /** Small images: on any connection, unless saving covers is off, the device is offline or on data saver. */
+  private smallAllowed(): boolean {
+    const online = typeof navigator === 'undefined' || navigator.onLine;
+    return online && this.mode !== 'off' && !this.connection()?.saveData;
+  }
+
   private allowed(force: boolean | 'mobile'): boolean {
     const online = typeof navigator === 'undefined' || navigator.onLine;
     if (force === 'mobile') return online && this.mode !== 'off';
@@ -526,11 +532,17 @@ export class CoverCache {
         const url = queue[i++];
         const kind = this.needs(url, Date.now());
         if (!kind) continue;
-        if (kind === 'download' && !this.allowed(force)) return; // e.g. left Wi-Fi: stop quietly
+        // Large images follow the Wi-Fi setting; the small grid image (a few KB) comes on any connection,
+        // so covers show up offline even where the connection type can't be told (iPhone) or on mobile data.
+        let thumbOnly = false;
+        if (kind === 'download' && !this.allowed(force)) {
+          if (this.has(url) || !this.smallAllowed()) continue;
+          thumbOnly = true;
+        }
         const prev = kind === 'download' && !this.index.get(url)?.px ? undefined : await this.db.covers.get(url);
         const local = kind === 'shrink' || kind === 'thumb';
         try {
-          const want = this.fullMode === 'all' && kind !== 'thumb' ? 'full' : 'thumb';
+          const want = this.fullMode === 'all' && kind !== 'thumb' && !thumbOnly ? 'full' : 'thumb';
           const p = await this.process({ url, size: this.size, want, proxy, stored: local ? prev?.data : undefined, storedType: prev?.type });
           await this.save(url, p, kind === 'download' ? undefined : prev);
         } catch (e) {
