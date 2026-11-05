@@ -5,6 +5,7 @@ import { gbSearch } from './googlebooks';
 import { marcToIso, olCoverByIsbn, olSearch } from './openlibrary';
 import type { ImageProbe } from './lookup';
 import { titlesMatch } from './wikidata';
+import { rankCovers } from './coverRank';
 
 /**
  * Alternative covers for a book: every edition of the same work on Open Library (yours first:
@@ -89,13 +90,8 @@ export async function alternativeCovers(book: Book, f: Fetcher, key?: string): P
   const [ol, gb] = await Promise.allSettled([olEditionCovers(book, f), googleCovers(book, f, key)]);
   const all = [...(ol.status === 'fulfilled' ? ol.value : []), ...(gb.status === 'fulfilled' ? gb.value : [])];
   if (ol.status === 'rejected' && gb.status === 'rejected') throw ol.reason;
-  const rank = (o: CoverOption) => (o.sameEdition ? 0 : o.sameLanguage ? 1 : 2);
   const seen = new Set<string>([book.cover ?? '']);
-  return all
-    .map((o, i) => ({ o, i }))
-    .sort((a, b) => rank(a.o) - rank(b.o) || a.i - b.i)
-    .map(({ o }) => o)
-    .filter((o) => !seen.has(o.url) && !seen.has(o.thumb) && seen.add(o.url) && seen.add(o.thumb));
+  return rankCovers(all).filter((o) => !seen.has(o.url) && !seen.has(o.thumb) && seen.add(o.url) && seen.add(o.thumb));
 }
 
 /**
@@ -130,15 +126,19 @@ export async function isbnCovers(book: Pick<Book, 'isbn13' | 'isbn10'>, f: Fetch
   }
 }
 
-/** First working cover for a book: by ISBN, then other editions of the same work, then Google's ISBN image. */
+/** First working cover for a book: this edition's (by ISBN, from any source), then other editions of the same work. */
 export async function findCover(book: Book, f: Fetcher, probe: ImageProbe, key?: string): Promise<string | undefined> {
   const { early, last } = await isbnCovers(book, f);
   for (const u of early) if (await probe(u)) return u;
   try {
     const options = await alternativeCovers(book, f, key);
-    // Open Library answers 404 for a missing cover, so its covers are safe; Google may serve a blank tile.
-    const ordered = [...options.filter((o) => o.source === 'openlibrary'), ...options.filter((o) => o.source !== 'openlibrary')];
-    for (const o of ordered.slice(0, 6)) if (await probe(o.thumb)) return o.url;
+    const ordered = rankCovers(options); // already in this order; kept explicit, it's the rule that matters here
+    const editionOnes = ordered.filter((o) => o.sameEdition);
+    for (const o of editionOnes) if (await probe(o.thumb)) return o.url;
+    // Google's by-ISBN image is this edition too (if it isn't a blank tile): before other editions.
+    for (const u of last) if (await probe(u)) return u;
+    for (const o of ordered.filter((o) => !o.sameEdition).slice(0, 6)) if (await probe(o.thumb)) return o.url;
+    return undefined;
   } catch {
     // catalogue unreachable: still try the last resort below
   }

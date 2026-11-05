@@ -1,4 +1,5 @@
 import type { SyncData, Tombstone } from '../domain/sync';
+import type { StoredPhoto } from '../domain/photos';
 import type { Book, Id, Location, MoveRecord, Settings, Snapshot, UndoEntry } from '../domain/types';
 
 /** A set of writes that must be applied atomically. */
@@ -45,6 +46,10 @@ export interface Repository {
   exportSyncData(): Promise<SyncData>;
   /** Replace the synced part with merged data; settings stay, the undo history is cleared. */
   replaceSyncData(data: SyncData): Promise<void>;
+  /** Own cover photos (files, kept apart from the books). Photos are immutable: same id, same file. */
+  getPhoto(id: string): Promise<StoredPhoto | undefined>;
+  putPhotos(photos: StoredPhoto[]): Promise<void>;
+  photoIds(): Promise<string[]>;
 }
 
 /** Number of undoable actions kept. */

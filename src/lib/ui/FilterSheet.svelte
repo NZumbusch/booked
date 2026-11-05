@@ -120,14 +120,9 @@
   </section>
 
   <section class="grid">
-    <label class="field">Owned / wishlist
-      <select value={f.ownership ?? ''} onchange={(e) => (f = { ...f, ownership: (e.currentTarget.value || undefined) as BookFilter['ownership'] })}>
-        <option value="">Both</option><option value="owned">Owned</option><option value="wishlist">Wishlist</option>
-      </select>
-    </label>
     <label class="field">Lending
       <select value={f.lending ?? ''} onchange={(e) => (f = { ...f, lending: (e.currentTarget.value || undefined) as BookFilter['lending'] })}>
-        <option value="">Any</option><option value="lent">Lent out</option><option value="overdue">Overdue</option><option value="away">Taken out of a shared place</option>
+        <option value="">Any</option><option value="lent">Lent out</option><option value="overdue">Overdue</option><option value="away">Taken out of a shared place</option><option value="borrowed">Borrowed (not mine)</option>
       </select>
     </label>
   </section>

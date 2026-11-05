@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import Dexie from 'dexie';
 import { get } from 'svelte/store';
 import { Library } from '../services/library';
 import { DexieRepository } from '../storage/dexie-repository';
@@ -65,31 +66,34 @@ describe('CoverCache', () => {
     expect(calls).toHaveLength(2); // nothing new
   });
 
-  it('waits for Wi-Fi by default, and asks when the device can’t tell', async () => {
+  it('off Wi-Fi only fetches the small images; large ones wait for Wi-Fi, or ask when the device can’t tell', async () => {
     await add('https://c/a.jpg');
     conn = { type: 'cellular' };
     await cache.run();
-    expect(calls).toHaveLength(0);
+    expect(calls.map((c) => c.want)).toEqual(['thumb']); // the small one, on any connection
+    expect(cache.has('https://c/a.jpg')).toBe(true);
+    await cache.run();
+    expect(calls).toHaveLength(1); // the large one waits
     conn = undefined; // iPhone: unknown
     await cache.run();
-    expect(calls).toHaveLength(0);
+    expect(calls).toHaveLength(1);
     cache.publish();
     expect(get(cache.status).decision).toBe('ask');
     await cache.run(true); // user tapped "Download now"
-    expect(calls).toHaveLength(1);
+    expect(calls.map((c) => c.want)).toEqual(['thumb', 'full']);
   });
 
-  it('downloads on mobile data once the user confirms it, but never when off', async () => {
+  it('downloads large images on mobile data once the user confirms it, but nothing when off', async () => {
     await add('https://c/a.jpg');
-    conn = { type: 'cellular' };
-    await cache.run(true);
-    expect(calls).toHaveLength(0);
     await lib.updateSettings({ covers: { full: 'all', mode: 'off' } });
+    conn = { type: 'cellular' };
     await cache.run('mobile');
     expect(calls).toHaveLength(0);
     await lib.updateSettings({ covers: { full: 'all', mode: 'wifi' } });
+    await cache.run(true); // "Download now" on mobile data isn't enough for the large ones
+    expect(calls.map((c) => c.want)).toEqual(['thumb']);
     await cache.run('mobile');
-    expect(calls).toHaveLength(1);
+    expect(calls.map((c) => c.want)).toEqual(['thumb', 'full']);
   });
 
   it('never downloads when off or on data saver, even when asked', async () => {
@@ -185,7 +189,9 @@ describe('CoverCache', () => {
     // an entry saved before small images existed: only the large one
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const db = (cache as any).db;
-    await db.covers.put({ url: 'https://c/old.jpg', data: new ArrayBuffer(540), type: 'image/jpeg', w: 356, h: 540, px: 540, sourcePx: 600, bytes: 540, at: 1 });
+    const old = { url: 'https://c/old.jpg', type: 'image/jpeg', w: 356, h: 540, px: 540, sourcePx: 600, bytes: 540, at: 1 };
+    await db.covers.put({ ...old, data: new ArrayBuffer(540) });
+    await db.meta.put(old);
     await add('https://c/old.jpg');
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const fresh = new CoverCache(lib, processor, () => conn, (db as any).name);
@@ -258,5 +264,38 @@ describe('CoverCache: status report', () => {
     expect(cache.retryFailed(['https://c/limited.jpg'])).toBe(1);
     await cache.run();
     expect(cache.diagnose(lib.state.books)).toMatchObject({ saved: 2, failed: 1 });
+  });
+});
+
+describe('CoverCache: storage', () => {
+  it('moves covers saved by the previous version into the light index, without losing the images', async () => {
+    const name = `covers-upgrade-${n++}`;
+    const v1 = new Dexie(name);
+    v1.version(1).stores({ covers: 'url, at' });
+    await v1.table('covers').put({ url: 'https://c/a.jpg', data: new ArrayBuffer(540), thumb: new ArrayBuffer(100), type: 'image/jpeg', thumbType: 'image/jpeg', w: 356, h: 540, px: 540, tpx: 100, sourcePx: 600, at: 1 });
+    v1.close();
+    await add('https://c/a.jpg');
+    const upgraded = new CoverCache(lib, processor, () => conn, name);
+    await upgraded.run();
+    expect(calls).toHaveLength(0); // nothing downloaded again
+    const meta = upgraded.meta('https://c/a.jpg');
+    expect(meta).toMatchObject({ px: 540, tpx: 100 });
+    expect(meta && 'thumb' in meta).toBe(false); // no image data kept in memory
+    await upgraded.destroy();
+  });
+
+  it('waits before trying a failed large image again instead of retrying on every change', async () => {
+    await lib.updateSettings({ covers: { full: 'detail' } });
+    await add('https://c/big.jpg');
+    await cache.run(); // small image saved
+    await lib.updateSettings({ covers: { full: 'all' } });
+    fail.add('https://c/big.jpg');
+    await cache.run();
+    expect(calls.filter((c) => c.want === 'full')).toHaveLength(1);
+    expect(cache.meta('https://c/big.jpg')?.fullFailures).toBe(1);
+    await add('https://c/other.jpg'); // the library changes: another run
+    await cache.run();
+    expect(calls.filter((c) => c.url === 'https://c/big.jpg' && c.want === 'full')).toHaveLength(1);
+    expect(cache.has('https://c/big.jpg')).toBe(true); // the small one stays
   });
 });

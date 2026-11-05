@@ -1,3 +1,4 @@
+import { isOwnPhoto } from '../domain/photos';
 import { pathOf } from '../domain/locations';
 import type { Book, Location, ReadingStatus } from '../domain/types';
 
@@ -48,7 +49,7 @@ export function libibRows(books: Book[], locations: Location[]): string[][] {
       location_place: s(path[0]?.name), location_room: s(path[1]?.name), location_shelf: s(path[2]?.name),
       ownership: b.ownership, condition: s(b.condition), signed: b.signed ? 'yes' : '', purchase_date: s(b.purchasedOn),
       lent_to: s(b.lending?.to), lent_on: s(b.lending?.lentOn), due_on: s(b.lending?.dueOn),
-      cover_url: b.cover?.startsWith('data:') ? '' : s(b.cover), written_place: s(b.writing?.place?.label),
+      cover_url: isOwnPhoto(b.cover) ? '' : s(b.cover), written_place: s(b.writing?.place?.label),
       written_lat: s(b.writing?.place?.lat), written_lon: s(b.writing?.place?.lon)
     };
     return [...LIBIB_COLUMNS.map((c) => libib[c]), ...EXTRA_COLUMNS.map((c) => extra[c])];

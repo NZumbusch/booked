@@ -6,12 +6,12 @@
   import { facet } from '../lib/domain/filters';
   import type { Book, Id } from '../lib/domain/types';
   import { plural } from '../lib/format';
-  import { fileToCoverDataUrl } from '../lib/images';
   import { alternativeCovers, isbnCovers, type CoverOption } from '../lib/metadata/covers';
+  import { rankCovers } from '../lib/metadata/coverRank';
   import { dnbByIsbn } from '../lib/metadata/dnb';
   import { reviewQueue, type ReviewScope } from '../lib/services/coverReview';
   import { groupOf, LOOK_LIMIT, siblingLooks } from '../lib/services/seriesCovers';
-  import { covers, library, toast } from '../lib/stores/app';
+  import { covers, library, photoCover, toast } from '../lib/stores/app';
   import Cover from '../lib/ui/Cover.svelte';
   import Icon from '../lib/ui/Icon.svelte';
 
@@ -73,16 +73,8 @@
 
   const refs = $derived(book ? $lib && reference(book) : []);
   const distance = (o: Option) => (o.look && refs.length ? Math.min(...refs.map((r) => lookDistance(o.look!, r))) : Infinity);
-  const ranked = $derived(
-    options
-      .filter((o) => !o.bad)
-      .map((o, i) => ({ o, i, d: distance(o) }))
-      .sort((x, y) =>
-        refs.length
-          ? (x.o.sameEdition ? -1 : 0) - (y.o.sameEdition ? -1 : 0) || x.d - y.d || x.i - y.i
-          : (x.o.sameEdition ? 0 : x.o.sameLanguage ? 1 : 2) - (y.o.sameEdition ? 0 : y.o.sameLanguage ? 1 : 2) || x.i - y.i
-      )
-  );
+  // One rule everywhere: this edition, then look-alikes of the series, then same language (see coverRank).
+  const ranked = $derived(rankCovers(options.filter((o) => !o.bad), distance).map((o) => ({ o, d: distance(o) })));
   const suggestion = $derived(ranked.find((r) => !refs.length || r.d <= LOOK_LIMIT || r.o.sameEdition)?.o);
   const suggestionWhy = $derived(
     !suggestion ? '' : suggestion.sameEdition ? 'Same edition (matching ISBN)' : refs.length && distance(suggestion) <= LOOK_LIMIT ? 'Looks like the rest of the series' : 'Best match'
@@ -189,7 +181,7 @@
     e.currentTarget.value = '';
     if (!file) return;
     try {
-      const url = await fileToCoverDataUrl(file, 900);
+      const url = await photoCover(file);
       options = [{ url, thumb: url, label: 'Your photo', source: 'openlibrary', sameEdition: true }, ...options];
       selected = url;
       picked = true;

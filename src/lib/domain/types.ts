@@ -1,3 +1,4 @@
+import type { PhotoFile } from './photos';
 /**
  * Booked data schema (v1).
  *
@@ -42,13 +43,20 @@ export interface GeoPoint {
 
 export type BookFormat = 'hardcover' | 'paperback' | 'ebook' | 'audiobook' | 'other';
 export type ReadingStatus = 'unread' | 'reading' | 'read' | 'abandoned';
-export type Ownership = 'owned' | 'wishlist';
+/** owned = yours; wishlist = not yet yours (kept apart); borrowed = on your shelf for a while, to give back. */
+export type Ownership = 'owned' | 'wishlist' | 'borrowed';
 
 /** Publisher's list price (e.g. the fixed German book price), not what you paid. */
 export interface ListPrice {
   amount: number;
   currency: string;
   source: 'dnb' | 'googlebooks' | 'barcode' | 'manual';
+}
+
+export interface Borrowing {
+  from: string;
+  on: IsoDate;
+  dueOn?: IsoDate;
 }
 
 export interface Lending {
@@ -112,6 +120,8 @@ export interface Book {
   genres: string[];
   /** Finer-grained subjects / topics from catalogues. */
   subjects?: string[];
+  /** Topics from your own AI clustering (broad first, e.g. ["Philosophy", "Marxism"]); arranges the cover wall. */
+  aiTopics?: string[];
   series?: string;
   seriesNumber?: string;
   /** The publisher's paperback line ("dtv", "Reclam"…): numbered by catalogue, so not a series to complete, but its covers may share a design. */
@@ -142,6 +152,8 @@ export interface Book {
   /** On the "Up next" list since this time (queue order). */
   queuedAt?: Timestamp;
   notes?: string;
+  /** On the wishlist: a must-have (listed first, marked ★ when the list is shared). */
+  mustHave?: boolean;
   condition?: string;
   purchasedOn?: IsoDate;
   /** Price in the user's currency (see settings). */
@@ -151,6 +163,8 @@ export interface Book {
   signed: boolean;
   copies: number;
   lending?: Lending;
+  /** Borrowed from a library or a person (ownership 'borrowed'): from whom, since when, due back when. */
+  borrowed?: Borrowing;
   /** Shared places: someone took this book out of the shared place (into their own room). */
   away?: { by: string; since: Timestamp };
 
@@ -213,6 +227,10 @@ export interface Settings {
   covers?: { mode?: 'wifi' | 'any' | 'off'; size?: 'small' | 'medium' | 'large' | 'xl'; helper?: 'small' | 'off'; full?: 'detail' | 'all' };
   /** Books to read per year. */
   readingGoal?: number;
+  /** Usual loan period for borrowed books, in days (default 28). */
+  loanDays?: number;
+  /** Day a "due soon" notification was last shown (one a day at most). */
+  lastDueNotice?: IsoDate;
   /** Your name, shown to family on books you add to a shared place. */
   userName?: string;
   /** Places/rooms shared with family (per device; the key never leaves the share link). */
@@ -270,6 +288,9 @@ export interface Snapshot {
   locations: Location[];
   moves: MoveRecord[];
   settings: Settings;
+  /** Your own cover photos used by the books (v2+; in v1 they were inside the books' `cover`). */
+  photos?: PhotoFile[];
 }
 
-export const SCHEMA_VERSION = 1;
+/** v2: own cover photos in `photos`, referenced from books as `photo:<id>`. */
+export const SCHEMA_VERSION = 2;

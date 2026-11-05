@@ -1,4 +1,5 @@
 import { bookkeepingFor, EMPTY_BOOKKEEPING, exportSpace, planSpaceApply, type SpaceBookkeeping } from '../domain/spaces';
+import { photoIdsIn } from '../domain/photos';
 import type { Id } from '../domain/types';
 import type { Library } from '../services/library';
 import type { SyncSource } from './service';
@@ -11,9 +12,12 @@ export function spaceSource(lib: Library, spaceId: string, rootId: Id): SyncSour
     exclusive: (fn) => lib.exclusive(fn),
     async export() {
       const prev = (await lib.getMeta<SpaceBookkeeping>(metaKey(spaceId))) ?? EMPTY_BOOKKEEPING;
-      return exportSpace(await lib.exportSyncData(), rootId, prev, lib.state.settings.userName);
+      const data = exportSpace(await lib.exportSyncData(), rootId, prev, lib.state.settings.userName);
+      // The shared place has no separate file store: own cover photos of its books travel inside (encrypted).
+      return { ...data, photos: await lib.photoFiles(photoIdsIn(data.books)) };
     },
     async apply(merged) {
+      if (merged.photos?.length) await lib.storePhotos(merged.photos);
       const plan = planSpaceApply(await lib.exportSyncData(), rootId, merged);
       await lib.applyExternal({
         putBooks: plan.putBooks,

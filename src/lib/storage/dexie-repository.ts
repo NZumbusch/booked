@@ -2,6 +2,7 @@ import Dexie, { type Table } from 'dexie';
 import { DEFAULT_SETTINGS, SCHEMA_VERSION } from '../domain/types';
 import type { SyncData, Tombstone } from '../domain/sync';
 import type { Book, Id, Location, MoveRecord, Settings, Snapshot, UndoEntry } from '../domain/types';
+import { base64ToBytes, bytesToBase64, photoIdsIn, type StoredPhoto } from '../domain/photos';
 import { UNDO_LIMIT, type ChangeSet, type LoadedState, type Repository } from './repository';
 
 class BookedDb extends Dexie {
@@ -11,6 +12,7 @@ class BookedDb extends Dexie {
   undo!: Table<UndoEntry, Id>;
   meta!: Table<{ key: string; value: unknown }, string>;
   deleted!: Table<Tombstone & { key: string }, string>;
+  photos!: Table<StoredPhoto, string>;
 
   constructor(name: string) {
     super(name);
@@ -23,6 +25,8 @@ class BookedDb extends Dexie {
     });
     // v2: deletion markers for Google Drive sync.
     this.version(2).stores({ deleted: 'key, at' });
+    // v3: own cover photos as files, apart from the books.
+    this.version(3).stores({ photos: 'id' });
   }
 }
 
@@ -87,13 +91,18 @@ export class DexieRepository implements Repository {
       this.db.moves.toArray(),
       this.readSettings()
     ]);
-    return { app: 'booked', schemaVersion: SCHEMA_VERSION, exportedAt: new Date().toISOString(), books, locations, moves, settings };
+    // Backups are complete on their own: the photos the books use come along.
+    const stored = await this.db.photos.bulkGet([...photoIdsIn(books)]);
+    const photos = stored.filter((p): p is StoredPhoto => !!p).map((p) => ({ id: p.id, type: p.type, data: bytesToBase64(p.data) }));
+    return { app: 'booked', schemaVersion: SCHEMA_VERSION, exportedAt: new Date().toISOString(), books, locations, moves, settings, photos };
   }
 
   async importSnapshot(s: Snapshot): Promise<void> {
     const db = this.db;
-    await db.transaction('rw', [db.books, db.locations, db.moves, db.undo, db.meta], async () => {
+    await db.transaction('rw', [db.books, db.locations, db.moves, db.undo, db.meta, db.photos], async () => {
       await Promise.all([db.books.clear(), db.locations.clear(), db.moves.clear(), db.undo.clear()]);
+      // Photos are kept (they're immutable and may still be wanted by undo); the backup's are added.
+      if (s.photos?.length) await db.photos.bulkPut(s.photos.map((p) => ({ id: p.id, type: p.type, data: base64ToBytes(p.data), at: new Date().toISOString() })));
       await db.books.bulkPut(s.books);
       await db.locations.bulkPut(s.locations);
       await db.moves.bulkPut(s.moves ?? []);
@@ -134,6 +143,18 @@ export class DexieRepository implements Repository {
       await db.moves.bulkPut(data.moves);
       await db.deleted.bulkPut(data.deleted.map((t) => ({ ...t, key: `${t.kind}:${t.id}` })));
     });
+  }
+
+  getPhoto(id: string): Promise<StoredPhoto | undefined> {
+    return this.db.photos.get(id);
+  }
+
+  async putPhotos(photos: StoredPhoto[]): Promise<void> {
+    if (photos.length) await this.db.photos.bulkPut(photos);
+  }
+
+  async photoIds(): Promise<string[]> {
+    return (await this.db.photos.toCollection().primaryKeys()) as string[];
   }
 
   /** For tests. */

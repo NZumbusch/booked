@@ -27,9 +27,18 @@ export default defineConfig({
           { src: 'icon-512.png', sizes: '512x512', type: 'image/png' },
           { src: 'icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
           { src: 'icon.svg', sizes: 'any', type: 'image/svg+xml' }
-        ]
+        ],
+        // Android: share an image (e.g. long-press in Google Images › Share) to Booked to use it as a cover.
+        share_target: {
+          action: 'share-target',
+          method: 'POST',
+          enctype: 'multipart/form-data',
+          params: { title: 'title', text: 'text', url: 'url', files: [{ name: 'image', accept: ['image/*'] }] }
+        }
       },
       workbox: {
+        // Receives shared images (see public/share-target-sw.js).
+        importScripts: ['share-target-sw.js'],
         globPatterns: ['**/*.{js,css,html,svg,png,woff2,wasm}'],
         // The barcode decoder (WASM, ~1 MB) is precached so scanning works offline on iOS too.
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,

@@ -3,6 +3,8 @@ import { labelOf, pathOf } from '../domain/locations';
 import { fold } from '../domain/query';
 import type { Book, Location } from '../domain/types';
 import { ordinal } from '../format';
+import { similarityModel } from './similarity';
+import { arrangeByTopic, makeGrid, regionLabels } from './topicMap';
 
 /**
  * Cover field layouts: one seamless field of covers instead of rows or islands.
@@ -55,8 +57,8 @@ export interface FieldLabel {
   /** World coordinates of the group's centre. */
   x: number;
   y: number;
-  /** 1 = group, 2 = subgroup. */
-  level: 1 | 2;
+  /** 1 = group, 2 = subgroup; the topic map goes deeper (sub-sub-topics, then series and authors). */
+  level: number;
   count: number;
 }
 
@@ -65,6 +67,11 @@ export interface FieldLayout {
   labels: FieldLabel[];
   /** Endless: the field repeats every `cols` × `rows` cells. */
   wrap?: { cols: number; rows: number };
+  /**
+   * Endless topic map: other arrangements of the same map (book id per tile, same order as `tiles`).
+   * Each repeat of the field uses one of them, so neighbouring repeats aren't identical.
+   */
+  variants?: string[][];
   bounds: { minCol: number; maxCol: number; minRow: number; maxRow: number };
 }
 
@@ -140,7 +147,7 @@ interface Keyed {
 
 const colorKey = (it: FieldItem) => (it.analysis ? colorSortKey(it.analysis) : 2000);
 const titleKey = (b: Book) => fold(b.title.replace(/^(the|a|an|der|die|das|le|la|les|el|il)\s+/i, ''));
-const topicsOf = (b: Book) => [...new Set([...b.genres, ...(b.subjects ?? [])].map((t) => t.trim()).filter(Boolean))];
+const topicsOf = (b: Book) => [...new Set([...(b.aiTopics ?? []), ...b.genres, ...(b.subjects ?? [])].map((t) => t.trim()).filter(Boolean))];
 
 /**
  * Topic › subtopic for every book. Genres are the broad categories, subjects the specific ones:
@@ -325,8 +332,61 @@ function colorTorus(items: FieldItem[], cols: number, rows: number): FieldTile[]
 
 // ---------------------------------------------------------------- main
 
+/** How often each book appears on an endless topic map: small libraries repeat more, so the field is big enough to wander. */
+export function copiesFor(n: number): number {
+  return n < 120 ? 4 : n < 300 ? 3 : n < 900 ? 2 : 1;
+}
+
+/** Topic map: similar books side by side, regions flowing into each other (see topicMap). */
+function topicField(items: FieldItem[], shape: FieldShape, seed: number, g: Geometry): Omit<FieldLayout, 'bounds'> {
+  const model = similarityModel(items.map((it) => it.book));
+  const n = items.length;
+  if (shape === 'disc') {
+    const cells = hilbertSorted(discCells(n, seed, g));
+    const grid = makeGrid(cells);
+    const { slots } = arrangeByTopic(model, n, grid, seed, 0);
+    const centre = (i: number) => {
+      const p = cellPos(cells[i].col, cells[i].row, g);
+      return { x: p.x + g.cellW / 2, y: p.y + g.cellH / 2 };
+    };
+    return {
+      tiles: slots.map((b, i) => ({ id: items[b].book.id, col: cells[i].col, row: cells[i].row })),
+      labels: regionLabels(model, slots, grid, centre)
+    };
+  }
+  const wrap = torusSize(n * copiesFor(n), g);
+  const all: FieldTile[] = [];
+  for (let row = 0; row < wrap.rows; row++) for (let col = 0; col < wrap.cols; col++) all.push({ id: '', col, row });
+  const cells = hilbertSorted(all);
+  const grid = makeGrid(cells, wrap);
+  // copies of a book at least a third of the field apart: different neighbourhoods, never side by side
+  const apart = n >= cells.length ? 0 : Math.max(3, Math.floor(Math.min(wrap.cols, wrap.rows * 1.5) / 3));
+  const { slots, variants } = arrangeByTopic(model, n, grid, seed, apart, 3);
+  const centre = (i: number) => {
+    const p = cellPos(cells[i].col, cells[i].row, g);
+    return { x: p.x + g.cellW / 2, y: p.y + g.cellH / 2 };
+  };
+  return {
+    tiles: slots.map((b, i) => ({ id: items[b].book.id, col: cells[i].col, row: cells[i].row })),
+    labels: regionLabels(model, slots, grid, centre, cells.length),
+    wrap,
+    variants: variants.map((v) => v.map((b) => items[b].book.id))
+  };
+}
+
+let memo: { key: string; layout: FieldLayout } | undefined;
+
 export function fieldLayout(items: FieldItem[], order: FieldOrder, shape: FieldShape, locations: Location[], seed = 7, g: Geometry = RECT): FieldLayout {
   if (!items.length) return { tiles: [], labels: [], bounds: { minCol: 0, maxCol: 0, minRow: 0, maxRow: 0 } };
+  if (order === 'topic') {
+    // The map only depends on the books' data, not on cover colours arriving: don't redo it for those.
+    const key = `${shape}|${seed}|${g.cellW}x${g.cellH}|${items.map((it) => `${it.book.id}:${it.book.updatedAt}`).join(',')}`;
+    if (memo?.key === key) return memo.layout;
+    const f = topicField(items, shape, seed, g);
+    const layout = { ...f, bounds: boundsOf(f.tiles) };
+    memo = { key, layout };
+    return layout;
+  }
   let tiles: FieldTile[];
   let labels: FieldLabel[] = [];
   let wrap: FieldLayout['wrap'];
@@ -353,12 +413,16 @@ export function fieldLayout(items: FieldItem[], order: FieldOrder, shape: FieldS
       labels = labelsFor(list, tiles, g, wrap);
     }
   }
-  const cols = tiles.map((t) => t.col);
-  const rows = tiles.map((t) => t.row);
-  return {
-    tiles, labels, wrap,
-    bounds: { minCol: Math.min(...cols), maxCol: Math.max(...cols), minRow: Math.min(...rows), maxRow: Math.max(...rows) }
-  };
+  return { tiles, labels, wrap, bounds: boundsOf(tiles) };
+}
+
+function boundsOf(tiles: FieldTile[]): FieldLayout['bounds'] {
+  let minCol = Infinity, maxCol = -Infinity, minRow = Infinity, maxRow = -Infinity;
+  for (const t of tiles) {
+    minCol = Math.min(minCol, t.col); maxCol = Math.max(maxCol, t.col);
+    minRow = Math.min(minRow, t.row); maxRow = Math.max(maxRow, t.row);
+  }
+  return { minCol, maxCol, minRow, maxRow };
 }
 
 /** Topics available for the topic dropdown (most common first). */

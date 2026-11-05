@@ -1,6 +1,12 @@
 import { writable } from 'svelte/store';
+import { isOwnPhoto, PHOTO_PX } from '../domain/photos';
+import { fileToJpeg } from '../images';
+import { initPhotoUrls, photoUrl } from '../ui/photoUrls';
+import { loadsAsImage } from '../ui/sharedCover';
+import { checkDueNotice } from '../ui/dueReminders';
 import { booksKeyOf } from '../config';
-import { olCoverByIsbn } from '../metadata/openlibrary';
+import { olCoverByIsbn, olCoverId, olEditionCoverIds } from '../metadata/openlibrary';
+import { gbByIsbn } from '../metadata/googlebooks';
 import { coverFor, siblingLooks, type SeriesCoverContext } from '../services/seriesCovers';
 import { browserProbe, lookupCandidate, lookupIsbn } from '../metadata/lookup';
 import { Enricher } from '../services/enrich';
@@ -63,8 +69,13 @@ export async function openLibrary(): Promise<Library> {
     syncInstance = new SyncController(instance);
     spacesInstance = new SpacesController(instance);
     knowledgeInstance = new KnowledgeStore(instance);
-    coverInstance = new CoverCache(instance, browserProcessor);
+    initPhotoUrls(instance);
+    coverInstance = new CoverCache(instance, browserProcessor, undefined, undefined, photoUrl);
     startCoverCache(instance, coverInstance);
+    // Borrowed books due soon: one notification a day, when the app opens or comes back to the front.
+    const lib = instance;
+    void checkDueNotice(lib);
+    document.addEventListener('visibilitychange', () => document.visibilityState === 'visible' && void checkDueNotice(lib));
   }
   // Ask the browser not to evict our data under storage pressure.
   navigator.storage?.persist?.().catch(() => {});
@@ -105,6 +116,28 @@ export async function attempt<T>(fn: () => Promise<T>, success?: string, opts: {
 export async function undoLast() {
   const label = await library().undo();
   toast(label ? `Undone: ${label}` : 'Nothing to undo');
+}
+
+/** A photo you took or picked, saved as an own cover; returns what to put in the book's `cover`. */
+export async function photoCover(file: Blob): Promise<string> {
+  const { data, type } = await fileToJpeg(file, PHOTO_PX);
+  return library().addPhoto(data, type);
+}
+
+/**
+ * A cover from an image address (copied or shared from a web page): saved as your own photo when the
+ * site lets us read it (then it's on the device and syncs), otherwise used as the address itself.
+ */
+export async function coverFromLink(url: string): Promise<string> {
+  try {
+    const res = await fetch(url, { mode: 'cors', signal: AbortSignal.timeout?.(15_000) });
+    const blob = res.ok ? await res.blob() : undefined;
+    if (blob?.type.startsWith('image/')) return await photoCover(blob);
+  } catch {
+    // the site doesn't allow reading it from here: use the address as is
+  }
+  if (await loadsAsImage(url)) return url;
+  throw new Error('That link isn’t an image. Long-press the picture and choose “Share image” or “Copy image”.');
 }
 
 /** Put a book you don't own yet on the wishlist; details are filled in in the background. */
@@ -155,7 +188,8 @@ const repairTried = new Set<string>();
 /** Books whose cover turned out to be missing/"not available": quietly switch to another cover. */
 async function repairCovers(lib: Library, cache: CoverCache) {
   await migrateIsbnCovers(lib);
-  const broken = lib.state.books.filter((b) => b.cover && !b.cover.startsWith('data:') && cache.isBroken(b.cover) && !repairTried.has(b.id + b.cover));
+  await recheckEditionCovers(lib);
+  const broken = lib.state.books.filter((b) => b.cover && !isOwnPhoto(b.cover) && cache.isBroken(b.cover) && !repairTried.has(b.id + b.cover));
   for (const b of broken.slice(0, 5)) {
     repairTried.add(b.id + b.cover);
     try {
@@ -190,5 +224,53 @@ async function migrateIsbnCovers(lib: Library) {
     } catch {
       // offline: next start
     }
+  }
+}
+
+const CHECKED_KEY = 'booked.editionCoverChecked';
+
+function checkedIds(): Set<string> {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(CHECKED_KEY) ?? '[]'));
+  } catch {
+    return new Set();
+  }
+}
+
+/**
+ * Earlier versions sometimes took the cover of the *work* (Open Library's representative cover, often
+ * another edition or language) when the scanned edition had none of its own. Once per book, and only
+ * for covers picked automatically (a cover you chose yourself is never touched): if this edition has
+ * its own cover, use it.
+ */
+async function recheckEditionCovers(lib: Library) {
+  if (typeof localStorage === 'undefined' || !navigator.onLine) return;
+  const checked = checkedIds();
+  const todo = lib.state.books.filter((b) =>
+    !checked.has(b.id) && (b.isbn13 || b.isbn10) && olCoverId(b.cover) && b.provenance?.cover?.source === 'openlibrary');
+  for (const b of todo.slice(0, 10)) {
+    try {
+      const isbn = (b.isbn13 ?? b.isbn10)!;
+      const ids = await olEditionCoverIds(isbn, fetch.bind(globalThis));
+      let better: string | undefined;
+      if (ids.length) {
+        if (!ids.includes(olCoverId(b.cover)!)) better = `https://covers.openlibrary.org/b/id/${ids[0]}-L.jpg?default=false`;
+      } else {
+        // Open Library has no cover for this edition, so the current one is the work's: Google's record for the ISBN may have the right one.
+        better = (await gbByIsbn(isbn, fetch.bind(globalThis), booksKeyOf(lib.state.settings)))?.fields.cover;
+      }
+      const now = lib.book(b.id);
+      if (better && now && now.cover === b.cover) {
+        await lib.enrichBook(b.id, { cover: better, provenance: { ...now.provenance, cover: { source: better.includes('google') ? 'googlebooks' : 'openlibrary' } } });
+      }
+      checked.add(b.id);
+    } catch {
+      break; // offline or rate-limited: carry on next time
+    }
+  }
+  try {
+    localStorage.setItem(CHECKED_KEY, JSON.stringify([...checked]));
+  } catch {
+    // storage full or blocked: we'll just check again
   }
 }

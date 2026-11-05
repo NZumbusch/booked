@@ -1,13 +1,14 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import { displayTitle, isOverdue, todayIso } from '../lib/domain/book';
+  import { dueOf } from '../lib/domain/borrowing';
   import {
     applyFilter, filterChips, filterFromQuery, filterToQuery, GROUP_LABELS, groupBooks, isEmptyFilter, removeChip,
     type BookFilter, type Chip, type GroupBy
   } from '../lib/domain/filters';
   import { sortBooks, SORT_LABELS, type SortDir, type SortKey } from '../lib/domain/query';
   import type { Book, Id } from '../lib/domain/types';
-  import { STATUS_LABEL, plural } from '../lib/format';
+  import { formatDate, STATUS_LABEL, plural } from '../lib/format';
   import { navigate, route } from '../lib/router';
   import { attempt, library } from '../lib/stores/app';
   import BulkBar from '../lib/ui/BulkBar.svelte';
@@ -23,7 +24,14 @@
 
   // ---- URL state: filter + sort + view + group, so back/forward and saved filters just work
   const query = $derived($route.query);
-  const filter = $derived(filterFromQuery(query));
+  // The wishlist has its own page now: old links (saved filters, Stats) that asked for it go there.
+  $effect(() => {
+    if (query.own === 'wishlist') navigate('/wishlist', {}, true);
+  });
+  /** The library is what you own; the wishlist is kept apart. */
+  const owned = $derived($lib && lib.owned());
+  // Owned books only: an old "owned" filter (saved filters) is simply what the library shows now.
+  const filter = $derived({ ...filterFromQuery(query), ownership: undefined });
   const sort = $derived((query.sort as SortKey) in SORT_LABELS ? (query.sort as SortKey) : 'title');
   const dir = $derived<SortDir>(query.dir === 'desc' ? 'desc' : 'asc');
   const group = $derived<GroupBy>((query.group as GroupBy) in GROUP_LABELS ? (query.group as GroupBy) : 'none');
@@ -60,7 +68,7 @@
   });
 
   // ---- results
-  const results = $derived(sortBooks(applyFilter($lib.books, filter, { locations: $lib.locations, today: todayIso() }), sort, dir, (id) => lib.label(id)));
+  const results = $derived(sortBooks(applyFilter(owned, filter, { locations: $lib.locations, today: todayIso() }), sort, dir, (id) => lib.label(id)));
   const groups = $derived(groupBooks(results, group, $lib.locations));
   const chips = $derived(filterChips(filter, $lib.locations));
   const filterCount = $derived(chips.filter((c) => c.key !== 'q').length);
@@ -217,13 +225,13 @@
   {/if}
 
   <div class="spread">
-    <span class="muted small">{plural(results.length, 'book')}{results.length !== $lib.books.length ? ` of ${$lib.books.length.toLocaleString()}` : ''}</span>
+    <span class="muted small">{plural(results.length, 'book')}{results.length !== owned.length ? ` of ${owned.length.toLocaleString()}` : ''}</span>
     {#if selecting}
       <button class="btn-sm" onclick={selectAll}>{allSelected ? 'Select none' : `Select all ${results.length.toLocaleString()}`}</button>
     {/if}
   </div>
 
-  {#if $lib.books.length === 0}
+  {#if owned.length === 0}
     <div class="card empty">
       <span class="big">📚</span>
       <p>Your library is empty. Scan a barcode or add your first book by hand.</p>
@@ -247,6 +255,8 @@
                 <Cover {book} />
                 {#if selecting}<span class="check" aria-hidden="true">{selected.has(book.id) ? '✓' : ''}</span>{/if}
                 {#if book.lending}<span class="badge lent" class:danger={isOverdue(book, today)}>lent</span>
+                {:else if book.ownership === 'borrowed'}<span class="badge lent borrowed" class:danger={['overdue', 'today'].includes(dueOf(book, today).state)}
+                  class:warn={dueOf(book, today).state === 'soon'}>{book.borrowed?.dueOn ? `back ${formatDate(book.borrowed.dueOn, $lib.settings.dateFormat)}` : 'borrowed'}</span>
                 {:else if book.away}<span class="badge lent away">with {book.away.by}</span>{/if}
               </span>
               <span class="t">{displayTitle(book)}</span>
@@ -282,6 +292,8 @@
                   <td class="c-cover"><Cover {book} size="sm" /></td>
                   <td class="c-title"><a href="#/book/{book.id}" onclick={(e) => { e.stopPropagation(); open(book, e); }}>{displayTitle(book)}</a>
                     {#if book.lending}<span class="badge" class:danger={isOverdue(book, today)}>lent</span>
+                    {:else if book.ownership === 'borrowed'}<span class="badge" class:danger={['overdue', 'today'].includes(dueOf(book, today).state)}
+                      class:warn={dueOf(book, today).state === 'soon'}>borrowed{book.borrowed?.dueOn ? ` · back ${formatDate(book.borrowed.dueOn, $lib.settings.dateFormat)}` : ''}</span>
                     {:else if book.away}<span class="badge away">with {book.away.by}</span>{/if}
                     <div class="muted small mobile-only">{book.authors.join(', ')}</div></td>
                   <td class="c-author">{book.authors.join(', ')}</td>
@@ -304,7 +316,7 @@
   <BulkBar ids={selectedIds} ondone={stopSelect} />
 {/if}
 
-<FilterSheet bind:open={filtersOpen} {filter} books={$lib.books} locations={$lib.locations} onapply={setFilter} />
+<FilterSheet bind:open={filtersOpen} {filter} books={owned} locations={$lib.locations} onapply={setFilter} />
 
 <Dialog bind:open={saveOpen} title="Save this filter">
   <form class="row save" onsubmit={(e) => { e.preventDefault(); save(); }}>

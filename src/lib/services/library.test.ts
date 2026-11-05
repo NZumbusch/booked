@@ -362,3 +362,56 @@ describe('sync bookkeeping', () => {
     expect(await lib.undo()).toBeUndefined();
   });
 });
+
+describe('Library: wishlist', () => {
+  it('keeps wishlist books out of rooms, counts and the owned list', async () => {
+    const repo = new DexieRepository(`wish-${Math.random()}`);
+    const lib = await Library.open(repo);
+    const place = await lib.addLocation('place', 'Flat', null);
+    const wish = await lib.addBook({ title: 'Wanted', ownership: 'wishlist', locationId: place.id });
+    const mine = await lib.addBook({ title: 'Mine', locationId: place.id });
+    expect(wish.locationId).toBeNull();
+    expect(lib.owned().map((b) => b.id)).toEqual([mine.id]);
+    expect(lib.wishlist().map((b) => b.id)).toEqual([wish.id]);
+    expect(lib.counts().get(place.id)).toBe(1);
+    expect(lib.counts().get(null)).toBeUndefined(); // not "without a location" either
+    await lib.moveBooks([wish.id], place.id);
+    expect(lib.book(wish.id)!.locationId).toBeNull();
+    // Bought it: into a room, part of the library
+    await lib.updateBook(wish.id, { ownership: 'owned', locationId: place.id });
+    expect(lib.owned()).toHaveLength(2);
+    expect(lib.counts().get(place.id)).toBe(2);
+    await repo.destroy();
+  });
+
+  it('migrates wishlist books saved in a room by earlier versions', async () => {
+    const repo = new DexieRepository(`wish-old-${Math.random()}`);
+    const lib = await Library.open(repo);
+    const place = await lib.addLocation('place', 'Flat', null);
+    const b = await lib.addBook({ title: 'Old wish', locationId: place.id });
+    // what an earlier version stored: wishlist, but still in a room
+    await repo.commit({ putBooks: [{ ...lib.book(b.id)!, ownership: 'wishlist' }] });
+    const reopened = await Library.open(repo);
+    expect(reopened.book(b.id)).toMatchObject({ ownership: 'wishlist', locationId: null, title: 'Old wish' });
+    expect(reopened.counts().get(place.id)).toBeUndefined();
+    await repo.destroy();
+  });
+});
+
+describe('Library: writes at the same moment', () => {
+  it('keeps both when a background fill-in and an edit of the same book overlap', async () => {
+    const repo = new DexieRepository(`race-${Math.random()}`);
+    const lib = await Library.open(repo);
+    const b = await lib.addBook({ title: 'Race' });
+    // not awaited one after the other: both are in flight together
+    await Promise.all([
+      lib.enrichBook(b.id, { description: 'from the catalogue' }),
+      lib.updateBook(b.id, { rating: 5 }),
+      lib.enrichBook(b.id, { cover: 'https://c/x.jpg' })
+    ]);
+    expect(lib.book(b.id)).toMatchObject({ description: 'from the catalogue', rating: 5, cover: 'https://c/x.jpg' });
+    const reopened = await Library.open(repo);
+    expect(reopened.book(b.id)).toMatchObject({ description: 'from the catalogue', rating: 5, cover: 'https://c/x.jpg' });
+    await repo.destroy();
+  });
+});

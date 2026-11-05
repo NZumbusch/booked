@@ -43,10 +43,22 @@ export function matchesText(book: Book, query: string): boolean {
 }
 
 const ARTICLE = /^(the|a|an|der|die|das|le|la|les|l'|el|il)\s+/i;
-const titleKey = (b: Book) => fold(b.title.replace(ARTICLE, ''));
+/** Sort keys are worked out once per book version (books are immutable: an edit is a new object). */
+const titleKeys = new WeakMap<Book, string>();
+const authorKeys = new WeakMap<Book, string>();
+const titleKey = (b: Book) => {
+  let k = titleKeys.get(b);
+  if (k === undefined) titleKeys.set(b, (k = fold(b.title.replace(ARTICLE, ''))));
+  return k;
+};
 const surname = (name: string) => {
   const parts = name.trim().split(/\s+/);
   return fold(parts[parts.length - 1] + ' ' + parts.slice(0, -1).join(' '));
+};
+const authorKey = (b: Book) => {
+  let k = authorKeys.get(b);
+  if (k === undefined) authorKeys.set(b, (k = b.authors[0] ? surname(b.authors[0]) : '\uffff'));
+  return k;
 };
 
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
@@ -58,22 +70,32 @@ export function sortBooks(
   locationLabel: (id: Id | null) => string = () => ''
 ): Book[] {
   const sign = dir === 'asc' ? 1 : -1;
-  const text = (f: (b: Book) => string) => (a: Book, b: Book) => sign * collator.compare(f(a), f(b));
-  // Numeric keys: missing values always sort last, regardless of direction.
-  const num = (f: (b: Book) => number | undefined) => (a: Book, b: Book) => {
-    const x = f(a), y = f(b);
-    if (x === undefined || y === undefined) return x === y ? 0 : x === undefined ? 1 : -1;
-    return sign * (x - y);
+  // Each book's keys are computed once up front, not again in every comparison.
+  type Row = { b: Book; t: string; k: string | number | undefined };
+  const textKey: Partial<Record<SortKey, (b: Book) => string>> = {
+    title: titleKey, author: authorKey, added: (b) => b.createdAt, location: (b) => locationLabel(b.locationId)
   };
-  const cmp = {
-    title: text(titleKey),
-    author: text((b) => (b.authors[0] ? surname(b.authors[0]) : '￿')),
-    added: text((b) => b.createdAt),
-    year: num((b) => b.publishedYear),
-    rating: num((b) => b.rating),
-    pages: num((b) => b.pageCount),
-    location: text((b) => locationLabel(b.locationId))
-  }[key];
-  const byTitle = text(titleKey);
-  return [...books].sort((a, b) => cmp(a, b) || byTitle(a, b));
+  const numKey: Partial<Record<SortKey, (b: Book) => number | undefined>> = {
+    year: (b) => b.publishedYear, rating: (b) => b.rating, pages: (b) => b.pageCount
+  };
+  const labels = new Map<Id | null, string>();
+  const keyOf = textKey[key]
+    ? key === 'location'
+      ? (b: Book) => {
+          if (!labels.has(b.locationId)) labels.set(b.locationId, locationLabel(b.locationId));
+          return labels.get(b.locationId)!;
+        }
+      : textKey[key]!
+    : numKey[key]!;
+  const rows: Row[] = books.map((b) => ({ b, t: titleKey(b), k: keyOf(b) }));
+  const byTitle = (x: Row, y: Row) => sign * collator.compare(x.t, y.t);
+  const cmp = textKey[key]
+    ? (x: Row, y: Row) => sign * collator.compare(x.k as string, y.k as string)
+    : (x: Row, y: Row) => {
+        // Numeric keys: missing values always sort last, regardless of direction.
+        const a = x.k as number | undefined, c = y.k as number | undefined;
+        if (a === undefined || c === undefined) return a === c ? 0 : a === undefined ? 1 : -1;
+        return sign * (a - c);
+      };
+  return rows.sort((x, y) => cmp(x, y) || byTitle(x, y)).map((r) => r.b);
 }

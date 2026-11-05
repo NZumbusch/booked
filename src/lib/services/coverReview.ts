@@ -1,3 +1,4 @@
+import { isOwnPhoto } from '../domain/photos';
 import type { Book } from '../domain/types';
 import { groupOf } from './seriesCovers';
 
@@ -18,7 +19,7 @@ export function reviewQueue(books: Book[], scope: ReviewScope, isBroken: (cover:
     if (b.ownership === 'wishlist') return false;
     if (scope === 'all') return true;
     if (scope === 'series') return !!b.series;
-    return !b.cover || (!b.cover.startsWith('data:') && isBroken(b.cover));
+    return !b.cover || (!isOwnPhoto(b.cover) && isBroken(b.cover));
   });
   const key = (b: Book) => (groupOf(b)?.kind === 'series' ? b.series!.toLowerCase() : undefined);
   return picked.sort((a, b) => {

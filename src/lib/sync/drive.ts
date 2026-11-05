@@ -63,4 +63,45 @@ export class DriveTarget implements SyncTarget {
     this.fileId = file.id;
     return file.version;
   }
+
+  // ---- own cover photos: one file each (photo-<id>.jpg), next to the library file
+
+  /** Photo ids on Drive → their file ids. */
+  async listPhotos(): Promise<Map<string, string>> {
+    const out = new Map<string, string>();
+    const q = encodeURIComponent(`name contains '${PHOTO_FILE_PREFIX}' and trashed=false`);
+    let page: string | undefined;
+    do {
+      const res = await this.call(`${API}?spaces=appDataFolder&q=${q}&fields=nextPageToken,files(id,name)&pageSize=1000${page ? `&pageToken=${page}` : ''}`);
+      const body = (await res.json()) as { files: { id: string; name: string }[]; nextPageToken?: string };
+      for (const f of body.files) {
+        const id = photoIdFromFileName(f.name);
+        if (id) out.set(id, f.id);
+      }
+      page = body.nextPageToken;
+    } while (page);
+    return out;
+  }
+
+  async uploadPhoto(id: string, data: ArrayBuffer, type: string): Promise<void> {
+    const boundary = 'booked' + Math.random().toString(36).slice(2);
+    const head =
+      `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n` +
+      JSON.stringify({ name: `${PHOTO_FILE_PREFIX}${id}.jpg`, parents: ['appDataFolder'], mimeType: type }) +
+      `\r\n--${boundary}\r\nContent-Type: ${type}\r\n\r\n`;
+    const body = new Blob([head, data, `\r\n--${boundary}--`]);
+    await this.call(`${UPLOAD}?uploadType=multipart&fields=id`, {
+      method: 'POST', headers: { 'Content-Type': `multipart/related; boundary=${boundary}` }, body
+    });
+  }
+
+  async downloadPhoto(fileId: string): Promise<{ data: ArrayBuffer; type: string }> {
+    const res = await this.call(`${API}/${fileId}?alt=media`);
+    return { data: await res.arrayBuffer(), type: res.headers.get('Content-Type')?.split(';')[0] || 'image/jpeg' };
+  }
+}
+
+export const PHOTO_FILE_PREFIX = 'photo-';
+export function photoIdFromFileName(name: string): string | undefined {
+  return name.match(/^photo-([0-9a-f]{20})\.jpg$/)?.[1];
 }

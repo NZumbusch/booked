@@ -7,7 +7,8 @@ import type { Fetcher } from '../metadata/http';
 import type { ImageProbe } from '../metadata/lookup';
 
 /** Volumes of a series should look alike (same colour scheme); beyond this distance a cover is not a match. */
-export const LOOK_LIMIT = 0.35;
+export { LOOK_LIMIT } from '../metadata/coverRank';
+import { LOOK_LIMIT } from '../metadata/coverRank';
 
 export interface Candidate {
   url: string;
@@ -103,6 +104,9 @@ export async function matchingCover(book: Book, reference: CoverAnalysis[], ctx:
 export async function coverFor(book: Book, ctx: SeriesCoverContext): Promise<string | undefined> {
   const reference = ctx.siblings(book);
   if (reference.length) {
+    // The cover of this very edition beats any look-alike: it's the one on the shelf.
+    const { early } = await isbnCovers(book, ctx.fetcher ?? fetch.bind(globalThis));
+    for (const u of early) if (u !== book.cover && (await ctx.probe(u))) return u;
     const match = await matchingCover(book, reference, ctx);
     if (match) return match;
   }

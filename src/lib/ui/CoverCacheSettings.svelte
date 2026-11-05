@@ -62,7 +62,7 @@
 
   <label class="field">Download
     <select value={s.mode ?? 'wifi'} onchange={(e) => update({ mode: e.currentTarget.value as CacheMode })}>
-      <option value="wifi">Only on Wi-Fi (recommended)</option>
+      <option value="wifi">Large images only on Wi-Fi (recommended)</option>
       <option value="any">On any connection</option>
       <option value="off">Off (always load from the internet)</option>
     </select>
@@ -107,9 +107,9 @@
     {#if $status.failed} · {$status.failed} unavailable{/if}
   </p>
   {#if $status.decision === 'ask' && $status.current < $status.total}
-    <p class="muted small">This device can’t tell whether it’s on Wi-Fi. Tap below when you are.</p>
+    <p class="muted small">Small images are saved on any connection. This device can’t tell whether it’s on Wi-Fi: tap below when you are, for the large ones.</p>
   {:else if $status.decision === 'no' && $status.current < $status.total && (s.mode ?? 'wifi') !== 'off'}
-    <p class="muted small">Waiting for Wi-Fi.</p>
+    <p class="muted small">Small images are saved; the large ones wait for Wi-Fi.</p>
   {/if}
   <div class="row">
     <CoverDownload disabled={$status.running || (s.mode ?? 'wifi') === 'off' || $status.current >= $status.total}>Download now</CoverDownload>

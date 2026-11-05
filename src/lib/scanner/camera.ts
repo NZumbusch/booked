@@ -1,7 +1,7 @@
 /** Camera + barcode detection. Native BarcodeDetector where available (Android/Chrome), WASM ZXing elsewhere (iOS). */
 
 export interface Detector {
-  detect(source: HTMLVideoElement): Promise<string[]>;
+  detect(source: HTMLVideoElement | HTMLCanvasElement): Promise<string[]>;
   kind: 'native' | 'wasm';
 }
 
@@ -75,15 +75,94 @@ export async function readAddOn(video: HTMLVideoElement, isbn: string): Promise<
   return addOnFrom(results.map((r) => r.text), isbn);
 }
 
-export async function openCamera(): Promise<MediaStream> {
+let cropCanvas: HTMLCanvasElement | undefined;
+
+/**
+ * The middle band of the frame (where the scan frame is), at most 1280 px wide. The WASM decoder
+ * (iPhone) is much quicker on that than on a full HD frame, so it sees more frames per second.
+ */
+export function centreCrop(video: HTMLVideoElement): HTMLCanvasElement | undefined {
+  const vw = video.videoWidth, vh = video.videoHeight;
+  if (!vw || !vh) return undefined;
+  const sx = vw * 0.05, sy = vh * 0.2, sw = vw * 0.9, sh = vh * 0.6;
+  const scale = Math.min(1, 1280 / sw);
+  cropCanvas ??= document.createElement('canvas');
+  cropCanvas.width = Math.round(sw * scale);
+  cropCanvas.height = Math.round(sh * scale);
+  cropCanvas.getContext('2d', { willReadFrequently: true })!.drawImage(video, sx, sy, sw, sh, 0, 0, cropCanvas.width, cropCanvas.height);
+  return cropCanvas;
+}
+
+// ------------------------------------------------------------- which camera
+
+export interface CameraInfo {
+  deviceId: string;
+  label: string;
+}
+
+const CAMERA_KEY = 'booked.scanCamera';
+
+/** The camera the user picked last time (by switching), if any. */
+export function savedCamera(): string | undefined {
+  try {
+    return localStorage.getItem(CAMERA_KEY) ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export function saveCamera(deviceId: string) {
+  try {
+    localStorage.setItem(CAMERA_KEY, deviceId);
+  } catch {
+    // not essential
+  }
+}
+
+/**
+ * Back cameras, best for scanning first. Phones with several lenses often hand out the ultra-wide
+ * or a telephoto lens for "the back camera"; those focus badly (or not at all) up close.
+ * - The plain main camera first: "camera2 0" on Android (the main sensor on nearly every phone),
+ *   "Back Camera" / "Rückseitige Kamera" on iPhone.
+ * - Then the iPhone's virtual cameras (Dual Wide, Triple), which may switch lenses by themselves.
+ * - Ultra-wide, telephoto, depth and macro lenses last.
+ * The scanner has a button to try the next one; the choice is remembered.
+ */
+export function rankCameras(devices: CameraInfo[]): CameraInfo[] {
+  const back = devices.filter((d) => !/front|user|face\b|selfie|vorder/i.test(d.label));
+  const score = (d: CameraInfo) => {
+    const l = d.label.toLowerCase().trim();
+    if (/ultra|tele|depth|tiefe|macro|makro|infrared|\bir\b/.test(l)) return 9;
+    if (/camera2 0\b|camera 0\b/.test(l)) return 0;
+    if (/^(back|rear) camera$|^rückseitige kamera$|^rückkamera$/.test(l)) return 0;
+    if (/dual.?wide|dual.?weitwinkel/.test(l)) return 2;
+    if (/triple/.test(l)) return 3;
+    if (/dual/.test(l)) return 4;
+    return 1;
+  };
+  return back.map((d, i) => ({ d, i })).sort((a, b) => score(a.d) - score(b.d) || a.i - b.i).map(({ d }) => d);
+}
+
+/** Back cameras that can be switched between (labels are only known once the camera was allowed). */
+export async function backCameras(): Promise<CameraInfo[]> {
+  const all = (await navigator.mediaDevices?.enumerateDevices?.()) ?? [];
+  return rankCameras(all.filter((d) => d.kind === 'videoinput').map((d) => ({ deviceId: d.deviceId, label: d.label })));
+}
+
+export async function openCamera(deviceId?: string): Promise<MediaStream> {
   if (!navigator.mediaDevices?.getUserMedia) {
     throw new Error('This browser cannot use the camera. Open the app via https in Safari or Chrome.');
   }
+  const size = { width: { ideal: 1920 }, height: { ideal: 1080 } };
   try {
-    return await navigator.mediaDevices.getUserMedia({
-      audio: false,
-      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } }
-    });
+    if (deviceId) {
+      try {
+        return await navigator.mediaDevices.getUserMedia({ audio: false, video: { deviceId: { exact: deviceId }, ...size } });
+      } catch {
+        // that camera is gone (other phone, unplugged): the default one below
+      }
+    }
+    return await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: { ideal: 'environment' }, ...size } });
   } catch (e) {
     const name = (e as DOMException)?.name;
     if (name === 'NotAllowedError') throw new Error('Camera access was denied. Allow it in your browser settings to scan.');
@@ -92,8 +171,8 @@ export async function openCamera(): Promise<MediaStream> {
   }
 }
 
-type FocusCaps = { focusMode?: string[]; pointsOfInterest?: unknown };
-type FocusConstraint = { focusMode?: string; pointsOfInterest?: { x: number; y: number }[] };
+type FocusCaps = { focusMode?: string[]; pointsOfInterest?: unknown; zoom?: { min: number; max: number; step?: number } };
+type FocusConstraint = { focusMode?: string; pointsOfInterest?: { x: number; y: number }[]; zoom?: number };
 
 const focusCaps = (stream: MediaStream) => stream.getVideoTracks()[0]?.getCapabilities?.() as FocusCaps | undefined;
 const applyFocus = (stream: MediaStream, c: FocusConstraint) =>
@@ -109,6 +188,37 @@ export async function useContinuousFocus(stream: MediaStream): Promise<void> {
   if (focusCaps(stream)?.focusMode?.includes('continuous')) await applyFocus(stream, { focusMode: 'continuous' });
 }
 
+/** The camera only has a one-shot focus: it has to be asked again now and then (e.g. while no barcode is found). */
+export function needsRefocus(stream: MediaStream): boolean {
+  const modes = focusCaps(stream)?.focusMode ?? [];
+  return !modes.includes('continuous') && modes.includes('single-shot');
+}
+
+export async function refocus(stream: MediaStream): Promise<void> {
+  await applyFocus(stream, { focusMode: 'single-shot' });
+}
+
+/**
+ * A little zoom (about 1.6×, where the camera allows it): the phone can be held further away, beyond
+ * the lens's closest focus distance, while the barcode still fills the frame. Returns the zoom set.
+ */
+export async function scanZoom(stream: MediaStream, want = 1.6): Promise<number | undefined> {
+  const z = focusCaps(stream)?.zoom;
+  if (!z || !(z.max > 1)) return undefined;
+  const value = Math.min(z.max, Math.max(z.min, want));
+  await applyFocus(stream, { zoom: value });
+  return value;
+}
+
+export function zoomRange(stream: MediaStream): { min: number; max: number } | undefined {
+  const z = focusCaps(stream)?.zoom;
+  return z && z.max > z.min ? { min: z.min, max: z.max } : undefined;
+}
+
+export async function setZoom(stream: MediaStream, value: number): Promise<void> {
+  await applyFocus(stream, { zoom: value });
+}
+
 /**
  * Focus on a point (x, y in 0–1 of the camera image). Uses the point of interest where the
  * camera supports it; otherwise kicks the autofocus by switching modes, which makes it search again.
@@ -122,8 +232,10 @@ export async function focusAt(stream: MediaStream, x: number, y: number): Promis
       await applyFocus(stream, { focusMode: modes.includes('single-shot') ? 'single-shot' : 'continuous', pointsOfInterest: [{ x, y }] });
     } else if (modes.includes('single-shot')) {
       await applyFocus(stream, { focusMode: 'single-shot' });
-    } else if (modes.includes('manual')) {
-      await applyFocus(stream, { focusMode: 'manual' });
+    } else if (modes.includes('continuous')) {
+      // No way to aim it: nudge the autofocus to search again. ("manual" without a distance would
+      // freeze the focus wherever it is, so it is never used.)
+      await applyFocus(stream, { focusMode: 'continuous' });
     }
   } catch {
     // fall through to restoring continuous focus

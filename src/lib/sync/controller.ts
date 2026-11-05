@@ -2,6 +2,7 @@ import { get, writable, type Readable } from 'svelte/store';
 import { syncConfig } from '../config';
 import type { Library } from '../services/library';
 import { DriveTarget } from './drive';
+import { syncPhotos } from './photos';
 import { GoogleAuth } from './google-auth';
 import { librarySource, SyncService, type SyncOutcome, type SyncStatus } from './service';
 
@@ -15,6 +16,7 @@ const PERIODIC_MS = 5 * 60_000;
  */
 export class SyncController {
   private auth: GoogleAuth | undefined;
+  private drive: DriveTarget | undefined;
   private service: SyncService | undefined;
   private clientId: string | undefined;
   private status$ = writable<SyncStatus>({ state: 'off' });
@@ -84,7 +86,8 @@ export class SyncController {
     }
     this.auth = new GoogleAuth(id, { helperUrl });
     const auth = this.auth;
-    this.service = new SyncService(librarySource(this.lib), new DriveTarget(() => auth.accessToken()));
+    this.drive = new DriveTarget(() => auth.accessToken());
+    this.service = new SyncService(librarySource(this.lib), this.drive);
     const last = this.lib.state.settings.sync?.lastSyncAt;
     this.service.setStatus({ state: auth.connected ? 'idle' : 'needs-auth', lastSyncAt: last });
     this.unsubscribeStatus = this.service.status.subscribe((s) => this.status$.set(s));
@@ -113,6 +116,8 @@ export class SyncController {
     if (!this.service) return undefined;
     const outcome = await this.service.sync();
     this.autoTried = false;
+    // Own cover photos travel as separate files; a problem there doesn't fail the sync (next time).
+    if (this.drive) await this.lib.exclusive(() => syncPhotos(this.lib, this.drive!)).catch(() => {});
     await this.lib.updateSettings({ sync: { ...this.lib.state.settings.sync, lastSyncAt: new Date().toISOString() } });
     return outcome;
   }

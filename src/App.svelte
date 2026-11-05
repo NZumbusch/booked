@@ -26,6 +26,9 @@
   import Print from './routes/Print.svelte';
   import Stats from './routes/Stats.svelte';
   import CoverReview from './routes/CoverReview.svelte';
+  import Wishlist from './routes/Wishlist.svelte';
+  import Shared from './routes/Shared.svelte';
+  import AiTopics from './routes/AiTopics.svelte';
 
   let lib = $state<Library>();
   let error = $state('');
@@ -81,7 +84,7 @@
     {:else if section === 'book' && param}
       {#key param}<BookDetail id={param} edit={$route.query.edit === '1'} />{/key}
     {:else if section === 'add'}
-      {#key $route.query.mode}<AddBook mode={$route.query.mode === 'scan' || $route.query.mode === 'search' ? $route.query.mode : 'isbn'} />{/key}
+      {#key `${$route.query.mode}/${$route.query.to}`}<AddBook mode={$route.query.mode === 'scan' || $route.query.mode === 'search' ? $route.query.mode : 'isbn'} wish={$route.query.to === 'wishlist'} borrow={$route.query.to === 'borrowed'} />{/key}
     {:else if section === 'scan'}
       <BatchScan />
     {:else if section === 'locations'}
@@ -102,6 +105,12 @@
       <Exchange />
     {:else if section === 'print'}
       <Print loc={$route.query.loc ?? null} />
+    {:else if section === 'topics'}
+      <AiTopics />
+    {:else if section === 'shared'}
+      <Shared />
+    {:else if section === 'wishlist'}
+      <Wishlist />
     {:else if section === 'lending'}
       <Lending />
     {:else if section === 'stats'}

@@ -13,7 +13,7 @@
   kn.refresh();
   /** Where the stories take place (Wikidata "narrative location"), one entry per real place per book. */
   const storyGroups = $derived(
-    clusterByPlace($lib.books.flatMap((b) => {
+    clusterByPlace(($lib && lib.owned()).flatMap((b) => {
       const w = b.identifiers?.wikidata ? $k.works.get(b.identifiers.wikidata) : undefined;
       const seen = new Set<string>();
       return (w?.settings ?? []).filter((st) => st.point).flatMap((st) => {
@@ -35,7 +35,7 @@
   };
 
   const writtenGroups = $derived(
-    clusterByPlace($lib.books.filter((b) => b.writing?.place).map((b) => ({ point: b.writing!.place!, item: b })))
+    clusterByPlace(($lib && lib.owned()).filter((b) => b.writing?.place).map((b) => ({ point: b.writing!.place!, item: b })))
   );
   const placeGroups = $derived(
     lib.children(null).filter((p) => p.geo).map((p) => ({ place: p, count: ($lib && lib.counts()).get(p.id) ?? 0 }))

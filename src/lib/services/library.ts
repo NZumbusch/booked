@@ -1,5 +1,8 @@
-import { applyPatch, cleanList, createBook, findDuplicates } from '../domain/book';
+import { applyPatch, cleanList, createBook, findDuplicates, onWishlist } from '../domain/book';
 import { fold } from '../domain/query';
+import {
+  base64ToBytes, bytesToBase64, decodeDataUrl, isInlinePhoto, photoIdFor, photoRef, type PhotoFile, type StoredPhoto
+} from '../domain/photos';
 import { newId } from '../domain/ids';
 import { bookCounts, canParent, childrenOf, descendantIds, labelOf, nextOrder, reorder } from '../domain/locations';
 import type {
@@ -32,6 +35,8 @@ export class Library {
   private books = new Map<Id, Book>();
   private locations = new Map<Id, Location>();
   private countsCache?: Map<Id | null, number>;
+  private ownedCache?: Book[];
+  private wishlistCache?: Book[];
   private lastTime = 0;
   private lock: Promise<unknown> = Promise.resolve();
 
@@ -40,7 +45,98 @@ export class Library {
   }
 
   static async open(repo: Repository): Promise<Library> {
-    return new Library(repo, await repo.load());
+    const lib = new Library(repo, await repo.load());
+    await lib.migrate();
+    return lib;
+  }
+
+  /**
+   * Bring older data in line with current rules (idempotent, not undoable):
+   * - wishlist books have no room (earlier versions kept one, so they showed up in that room).
+   */
+  private async migrate() {
+    const now = this.now();
+    const fix = this.state.books.filter((b) => onWishlist(b) && (b.locationId !== null || b.lending || b.away));
+    if (fix.length) await this.commit({ putBooks: fix.map((b) => applyPatch(b, {}, now)) });
+    await this.migratePhotos();
+  }
+
+  // ------------------------------------------------------------- own cover photos
+
+  /** Save a photo file; returns the reference to put in a book's `cover`. */
+  async addPhoto(data: ArrayBuffer, type = 'image/jpeg'): Promise<string> {
+    const id = await photoIdFor(data);
+    if (!(await this.repo.getPhoto(id))) await this.repo.putPhotos([{ id, type, data, at: new Date().toISOString() }]);
+    return photoRef(id);
+  }
+
+  /** A photo file with a known id (downloaded from another device's upload). */
+  async putPhoto(id: string, data: ArrayBuffer, type: string): Promise<void> {
+    await this.repo.putPhotos([{ id, type, data, at: new Date().toISOString() }]);
+    this.photoListeners.forEach((fn) => fn(id));
+  }
+
+  private photoListeners = new Set<(id: string) => void>();
+  /** Called when a photo arrives that books may be waiting for. */
+  onPhoto(fn: (id: string) => void): () => void {
+    this.photoListeners.add(fn);
+    return () => this.photoListeners.delete(fn);
+  }
+
+  photo(id: string): Promise<StoredPhoto | undefined> {
+    return this.repo.getPhoto(id);
+  }
+
+  photoIds(): Promise<string[]> {
+    return this.repo.photoIds();
+  }
+
+  /** Photos received from elsewhere (another device, a shared place). */
+  async storePhotos(files: PhotoFile[]): Promise<void> {
+    const have = new Set(await this.repo.photoIds());
+    const at = new Date().toISOString();
+    const fresh = files.filter((f) => !have.has(f.id));
+    await this.repo.putPhotos(fresh.map((f) => ({ id: f.id, type: f.type, data: base64ToBytes(f.data), at })));
+    fresh.forEach((f) => this.photoListeners.forEach((fn) => fn(f.id)));
+  }
+
+  /** These photos as base64, for JSON transports. */
+  async photoFiles(ids: Iterable<string>): Promise<PhotoFile[]> {
+    const out: PhotoFile[] = [];
+    for (const id of ids) {
+      const p = await this.repo.getPhoto(id);
+      if (p) out.push({ id: p.id, type: p.type, data: bytesToBase64(p.data) });
+    }
+    return out;
+  }
+
+  private migratingPhotos: Promise<void> | undefined;
+
+  /**
+   * Photos stored inside books (`data:` covers, from earlier versions, old backups, older devices or
+   * undo) move into the photo store; the book keeps a short reference. Not undoable, and the book's
+   * edit time is kept, so this never looks like an edit to sync (every device converts on its own).
+   */
+  migratePhotos(): Promise<void> {
+    this.migratingPhotos ??= (async () => {
+      // (cleared below, on the outer promise: a `finally` in here could run before the assignment)
+      {
+        const todo = this.state.books.filter((b) => isInlinePhoto(b.cover));
+        if (!todo.length) return;
+        const put: Book[] = [];
+        for (const b of todo) {
+          const file = decodeDataUrl(b.cover!);
+          if (!file) continue;
+          const ref = await this.addPhoto(file.data, file.type);
+          const current = this.books.get(b.id);
+          if (current && current.cover === b.cover) put.push({ ...current, cover: ref });
+        }
+        if (put.length) await this.commit({ putBooks: put });
+      }
+    })().finally(() => {
+      this.migratingPhotos = undefined;
+    });
+    return this.migratingPhotos;
   }
 
   subscribe(fn: Listener): () => void {
@@ -67,8 +163,19 @@ export class Library {
     return labelOf(this.state.locations, id);
   }
 
+  /** Book counts per location: books you own only (the wishlist lives nowhere). */
   counts(): Map<Id | null, number> {
-    return (this.countsCache ??= bookCounts(this.state.locations, this.state.books));
+    return (this.countsCache ??= bookCounts(this.state.locations, this.owned()));
+  }
+
+  /** The library proper: every book you own. */
+  owned(): Book[] {
+    return (this.ownedCache ??= this.state.books.filter((b) => !onWishlist(b)));
+  }
+
+  /** Books you'd like to have. */
+  wishlist(): Book[] {
+    return (this.wishlistCache ??= this.state.books.filter(onWishlist));
   }
 
   duplicatesOf(candidate: { id?: Id; isbn10?: string; isbn13?: string }): Book[] {
@@ -233,7 +340,7 @@ export class Library {
     const now = this.now();
     const pairs = ids
       .map((id) => this.mustBook(id))
-      .filter((b) => b.locationId !== toId)
+      .filter((b) => b.locationId !== toId && !onWishlist(b)) // wishlist books live nowhere
       .map((b): [Book, Book] => [b, { ...b, locationId: toId, updatedAt: now }]);
     if (!pairs.length) return 0;
     const n = pairs.length;
@@ -501,27 +608,46 @@ export class Library {
     await this.commit({ ...action, pushUndo: undo, putTombstones });
   }
 
+  /**
+   * Apply a change: memory first (synchronously), then storage.
+   * Every action computes its result from the in-memory state without awaiting first, so updating
+   * memory right away means the next action (a background fill-in, another tap) always builds on this
+   * one. Before, memory changed only after the database write, so two writes to the same book in flight
+   * at once both started from the old state and the second silently undid the first.
+   * Storage writes run in the order they were started (IndexedDB queues them); if one fails, memory is
+   * reloaded from storage so it never shows something that wasn't saved.
+   */
   private async commit(changes: ChangeSet): Promise<void> {
-    await this.repo.commit(plain(changes));
+    const data = plain(changes);
     const books = new Map(this.books);
-    changes.deleteBookIds?.forEach((id) => books.delete(id));
-    changes.putBooks?.forEach((b) => books.set(b.id, b));
+    data.deleteBookIds?.forEach((id) => books.delete(id));
+    data.putBooks?.forEach((b) => books.set(b.id, b));
     const locations = new Map(this.locations);
-    changes.deleteLocationIds?.forEach((id) => locations.delete(id));
-    changes.putLocations?.forEach((l) => locations.set(l.id, l));
+    data.deleteLocationIds?.forEach((id) => locations.delete(id));
+    data.putLocations?.forEach((l) => locations.set(l.id, l));
     this.set({ ...this.state, books: [...books.values()], locations: [...locations.values()] });
+    try {
+      await this.repo.commit(data);
+    } catch (e) {
+      this.set(await this.repo.load());
+      throw e;
+    }
   }
 
   private set(state: LoadedState) {
     this.state = state;
     this.index();
     this.listeners.forEach((fn) => fn(state));
+    // A photo inside a book arrived (sync from an older device, a restore, undo): move it to the photo store.
+    if (!this.migratingPhotos && state.books.some((b) => isInlinePhoto(b.cover))) queueMicrotask(() => void this.migratePhotos().catch(() => {}));
   }
 
   private index() {
     this.books = new Map(this.state.books.map((b) => [b.id, b]));
     this.locations = new Map(this.state.locations.map((l) => [l.id, l]));
     this.countsCache = undefined;
+    this.ownedCache = undefined;
+    this.wishlistCache = undefined;
   }
 }
 

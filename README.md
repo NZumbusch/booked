@@ -10,9 +10,20 @@ All data stays on your device (IndexedDB). The app needs no backend and no API k
   - ISBN entry, title/author search, or a full manual form
   - Details come from Open Library, Google Books and Wikidata, filled in the background so adding never waits
   - Repeated ISBNs ask "another copy?" before adding
+- **Wishlist, kept apart**
+  - Its own page (Home › Wishlist): add a wish by title search or by hand, remove it, or tap **Bought it** and choose the room
+  - Wishes have no room and never appear in the library, room counts, stats, the wall or the map
+  - Scanning a book that's on your wishlist moves it into the library instead of adding a second entry
+  - ★ marks the most wanted (listed first); a note per wish (e.g. which edition)
+  - **Share** the list with family as text (for a message) or as a picture with covers
 - **Know where everything is**
   - Place › room (› optional shelf), with counts at every level
   - Move single books, a selection, or a whole room. Every move goes into the book's history
+- **Borrowed books** (from a library or a friend)
+  - Lending › **＋ Borrowed book**: scan or type it, set where it's from; due back after your usual loan period (4 weeks, changeable)
+  - They sit in your library and rooms with a "back 03.12." badge, but don't count as owned or in the collection value
+  - Reminders: a banner on Home and the Lending badge (due in 3 days, then overdue), a notification when you open Booked (once a day, if allowed), and **📅 Calendar** adds an event with an alarm to your phone's calendar
+  - **Given back**: remove it, keep it on your wishlist, or keep it because you bought it; **Extend** moves the due date
 - **Find and organise**
   - Search plus combinable filters as chips, which you can save
   - Grid or list, sorting and grouping
@@ -30,7 +41,10 @@ All data stays on your device (IndexedDB). The app needs no backend and no API k
   - Seamless: every cover gets the same 2:3 tile with no gaps; covers are cropped to fill (never stretched), taking less from the top where the title usually is
   - **Arrangements:**
     - Colour, as a colour wheel
-    - Topic › subtopic, as seamless clusters with floating labels
+    - Topic, as a map: similar books side by side (same series and author count most, then shared topics, rarer ones more; a little era, language and publisher line), regions flowing into each other. Tags name the regions on several levels as you zoom in: broad topics (Fiction, History), their sub-topics (Crime & mystery, Historical fiction), sub-sub-topics (Police), then series and authors. The topic tree comes from your own books (a topic goes under a broader one it mostly comes with; English and German catalogue synonyms are merged). 🔀 lays the map out anew
+    - **✨ Topics with AI** (#/topics): Booked writes a request listing your books (all, those without topics of your own, or those with no topic at all) together with your existing topics; paste it into any chat AI, paste the answer back, check or change each book's topic, save. The AI is asked to reuse your topics, add new ones only where needed, and search the web when unsure. Nothing is sent anywhere by Booked
+    - Every book page has **Topic on the cover wall**: set or change it yourself (suggestions from your topics), or go back to the catalogue's
+    - Endless topic wall: small libraries show each book a few times, each copy in a different neighbourhood and never near another; every repeat of the field is arranged a little differently
     - Title, author › title, century › decade, place › room
   - **Topic dropdown:** narrows the field to one topic, clustered by its subtopics
   - **Topic tags** float over the clusters (broad topics zoomed out, subtopics closer in); the tag button hides them
@@ -250,16 +264,16 @@ The writing place uses the best available evidence, in this order:
 The book page says which of these was used, and the "?" links to the Wikidata record.
 A field you edit by hand loses its source marker.
 
-## Data schema (v1)
+## Data schema (v2)
 
-All records are plain JSON. A backup is `{ app, schemaVersion, books, locations, moves, settings }`.
+All records are plain JSON. A backup is `{ app, schemaVersion, books, locations, moves, settings, photos }` (schema v2: own cover photos in `photos` as base64, referenced from books as `photo:<id>`).
 
 **Location**: `{ id, kind: 'place'|'room'|'shelf', name, parentId, order, geo?, createdAt, updatedAt }`.
 A place has no parent, a room's parent is a place, and a shelf's parent is a room. Shelves are optional and stay out of the way: the shelf picker only appears once a room has shelves.
 
 **Book**
 - *Bibliographic:* `title, subtitle, authors[], contributors[], publisher, publishedYear, firstPublishedYear, edition, language, originalLanguage, pageCount, format, isbn10, isbn13, identifiers{olid,gbid,oclc,lccn,wikidata…}, description, cover, genres[], subjects[], series, seriesNumber, writing{year,yearEnd,place{lat,lon,label},placeBasis}, sources[], provenance{field → {source,url,note}}`
-- *Mine:* `ownership: owned|wishlist, locationId, tags[], collections[], status: unread|reading|read|abandoned, rating 1–5, startedOn, finishedOn, notes, condition, purchasedOn, price, signed, copies, lending{to,lentOn,dueOn}`
+- *Mine:* `ownership: owned|wishlist` (a wishlist book always has `locationId: null`; older data is migrated on open), `locationId, tags[], collections[], status: unread|reading|read|abandoned, rating 1–5, startedOn, finishedOn, notes, condition, purchasedOn, price, signed, copies, lending{to,lentOn,dueOn}`
 - *Meta:* `createdAt, updatedAt`
 
 **MoveRecord** (location history): `{ id, bookId, fromId, toId, fromLabel, toLabel, at, batchId }`.
@@ -351,14 +365,20 @@ Labels are snapshots, so renaming a room later doesn't rewrite history. Moving a
 
 Tap the cover on a book's page to see the covers of its other editions (Open Library and Google Books): your own edition first, then the same language.
 - The covers lie in loose piles. Tap one to pull it out and see it full size, swipe sideways to flip through, swipe down to put it back, and tap **Use this cover** to take it.
+- **Google Images** opens an image search for the book (by title, or by ISBN). Long-press the right picture › **Share** › **Booked** (Android, installed app) and it becomes that book's cover; or **Copy image** and tap **Paste image**. Booked remembers which book you were looking for (for an hour); otherwise it asks.
 - **Use my own photo** takes a picture (or picks one from your photos) and uses that instead.
+  - Your photos are saved as real JPEG files (up to 1600 px) in their own store on the device; the book only keeps a short reference (`photo:<id>`, the id comes from the file's contents)
+  - **Backups** include them (a backup file is complete on its own)
+  - **Google Drive sync** uploads each photo once as its own file in Booked's hidden app folder, and other devices download it once; the library file itself stays small
+  - **Shared places** carry the photos of their books inside the encrypted shared copy
+  - Photos stored inside books by earlier versions (and in older backups) are converted automatically
 - Changing a cover can be undone right away.
 
 ### Covers on this device
 
 - **What's saved:** every cover is downloaded once and stored on the device in its own database, separate from your backups and sync. The colours of each cover are analysed (main colour, palette, "is this a real cover?") for the cover wall.
 - **When it downloads** (Settings → Covers on this device):
-  - **Only on Wi-Fi** (the default), on any connection, or off.
+  - **Large images only on Wi-Fi** (the default), on any connection, or off. The small grid images (a few KB each) are saved on any connection unless saving is off or data saver is on.
   - Android Chrome reports whether it's on Wi-Fi. iPhone browsers don't, so Booked asks once ("Download covers now?") instead of guessing.
   - Data saver is respected for automatic downloads.
   - **Downloading on mobile data:** tapping *Download* when not on Wi-Fi asks first and shows the estimated size; confirm and it downloads anyway.

@@ -41,6 +41,20 @@ function world(overrides: Record<string, unknown> = {}): Fetcher {
 }
 
 describe('lookupIsbn', () => {
+  it('takes this edition’s cover (Google by ISBN) over the work’s cover when the edition record has none', async () => {
+    const noCover = { ...edition, covers: undefined };
+    const r = await lookupIsbn('9780441172719', world({ 'openlibrary.org/isbn/9780441172719.json': noCover }), allLoad);
+    expect(r.draft.cover).toContain('books.google.com');
+    expect(r.draft.provenance?.cover?.source).toBe('googlebooks');
+  });
+
+  it('falls back to the work’s cover only when no source has this edition’s cover', async () => {
+    const noCover = { ...edition, covers: undefined };
+    const probe = async (u: string) => !u.includes('books.google.com') && !u.includes('dnb.de');
+    const r = await lookupIsbn('9780441172719', world({ 'openlibrary.org/isbn/9780441172719.json': noCover }), probe);
+    expect(r.draft.cover).toBe('https://covers.openlibrary.org/b/id/11481354-L.jpg?default=false');
+  });
+
   it('merges Open Library, Google Books and Wikidata, keeping provenance', async () => {
     const r = await lookupIsbn('978-0-441-17271-9', world(), allLoad);
     expect(r.status).toBe('found');

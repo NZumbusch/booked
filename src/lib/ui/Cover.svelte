@@ -5,6 +5,8 @@
   import { isCoverShape } from '../covers/colors';
   import { covers } from '../stores/app';
   import { coverRetry } from './coverRetry';
+  import { isOwnPhoto, isPhotoRef } from '../domain/photos';
+  import { photoArrived, photoUrl } from './photoUrls';
 
   let { book, size = 'md' }: { book: Pick<Book, 'title' | 'authors' | 'cover'>; size?: 'sm' | 'md' | 'lg' } = $props();
   let failed = $state(false);
@@ -13,8 +15,13 @@
   // Prefer the copy cached on this device (offline, no network); fall back to the URL.
   let local = $state<string>();
   let broken = $state(false);
+  /** A copy is saved on this device: wait for it instead of downloading the image again. */
+  let saved = $state(false);
   let tick = $state(0);
   let timer: ReturnType<typeof setTimeout> | undefined;
+
+  /** What the cache knew about this cover last time we looked (so unrelated cache updates cost nothing). */
+  let seen: string | undefined;
 
   /** Look in the cache again: a cover that wasn't saved yet may be now. */
   function refresh(url: string | undefined) {
@@ -24,6 +31,10 @@
     } catch {
       return; // e.g. in component tests without the app
     }
+    const m = cache.meta(url);
+    const sig = `${m?.at}|${m?.px}|${m?.tpx}|${m?.failedAt}`;
+    if (sig === seen) return; // another cover changed, not this one
+    seen = sig;
     broken = cache.isBroken(url);
     (async () => {
       // Grids and lists use the small saved image; the big view (a book's page) uses the large one,
@@ -35,7 +46,13 @@
       }
       u ??= await cache.objectUrl(url, 'thumb');
       if (!u) cache.warm(url); // not saved yet: have it saved now, so the saved copy takes over from the slow network image
-      if (url !== book.cover || !u || u === local) return;
+      if (url !== book.cover) return;
+      if (!u) {
+        saved = false; // nothing readable after all: the network image it is
+        seen = undefined; // look again next time
+        return;
+      }
+      if (u === local) return;
       local = u;
       failed = false; // the saved copy works even if the network image didn't
       tries = 0;
@@ -48,13 +65,24 @@
     failed = false;
     tries = 0;
     broken = false;
+    saved = false;
+    seen = undefined;
     clearTimeout(timer);
+    if (isPhotoRef(url)) {
+      // Your own photo, from the photo store on this device (it may still be on its way from Drive).
+      return photoArrived.subscribe(() => {
+        photoUrl(url).then((u) => {
+          if (u && url === book.cover) local = u;
+        });
+      });
+    }
     let cache;
     try {
       cache = covers();
     } catch {
       return;
     }
+    saved = cache.has(url);
     // Re-check whenever the cache changes (a cover finished downloading), so a cover that was
     // missing when first shown appears without reloading the page.
     const stopCache = cache.version.subscribe(() => refresh(url));
@@ -72,23 +100,29 @@
       clearTimeout(timer);
     };
   });
-  const src = $derived(broken ? undefined : (local ?? (book.cover ? withRetry(book.cover, tick) : undefined)));
+  const src = $derived(broken ? undefined : (local ?? (book.cover && !saved && !isPhotoRef(book.cover) ? withRetry(book.cover, tick) : undefined)));
 
   /** A different address makes the browser load the image again instead of reusing a failed one. */
   function withRetry(url: string, n: number): string {
-    if (!n || url.startsWith('data:')) return url;
+    if (!n || isOwnPhoto(url)) return url;
     return url + (url.includes('?') ? '&' : '?') + `r=${n}`;
   }
   /** A wide title-page scan or similar isn't a cover: show the title instead of a zoomed-in crop. */
   function onLoad(e: Event) {
     const img = e.currentTarget as HTMLImageElement;
-    if (!book.cover?.startsWith('data:') && !isCoverShape(img.naturalWidth, img.naturalHeight)) failed = true;
+    if (!isOwnPhoto(book.cover) && !isCoverShape(img.naturalWidth, img.naturalHeight)) failed = true;
   }
   function onError() {
+    if (isPhotoRef(book.cover)) {
+      failed = true; // a damaged photo file: show the title
+      return;
+    }
     if (local) {
       // The saved copy can't be shown (its temporary address was released): make a fresh one, else use the network image.
       const url = book.cover;
       local = undefined;
+      saved = false;
+      seen = undefined;
       try {
         covers().dropUrl(url);
       } catch {
@@ -111,6 +145,8 @@
 <div class="cover {size}" style:--hue={hue}>
   {#if src && !failed}
     <img {src} alt="" loading="lazy" decoding="async" onerror={onError} onload={onLoad} />
+  {:else if saved && !failed && !broken}
+    <!-- the saved copy is a moment away: no title flash in between -->
   {:else}
     <div class="placeholder">
       <span class="t">{cleanTitle(book.title)}</span>

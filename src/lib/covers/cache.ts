@@ -2,6 +2,7 @@ import Dexie, { type Table } from 'dexie';
 import { helperUrlOf } from '../config';
 import { writable, type Readable } from 'svelte/store';
 import type { Book } from '../domain/types';
+import { isInlinePhoto, isOwnPhoto, isPhotoRef } from '../domain/photos';
 import type { Library } from '../services/library';
 import { analyzePixels, isCoverShape, isNiceCover, looksLikePlaceholder, type CoverAnalysis } from './colors';
 import { currentConnection, downloadDecision, type CacheMode, type ConnectionInfo } from './policy';
@@ -35,6 +36,9 @@ export interface CoverEntry {
   error?: string;
   /** The source only had a blank "image not available" tile. */
   placeholder?: boolean;
+  /** The large image failed (the small one may be saved): waits like `failedAt`/`failures` before the next try. */
+  fullFailedAt?: number;
+  fullFailures?: number;
   at: number;
 }
 export type CoverMeta = Omit<CoverEntry, 'data' | 'thumb'>;
@@ -44,10 +48,20 @@ export const THUMB_PX = 300;
 
 class CoverDb extends Dexie {
   covers!: Table<CoverEntry, string>;
+  /** The same entries without the image data: read in full at start, so that is quick and light. */
+  meta!: Table<CoverMeta, string>;
   constructor(name: string) {
     super(name);
     this.version(1).stores({ covers: 'url, at' });
+    this.version(2).stores({ covers: 'url, at', meta: 'url' }).upgrade(async (tx) => {
+      await tx.table('covers').toCollection().each((e: CoverEntry) => void tx.table('meta').put(metaOf(e)));
+    });
   }
+}
+
+function metaOf(e: CoverEntry): CoverMeta {
+  const { data: _d, thumb: _t, ...meta } = e;
+  return meta;
 }
 
 export interface Rendered {
@@ -124,6 +138,11 @@ export interface CacheStatus {
 const DAY = 86400000;
 /** Waits after the 1st, 2nd… failed download. A missing image (404) or a blank tile waits a day right away. */
 const RETRY_WAIT = [60_000, 5 * 60_000, 30 * 60_000, 3 * 3600_000, DAY];
+const retryWait = (failures: number | undefined) => RETRY_WAIT[Math.min(Math.max((failures ?? 1) - 1, 0), RETRY_WAIT.length - 1)];
+
+/** A cover request that hangs (it happens with Open Library) must not block a download slot for good. */
+const FETCH_TIMEOUT = 20_000;
+const timeoutSignal = () => (typeof AbortSignal !== 'undefined' && 'timeout' in AbortSignal ? AbortSignal.timeout(FETCH_TIMEOUT) : undefined);
 
 /** Small LRU of object URLs / bitmaps so thousands of covers don't sit in memory. */
 class Lru<V> {
@@ -171,7 +190,7 @@ export class CoverCache {
   private loaded: Promise<void>;
   private running: Promise<void> | undefined;
   // Object URLs may still be in use by covers on screen: give them time before they are released.
-  private urls = new Lru<string>(300, (u) => void setTimeout(() => URL.revokeObjectURL(u), 60_000));
+  private urls = new Lru<string>(800, (u) => void setTimeout(() => URL.revokeObjectURL(u), 60_000));
   private bitmaps = new Lru<ImageBitmap>(500, (b) => b.close?.());
   /** Bumped whenever covers change, so views can redraw. */
   version = writable(0);
@@ -180,13 +199,42 @@ export class CoverCache {
     private lib: Library,
     private process: Processor,
     private connection: () => ConnectionInfo | undefined = currentConnection,
-    dbName = 'booked-covers'
+    dbName = 'booked-covers',
+    /** Where an own photo (`photo:<id>`) can be read from on this device; undefined = not here (yet). */
+    private resolve: (url: string) => Promise<string | undefined> = async (u) => u
   ) {
     this.db = new CoverDb(dbName);
-    this.loaded = this.db.covers.toCollection().each((e) => {
-      const { data: _d, ...meta } = e;
-      this.index.set(e.url, meta);
-    }).then(() => this.publish());
+    this.loaded = this.db.meta.toArray().then((all) => {
+      for (const m of all) this.index.set(m.url, m);
+      this.publish();
+    });
+  }
+
+  /** Write an entry (images + meta) in one transaction. */
+  private async put(e: CoverEntry) {
+    await this.db.transaction('rw', this.db.covers, this.db.meta, async () => {
+      await this.db.covers.put(e);
+      await this.db.meta.put(metaOf(e));
+    });
+    this.index.set(e.url, metaOf(e));
+  }
+
+  /** Update only the bookkeeping of an entry (no image data is read or written). */
+  private async putMeta(m: CoverMeta) {
+    await this.db.transaction('rw', this.db.covers, this.db.meta, async () => {
+      await this.db.meta.put(m);
+      // Keep the full record in step, so a later upgrade or re-index sees the same state.
+      if (!(await this.db.covers.update(m.url, m))) await this.db.covers.put(m);
+    });
+    this.index.set(m.url, m);
+  }
+
+  private async remove(url: string) {
+    this.index.delete(url);
+    await this.db.transaction('rw', this.db.covers, this.db.meta, async () => {
+      await this.db.covers.delete(url);
+      await this.db.meta.delete(url);
+    });
   }
 
   get status(): Readable<CacheStatus> {
@@ -222,22 +270,35 @@ export class CoverCache {
   }
 
   private waitAfter(e: CoverMeta): number {
-    return e.placeholder ? DAY : RETRY_WAIT[Math.min(Math.max((e.failures ?? 1) - 1, 0), RETRY_WAIT.length - 1)];
+    return e.placeholder ? DAY : retryWait(e.failures);
   }
 
-  /** Remember a failed download; a transient problem (rate limit, no connection) is retried soon, not tomorrow. */
+  /** The large image failed recently: don't try it again before its wait is over. */
+  private fullWaiting(e: CoverMeta, now: number): boolean {
+    return !!e.fullFailedAt && now - e.fullFailedAt < retryWait(e.fullFailures);
+  }
+
+  /**
+   * Remember a failed download; a transient problem (rate limit, no connection) is retried soon, not tomorrow.
+   * If the small image is saved and only the large one failed, that is remembered too (with its own wait),
+   * so the large one isn't fetched again on every change in the library.
+   */
   private async recordFailure(url: string, e: unknown) {
     const prev = this.index.get(url);
-    if (prev?.px || prev?.tpx) return; // something usable is saved already
     const permanent = e instanceof PlaceholderError || (e instanceof HttpError && (e.status === 404 || e.status === 410));
-    const failed: CoverEntry = {
+    if (prev?.px || prev?.tpx) {
+      await this.putMeta({
+        ...prev, fullFailedAt: Date.now(), fullFailures: permanent ? RETRY_WAIT.length : (prev.fullFailures ?? 0) + 1, error: describeError(e)
+      });
+      return;
+    }
+    const failed: CoverMeta = {
       ...(prev ?? { url }), failedAt: Date.now(), at: Date.now(),
       failures: permanent ? RETRY_WAIT.length : (prev?.failures ?? 0) + 1,
       error: describeError(e),
       ...(e instanceof PlaceholderError ? { placeholder: true } : { placeholder: undefined })
     };
-    await this.db.covers.put(failed);
-    this.index.set(url, failed);
+    await this.putMeta(failed);
   }
 
   /** Does this cover need (re)processing? 'thumb' = only the small copy is missing (made on the device, no download). */
@@ -247,9 +308,9 @@ export class CoverCache {
     if (!e.tpx) return 'thumb';
     if (this.fullMode === 'detail') return false;
     const target = COVER_SIZES[this.size].px;
-    if (!e.px) return 'download';
+    if (!e.px) return this.fullWaiting(e, now) ? false : 'download';
     if (e.px > target * 1.05) return 'shrink';
-    if (e.px < target * 0.95 && (e.sourcePx ?? 0) > e.px * 1.05) return 'download';
+    if (e.px < target * 0.95 && (e.sourcePx ?? 0) > e.px * 1.05 && !this.fullWaiting(e, now)) return 'download';
     return false;
   }
 
@@ -273,17 +334,14 @@ export class CoverCache {
 
   /** The source gave us nothing usable: only a "not available" tile, or an image that isn't book-shaped (a title-page scan…). */
   isBroken(url: string | undefined): boolean {
-    const e = url && !url.startsWith('data:') ? this.index.get(url) : undefined;
+    const e = url && !isOwnPhoto(url) ? this.index.get(url) : undefined;
     return !!e && ((!e.px && !!e.placeholder) || (!!e.px && !isCoverShape(e.w ?? 0, e.h ?? 0)));
   }
 
   /** Forget a failed download so it is tried again on the next run. */
   retry(url: string): void {
     const e = this.index.get(url);
-    if (e && !e.px) {
-      this.index.delete(url);
-      void this.db.covers.delete(url);
-    }
+    if (e && !e.px) void this.remove(url);
   }
 
   /** Everything about the state of the saved covers, for the status page. */
@@ -293,7 +351,7 @@ export class CoverCache {
     let noCover = 0, own = 0;
     for (const b of books) {
       if (!b.cover) noCover++;
-      else if (b.cover.startsWith('data:')) own++;
+      else if (isOwnPhoto(b.cover)) own++;
       else titles.set(b.cover, [...(titles.get(b.cover) ?? []), b.title]);
     }
     const r: CoverReport = { books: books.length, noCover, ownPhotos: own, urls: titles.size, saved: 0, large: 0, notYet: 0, failed: 0, blank: 0, oddShape: 0, bytes: 0, items: [] };
@@ -321,9 +379,15 @@ export class CoverCache {
   retryFailed(urls?: string[]): number {
     let n = 0;
     for (const [url, e] of [...this.index]) {
-      if (!e.failedAt || e.px || e.tpx || (urls && !urls.includes(url))) continue;
-      this.index.delete(url);
-      void this.db.covers.delete(url);
+      if (urls && !urls.includes(url)) continue;
+      if (e.fullFailedAt && (e.px || e.tpx)) {
+        void this.putMeta({ ...e, fullFailedAt: undefined, fullFailures: undefined });
+        this.fullFailed.delete(url);
+        n++;
+        continue;
+      }
+      if (!e.failedAt || e.px || e.tpx) continue;
+      void this.remove(url);
       this.fullFailed.delete(url);
       n++;
     }
@@ -383,6 +447,7 @@ export class CoverCache {
     for (const u of this.wanted()) {
       const e = this.index.get(u);
       if (e?.failedAt && !e.px && !e.tpx) due = Math.min(due, e.failedAt + this.waitAfter(e));
+      else if (e?.fullFailedAt && !e.px && this.fullMode === 'all') due = Math.min(due, e.fullFailedAt + retryWait(e.fullFailures));
     }
     if (due < Infinity && due - now < DAY) this.retryTimer = setTimeout(() => this.run().catch(() => {}), Math.max(5000, due - now + 500));
   }
@@ -409,7 +474,7 @@ export class CoverCache {
    * is offline or on data saver, or it failed recently.
    */
   warm(url: string | undefined): void {
-    if (!url || url.startsWith('data:') || this.has(url) || this.warming.has(url) || this.mode === 'off') return;
+    if (!url || isInlinePhoto(url) || this.has(url) || this.warming.has(url) || this.mode === 'off') return;
     if (typeof navigator !== 'undefined' && !navigator.onLine) return;
     if (this.connection()?.saveData) return;
     const e = this.index.get(url);
@@ -436,11 +501,24 @@ export class CoverCache {
     if (this.has(url)) return;
     const proxy = this.lib.state.settings.covers?.helper === 'off' ? undefined : helperUrlOf(this.lib.state.settings);
     try {
-      await this.save(url, await this.process({ url, size: this.size, want: 'thumb', proxy }), undefined);
+      const src = await this.sourceOf(url);
+      if (!src) return;
+      await this.save(url, await this.process({ url: src, size: this.size, want: 'thumb', proxy }), undefined);
     } catch (e) {
       await this.recordFailure(url, e);
     }
     this.bumpSoon();
+  }
+
+  /** Small images: on any connection, unless saving covers is off, the device is offline or on data saver. */
+  private smallAllowed(): boolean {
+    const online = typeof navigator === 'undefined' || navigator.onLine;
+    return online && this.mode !== 'off' && !this.connection()?.saveData;
+  }
+
+  /** The address to read a cover from: own photos come from the photo store. */
+  private async sourceOf(url: string): Promise<string | undefined> {
+    return isPhotoRef(url) ? this.resolve(url) : url;
   }
 
   private allowed(force: boolean | 'mobile'): boolean {
@@ -464,12 +542,20 @@ export class CoverCache {
         const url = queue[i++];
         const kind = this.needs(url, Date.now());
         if (!kind) continue;
-        if (kind === 'download' && !this.allowed(force)) return; // e.g. left Wi-Fi: stop quietly
+        // Large images follow the Wi-Fi setting; the small grid image (a few KB) comes on any connection,
+        // so covers show up offline even where the connection type can't be told (iPhone) or on mobile data.
+        let thumbOnly = false;
+        if (kind === 'download' && !isOwnPhoto(url) && !this.allowed(force)) {
+          if (this.has(url) || !this.smallAllowed()) continue;
+          thumbOnly = true;
+        }
         const prev = kind === 'download' && !this.index.get(url)?.px ? undefined : await this.db.covers.get(url);
         const local = kind === 'shrink' || kind === 'thumb';
         try {
-          const want = this.fullMode === 'all' && kind !== 'thumb' ? 'full' : 'thumb';
-          const p = await this.process({ url, size: this.size, want, proxy, stored: local ? prev?.data : undefined, storedType: prev?.type });
+          const want = this.fullMode === 'all' && kind !== 'thumb' && !thumbOnly ? 'full' : 'thumb';
+          const src = local ? url : await this.sourceOf(url);
+          if (!src) continue; // an own photo that hasn't arrived on this device yet
+          const p = await this.process({ url: src, size: this.size, want, proxy, stored: local ? prev?.data : undefined, storedType: prev?.type });
           await this.save(url, p, kind === 'download' ? undefined : prev);
         } catch (e) {
           await this.recordFailure(url, e);
@@ -496,11 +582,11 @@ export class CoverCache {
       w: big?.w ?? prev?.w ?? p.thumb.w, h: big?.h ?? prev?.h ?? p.thumb.h,
       // A local re-render keeps knowing how big the source was (to grow again later).
       sourcePx: prev?.sourcePx ? Math.max(prev.sourcePx, p.sourcePx) : p.sourcePx,
-      analysis: p.analysis, nice: isNiceCover(big?.w ?? p.thumb.w, big?.h ?? p.thumb.h, p.analysis.contrast), at: Date.now()
+      analysis: p.analysis, nice: isNiceCover(big?.w ?? p.thumb.w, big?.h ?? p.thumb.h, p.analysis.contrast), at: Date.now(),
+      // A large image that failed before: still waiting, unless this one brought it.
+      ...(!big && prev?.fullFailedAt ? { fullFailedAt: prev.fullFailedAt, fullFailures: prev.fullFailures } : {})
     };
-    await this.db.covers.put(entry);
-    const { data: _d, thumb: _t, ...meta } = entry;
-    this.index.set(url, meta);
+    await this.put(entry);
     this.dropUrl(url);
     this.bitmaps.delete(url);
   }
@@ -513,7 +599,8 @@ export class CoverCache {
    * the device is offline, or it failed before in this session.
    */
   ensureFull(url: string | undefined): Promise<void> {
-    if (!url || url.startsWith('data:') || this.index.get(url)?.px || this.fullFailed.has(url)) return Promise.resolve();
+    const known = url ? this.index.get(url) : undefined;
+    if (!url || isOwnPhoto(url) || known?.px || this.fullFailed.has(url) || (known && this.fullWaiting(known, Date.now()))) return Promise.resolve();
     if (this.mode === 'off' || (typeof navigator !== 'undefined' && !navigator.onLine)) return Promise.resolve();
     const running = this.fullJobs.get(url);
     if (running) return running;
@@ -522,12 +609,15 @@ export class CoverCache {
       const prev = await this.db.covers.get(url);
       const proxy = this.lib.state.settings.covers?.helper === 'off' ? undefined : helperUrlOf(this.lib.state.settings);
       try {
-        const p = await this.process({ url, size: this.size, want: 'full', proxy });
+        const src = await this.sourceOf(url);
+        if (!src) return;
+        const p = await this.process({ url: src, size: this.size, want: 'full', proxy });
         await this.save(url, p, prev);
         this.publish();
         this.version.update((v) => v + 1);
-      } catch {
+      } catch (e) {
         this.fullFailed.add(url);
+        await this.recordFailure(url, e).catch(() => {});
       }
     })().finally(() => this.fullJobs.delete(url));
     this.fullJobs.set(url, job);
@@ -573,7 +663,10 @@ export class CoverCache {
   }
 
   async clear(): Promise<void> {
-    await this.db.covers.clear();
+    await this.db.transaction('rw', this.db.covers, this.db.meta, async () => {
+      await this.db.covers.clear();
+      await this.db.meta.clear();
+    });
     this.index.clear();
     this.urls.clear();
     this.bitmaps.clear();
@@ -590,6 +683,9 @@ export class CoverCache {
 }
 
 // ------------------------------------------------------------- browser image processing
+
+/** An image already on this device (own photo), not something to download. */
+const isLocalUrl = (url: string) => url.startsWith('data:') || url.startsWith('blob:');
 
 /** The source answered with an error status. */
 export class HttpError extends Error {
@@ -619,13 +715,13 @@ export function sourceCandidates(url: string, size: CoverSize): string[] {
 }
 
 async function fetchDirect(url: string): Promise<Blob> {
-  const res = await fetch(url, { mode: 'cors' });
+  const res = await fetch(url, { mode: 'cors', signal: timeoutSignal() });
   if (!res.ok) throw new HttpError(res.status);
   return res.blob();
 }
 
 async function fetchViaHelper(url: string, proxy: string): Promise<Blob> {
-  const res = await fetch(`${proxy.replace(/\/+$/, '')}/img?url=${encodeURIComponent(url)}`);
+  const res = await fetch(`${proxy.replace(/\/+$/, '')}/img?url=${encodeURIComponent(url)}`, { signal: timeoutSignal() });
   if (!res.ok) throw new HttpError(res.status);
   return res.blob();
 }
@@ -647,7 +743,7 @@ export const browserProcessor: Processor = async ({ url, size, want, proxy, stor
   for (const candidate of candidates) {
     try {
       const done = await processBlob(await fetchDirect(candidate), size, want);
-      if (looksLikePlaceholder(done.analysis) && !url.startsWith('data:')) {
+      if (looksLikePlaceholder(done.analysis) && !isLocalUrl(url)) {
         last = new PlaceholderError();
         continue; // try the smaller rendition before giving up
       }
@@ -657,7 +753,7 @@ export const browserProcessor: Processor = async ({ url, size, want, proxy, stor
     }
   }
   // 2. The source doesn't allow that: the helper passes on the small stored image, once (never the large one).
-  if (proxy && !url.startsWith('data:') && !(last instanceof PlaceholderError)) {
+  if (proxy && !isLocalUrl(url) && !(last instanceof PlaceholderError)) {
     const done = await processBlob(await fetchViaHelper(url, proxy), size, want);
     if (looksLikePlaceholder(done.analysis)) throw new PlaceholderError();
     return done;

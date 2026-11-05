@@ -41,7 +41,20 @@ function normalize(book: Book): Book {
   }
   if (out.subjects) out.subjects = cleanList(out.subjects);
   if (out.contributors) out.contributors = cleanList(out.contributors);
+  if (out.ownership === 'wishlist') {
+    // A wished-for book isn't on any shelf: no room, not lent out, not taken out of a shared room.
+    out.locationId = null;
+    delete out.lending;
+    delete out.away;
+  } else delete out.mustHave; // only means something on the wishlist
+  if (out.ownership === 'borrowed') delete out.lending; // not yours to lend on
+  else delete out.borrowed;
   return out;
+}
+
+/** On the wishlist (not owned yet): kept apart from the library everywhere. */
+export function onWishlist(book: Pick<Book, 'ownership'>): boolean {
+  return book.ownership === 'wishlist';
 }
 
 export function createBook(draft: BookDraft, { id, now }: { id: Id; now: Timestamp }): Book {
@@ -191,7 +204,7 @@ export function borrowers(books: Pick<Book, 'lending'>[]): string[] {
 export function copyDraft(book: Book): BookDraft {
   const {
     id: _id, createdAt: _c, updatedAt: _u, locationId: _l, tags: _t, collections: _co, status: _s, rating: _r, startedOn: _so,
-    finishedOn: _f, notes: _n, condition: _cd, purchasedOn: _p, price: _pr, signed: _sg, lending: _le, pendingLookup: _pl,
+    finishedOn: _f, notes: _n, condition: _cd, purchasedOn: _p, price: _pr, signed: _sg, lending: _le, pendingLookup: _pl, mustHave: _mh, borrowed: _bw,
     copies: _cp, ownership: _o, ...biblio
   } = book;
   return { ...biblio, ownership: 'owned' };
