@@ -93,8 +93,8 @@
 
   <section class="card stack">
     <h2>Export</h2>
-    <LocationPicker bind:value={scope} locations={$lib.locations} oncreate={null} />
-    <p class="muted small">{scope ? '' : 'No location chosen: '}{plural(scoped.length, 'book')} will be exported.</p>
+    <LocationPicker bind:value={scope} locations={$lib.locations} oncreate={null} noneLabel="All books" />
+    <p class="muted small">{plural(scoped.length, 'book')} will be exported.</p>
     <div class="formats">
       {#each Object.entries(FORMATS) as [key, f]}
         <label class="fmt" class:on={format === key}>

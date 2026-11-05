@@ -1,7 +1,9 @@
 <script lang="ts">
   import { onDestroy, onMount, untrack } from 'svelte';
-  import { rgbCss } from '../lib/covers/colors';
-  import { todayIso } from '../lib/domain/book';
+  import { isKnownPlaceholder, rgbCss } from '../lib/covers/colors';
+  import { cleanTitle, todayIso } from '../lib/domain/book';
+  import { isPhotoRef } from '../lib/domain/photos';
+  import { photoUrl } from '../lib/ui/photoUrls';
   import { applyFilter, filterChips, filterFromQuery } from '../lib/domain/filters';
   import type { Book } from '../lib/domain/types';
   import { saveFile, stamp } from '../lib/files';
@@ -65,7 +67,8 @@
   const period = $derived(layout.wrap);
   const byId = $derived(new Map(items.map((it) => [it.book.id, it])));
   const hiddenCount = $derived($lib && lib.owned().filter((b) => b.cover).length - items.length);
-  const uncached = $derived(items.filter((it) => !cache.has(it.book.cover)).length);
+  // Not saved yet and not failed: covers a site won't let us save (shown from the web instead) don't count.
+  const uncached = $derived(items.filter((it) => !cache.has(it.book.cover) && !cache.meta(it.book.cover)?.failedAt).length);
 
   // ---- geometry (world units: a cover is 1 wide and 1.5 high; cells add a small gap)
   const tileH = 1.5;
@@ -134,12 +137,36 @@
 
   // ---- images (decoded on demand for covers in view)
   const loading = new Set<string>();
-  const ready = new Map<string, ImageBitmap>();
+  type Pic = { src: CanvasImageSource; w: number; h: number };
+  const ready = new Map<string, Pic>();
+  /** Covers that can't be saved on the device (e.g. Google's, without the helper): shown straight from the web, like in the library. */
+  const tried = new Set<string>();
+  function wantWeb(url: string) {
+    if (ready.has(url) || tried.has(url) || loading.size > 8 || !navigator.onLine) return;
+    tried.add(url);
+    loading.add(url);
+    const img = new Image();
+    img.decoding = 'async';
+    img.onload = () => {
+      // a wide scan or a 1-pixel "no cover" answer isn't a cover: leave the title tile
+      if (isKnownPlaceholder(url, img.naturalWidth, img.naturalHeight)) cache.markPlaceholder(url);
+      else if (img.naturalWidth > 20 && img.naturalHeight > img.naturalWidth * 0.9) ready.set(url, { src: img, w: img.naturalWidth, h: img.naturalHeight });
+      if (ready.size > 600) ready.delete(ready.keys().next().value!);
+      loading.delete(url);
+      dirty = true;
+    };
+    img.onerror = () => {
+      loading.delete(url);
+      dirty = true;
+    };
+    if (isPhotoRef(url)) photoUrl(url).then((u) => (u ? (img.src = u) : img.onerror?.(new Event('error'))));
+    else img.src = url;
+  }
   function want(url: string) {
     if (ready.has(url) || loading.has(url) || loading.size > 8) return;
     loading.add(url);
     cache.bitmap(url).then((b) => {
-      if (b) ready.set(url, b);
+      if (b) ready.set(url, { src: b, w: b.width, h: b.height });
       // Keep memory bounded: forget the oldest decoded covers (the cache keeps its own LRU too).
       if (ready.size > 600) ready.delete(ready.keys().next().value!);
     }).finally(() => {
@@ -291,7 +318,10 @@
     drawn.push({ id, x: sx, y: sy, w, h });
     const url = it.book.cover!;
     const bmp = w >= MIN_SCALE - 2 ? ready.get(url) : undefined;
-    if (w >= MIN_SCALE - 2 && !bmp && cache.has(url)) want(url);
+    if (w >= MIN_SCALE - 2 && !bmp) {
+      if (cache.has(url)) want(url);
+      else if (!cache.isBroken(url)) wantWeb(url);
+    }
     paintCover(ctx, it, bmp, sx, sy, w, h, o.grey);
     if (id === focusId || id === selected?.id) {
       ctx.strokeStyle = o.ring;
@@ -303,15 +333,45 @@
   }
 
   /** A cover in its tile, never stretched; also used for the poster. */
-  function paintCover(ctx: CanvasRenderingContext2D, it: FieldItem, bmp: ImageBitmap | undefined, x: number, y: number, w: number, h: number, grey: string) {
+  function paintCover(ctx: CanvasRenderingContext2D, it: FieldItem, bmp: Pic | undefined, x: number, y: number, w: number, h: number, grey: string) {
     if (!bmp) {
-      // Not decoded yet (or too small to matter): its dominant colour stands in.
-      ctx.fillStyle = it.analysis ? rgbCss(it.analysis.color) : grey;
+      if (it.analysis) {
+        // Not decoded yet (or too small to matter): its dominant colour stands in.
+        ctx.fillStyle = rgbCss(it.analysis.color);
+        ctx.fillRect(x, y, w, h);
+        return;
+      }
+      // No picture at all: a title tile, like everywhere else in the app (not a hole in the wall).
+      const hue = [...it.book.title].reduce((acc, c) => (acc * 31 + c.charCodeAt(0)) % 360, 7);
+      const g = ctx.createLinearGradient(x, y, x + w, y + h);
+      g.addColorStop(0, `hsl(${hue} 35% 42%)`);
+      g.addColorStop(1, `hsl(${hue + 30} 40% 28%)`);
+      ctx.fillStyle = g;
       ctx.fillRect(x, y, w, h);
+      if (w >= 40) {
+        const size = Math.max(8, Math.round(w * 0.12));
+        ctx.fillStyle = '#fff';
+        ctx.font = `700 ${size}px system-ui, sans-serif`;
+        ctx.textBaseline = 'top';
+        ctx.textAlign = 'left';
+        const words = cleanTitle(it.book.title).split(/\s+/);
+        let line = '', row = 0;
+        const pad = w * 0.09, maxW = w - pad * 2, maxRows = Math.floor((h * 0.7) / (size * 1.2));
+        for (const word of words) {
+          const next = line ? `${line} ${word}` : word;
+          if (ctx.measureText(next).width > maxW && line) {
+            ctx.fillText(line, x + pad, y + pad + row * size * 1.2, maxW);
+            line = word;
+            if (++row >= maxRows) { line = ''; break; }
+          } else line = next;
+        }
+        if (line) ctx.fillText(line, x + pad, y + pad + row * size * 1.2, maxW);
+      }
+      void grey;
       return;
     }
-    const p = placeInRect(bmp.width, bmp.height, { x, y, w, h });
-    ctx.drawImage(bmp, p.src.x, p.src.y, p.src.w, p.src.h, p.dst.x, p.dst.y, p.dst.w, p.dst.h);
+    const p = placeInRect(bmp.w, bmp.h, { x, y, w, h });
+    ctx.drawImage(bmp.src, p.src.x, p.src.y, p.src.w, p.src.h, p.dst.x, p.dst.y, p.dst.w, p.dst.h);
   }
 
   // ---- input
@@ -510,7 +570,8 @@
       for (const t of layout.tiles) {
         const it = byId.get(t.id)!;
         const p = worldOf(t.col, t.row);
-        const bmp = cache.has(it.book.cover) ? await cache.bitmap(it.book.cover!) : undefined;
+        const raw = cache.has(it.book.cover) ? await cache.bitmap(it.book.cover!) : undefined;
+        const bmp = raw ? { src: raw, w: raw.width, h: raw.height } : undefined;
         paintCover(ctx, it, bmp, pad + (p.x - box.x0) * cell, pad + (p.y - box.y0) * cell, cell, cell * tileH, grey);
         if (++done % 200 === 0) await new Promise((r) => setTimeout(r));
       }

@@ -96,6 +96,14 @@ export function looksLikePlaceholder(a: Pick<CoverAnalysis, 'lightness' | 'satur
 }
 
 /** Book covers are portrait (about 2:3). Wide title-page scans, strips and thumbnails of other shapes are not covers. */
+/**
+ * Google Books' "image not available" picture: always the same 128×184 file. Its pixels can't be
+ * read from a web page (no CORS), so it's recognised by its size: the browser still tells us that.
+ */
+export function isKnownPlaceholder(url: string | undefined, width: number, height: number): boolean {
+  return !!url && /books\.google\./.test(url) && width === 128 && height === 184;
+}
+
 export function isCoverShape(width: number, height: number): boolean {
   if (!width || !height) return true; // unknown: give it the benefit of the doubt
   const ratio = width / height;

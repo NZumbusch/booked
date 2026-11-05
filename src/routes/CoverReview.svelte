@@ -31,6 +31,11 @@
     all: reviewQueue($lib.books, 'all').length
   });
 
+  // Start on a choice that has books (no point offering "0 books" first).
+  $effect(() => {
+    if (!started && scope === 'missing' && !counts.missing) scope = counts.series ? 'series' : 'all';
+  });
+
   function start() {
     queue = reviewQueue(lib.state.books, scope, (u) => cache.isBroken(u)).map((b) => b.id);
     pos = 0;

@@ -1,3 +1,4 @@
+import { canonicalTopic } from '../wall/topicTree';
 import { fold } from './query';
 import type { Book } from './types';
 
@@ -92,20 +93,29 @@ export function oddOneOut(books: Book[], index: SimilarityIndex): Book | undefin
 }
 
 /** Topics (subjects + genres) across the library, most common first, merged case-insensitively. */
+/** A book's topics as merged topics (own ones, genres, subjects; synonyms joined, catalogue noise left out). */
+function canonicalTopicsOf(b: Book): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const raw of [...(b.aiTopics ?? []), ...(b.subjects ?? []), ...b.genres]) {
+    const t = canonicalTopic(raw.trim());
+    if (t && !out.has(t.key)) out.set(t.key, t.label);
+  }
+  return out;
+}
+
 export function topTopics(books: Book[], limit = 24): { name: string; count: number }[] {
   const counts = new Map<string, { name: string; count: number }>();
   for (const b of books) {
-    for (const t of new Set([...(b.subjects ?? []), ...b.genres].map((x) => x.trim()).filter(Boolean))) {
-      const k = fold(t);
+    for (const [k, name] of canonicalTopicsOf(b)) {
       const e = counts.get(k);
       if (e) e.count++;
-      else counts.set(k, { name: t, count: 1 });
+      else counts.set(k, { name, count: 1 });
     }
   }
   return [...counts.values()].filter((t) => t.count > 1 || counts.size < 12).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name)).slice(0, limit);
 }
 
 export function booksOnTopic(books: Book[], topic: string): Book[] {
-  const k = fold(topic);
-  return books.filter((b) => [...(b.subjects ?? []), ...b.genres].some((t) => fold(t) === k));
+  const k = canonicalTopic(topic)?.key ?? `t:${fold(topic)}`;
+  return books.filter((b) => canonicalTopicsOf(b).has(k));
 }

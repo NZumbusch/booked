@@ -50,7 +50,7 @@
       {#if s.borrowed}<a class="tile" href="#/lending"><span class="v">{s.borrowed}</span><span class="k">borrowed (not counted as owned)</span></a>{/if}
       <a class="tile" href="#/wishlist"><span class="v">{s.wishlist}</span><span class="k">on wishlist</span></a>
       {#if s.totalValue.books}
-        <div class="tile"><span class="v">{s.totalValue.converted.length ? '≈ ' : ''}{formatPrice(s.totalValue.amount, s.totalValue.currency)}</span>
+        <div class="tile"><span class="v money">{s.totalValue.converted.length ? '≈\u00a0' : ''}{formatPrice(s.totalValue.amount, s.totalValue.currency)}</span>
           <span class="k">collection value ({plural(s.totalValue.books, 'book')} with a price)</span></div>
       {/if}
       {#if s.copies !== s.owned}<div class="tile"><span class="v">{s.copies.toLocaleString()}</span><span class="k">copies incl. duplicates</span></div>{/if}
@@ -199,6 +199,7 @@
 </div>
 
 <style>
+  .money { white-space: nowrap; font-size: clamp(1.1rem, 6vw, 1.6rem); }
   .tiles { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
   .tile { background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow); padding: 14px; display: grid; gap: 2px; text-decoration: none; }
   .v { font-size: 1.6rem; font-weight: 700; font-variant-numeric: tabular-nums; }
