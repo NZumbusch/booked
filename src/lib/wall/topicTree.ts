@@ -91,7 +91,8 @@ export function topicTree(topics: { key: string; w: number }[][], ai: string[][]
     return out;
   };
   const paths = topics.map((ts, i) => {
-    if (ai[i]?.length) return chain(ai[i][ai[i].length - 1]);
+    // your own path exactly as written (a name may sit under several topics; rebuilding it would mix them)
+    if (ai[i]?.length) return ai[i].filter((k, j) => k !== ai[i][j - 1]);
     // the book's most specific usable topic (deepest in the tree; then the strongest)
     let best: string[] = [];
     let bestW = -1;

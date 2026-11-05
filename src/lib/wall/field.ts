@@ -4,6 +4,8 @@ import { fold } from '../domain/query';
 import type { Book, Location } from '../domain/types';
 import { ordinal } from '../format';
 import { similarityModel } from './similarity';
+import { topicOrder } from './topicOrder';
+import { gilbert } from './gilbert';
 import { arrangeByTopic, makeGrid, regionLabels } from './topicMap';
 
 /**
@@ -339,12 +341,16 @@ export function copiesFor(n: number): number {
 
 /** Topic map: similar books side by side, regions flowing into each other (see topicMap). */
 function topicField(items: FieldItem[], shape: FieldShape, seed: number, g: Geometry): Omit<FieldLayout, 'bounds'> {
-  const model = similarityModel(items.map((it) => it.book));
+  const books = items.map((it) => it.book);
+  const model = similarityModel(books);
   const n = items.length;
+  // the topic tree, ordered so that alike topics sit side by side (see topicOrder)
+  const order = topicOrder(books, model);
+  const opts = { order: (round: number) => order.sequence(round), shared: order.shared };
   if (shape === 'disc') {
     const cells = hilbertSorted(discCells(n, seed, g));
     const grid = makeGrid(cells);
-    const { slots } = arrangeByTopic(model, n, grid, seed, 0);
+    const { slots } = arrangeByTopic(model, n, grid, seed, 0, 1, opts);
     const centre = (i: number) => {
       const p = cellPos(cells[i].col, cells[i].row, g);
       return { x: p.x + g.cellW / 2, y: p.y + g.cellH / 2 };
@@ -355,13 +361,13 @@ function topicField(items: FieldItem[], shape: FieldShape, seed: number, g: Geom
     };
   }
   const wrap = torusSize(n * copiesFor(n), g);
-  const all: FieldTile[] = [];
-  for (let row = 0; row < wrap.rows; row++) for (let col = 0; col < wrap.cols; col++) all.push({ id: '', col, row });
-  const cells = hilbertSorted(all);
+  // a curve through the whole rectangle without jumps: each topic becomes one connected region
+  const cells: FieldTile[] = gilbert(wrap.cols, wrap.rows).map(([col, row]) => ({ id: '', col, row }));
   const grid = makeGrid(cells, wrap);
-  // copies of a book at least a third of the field apart: different neighbourhoods, never side by side
-  const apart = n >= cells.length ? 0 : Math.max(3, Math.floor(Math.min(wrap.cols, wrap.rows * 1.5) / 3));
-  const { slots, variants } = arrangeByTopic(model, n, grid, seed, apart, 3);
+  // copies of a book at least a quarter of the field apart: different neighbourhoods, never side by side
+  // (a third left so little room that keeping them apart tore the topic regions up)
+  const apart = n >= cells.length ? 0 : Math.max(3, Math.floor(Math.min(wrap.cols, wrap.rows * 1.5) / 4));
+  const { slots, variants } = arrangeByTopic(model, n, grid, seed, apart, 3, opts);
   const centre = (i: number) => {
     const p = cellPos(cells[i].col, cells[i].row, g);
     return { x: p.x + g.cellW / 2, y: p.y + g.cellH / 2 };

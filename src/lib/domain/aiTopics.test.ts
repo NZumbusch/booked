@@ -55,3 +55,25 @@ describe('AI topics', () => {
     expect(aiVocabulary([{ aiTopics: ['Fiction', 'Crime'] }, { aiTopics: ['Fiction'] }, {}])).toEqual(['Fiction', 'Crime']);
   });
 });
+
+describe('AI topics: splitting a big topic, own vocabulary', () => {
+  it('asks for sub-topics under the topic, and puts the topic back in front if the answer left it out', async () => {
+    const { aiSplitPrompts, underNode, ownVocabulary } = await import('./aiTopics');
+    const [p] = aiSplitPrompts(['Belletristik', 'Deutsche Belletristik'], [book(1), book(2)], 'de', ['Kriminalroman']);
+    expect(p.text).toContain('"Belletristik > Deutsche Belletristik"');
+    expect(p.text).toContain('Sub-topics that exist already (use them where they fit): Kriminalroman');
+    expect(p.text).toContain('Language or country is never a broad topic');
+    expect(underNode(['A', 'B'], ['A', 'B', 'C'])).toEqual(['A', 'B', 'C']);
+    expect(underNode(['A', 'B'], ['C', 'D'])).toEqual(['A', 'B', 'C', 'D']);
+    expect(ownVocabulary([{ aiTopics: ['Fiction', 'Crime'] }, { aiTopics: ['Fiction'] }, {}])).toEqual(['Fiction', 'Fiction > Crime']);
+  });
+});
+
+describe('topic language', () => {
+  it('guesses the language your topics are in', async () => {
+    const { topicLanguage } = await import('./aiTopics');
+    expect(topicLanguage(['Fiction', 'Fiction > Crime & mystery', 'History > Germany'])).toBe('en');
+    expect(topicLanguage(['Belletristik', 'Belletristik > Kriminalroman', 'Geschichte'])).toBe('de');
+    expect(topicLanguage([])).toBeUndefined();
+  });
+});

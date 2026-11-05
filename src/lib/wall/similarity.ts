@@ -51,9 +51,14 @@ function featuresOf(b: Book): Feature[] {
   };
   if (b.series) add('series', b.series.replace(/\s*[;:].*$/, ''));
   b.authors.slice(0, 3).forEach((a) => add('author', a));
-  (b.aiTopics ?? []).forEach((t) => add('ai', t));
-  b.genres.forEach((t) => add('genre', t));
-  (b.subjects ?? []).forEach((t) => add('subject', t));
+  if (b.aiTopics?.length) {
+    // Your topic path is the topic: the catalogue's genres and subjects don't count for this book.
+    b.aiTopics.forEach((t) => add('ai', t));
+  } else {
+    // No path yet: the catalogue stands in, so the book still lands somewhere sensible.
+    b.genres.forEach((t) => add('genre', t));
+    (b.subjects ?? []).forEach((t) => add('subject', t));
+  }
   if (b.line) add('line', b.line);
   const y = b.writing?.year ?? b.firstPublishedYear;
   if (y) add('decade', `${Math.floor(y / 10) * 10}s`);

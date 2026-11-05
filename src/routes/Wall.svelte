@@ -62,6 +62,8 @@
   const items = $derived(topic ? baseItems.filter((it) => hasTopic(it.book, topic)) : baseItems);
   const geometry = RECT;
   /** 🔀 gives the topic map a fresh arrangement (same neighbourhoods, laid out anew). */
+  /** The ⋯ menu with the options you need now and then. */
+  let menuOpen = $state(false);
   const seed = $derived(Number(query.seed) || 7);
   const layout = $derived(fieldLayout(items, order, shape, $lib.locations, seed, geometry));
   const period = $derived(layout.wrap);
@@ -393,6 +395,7 @@
   }
 
   function onDown(e: PointerEvent) {
+    menuOpen = false;
     canvas!.setPointerCapture(e.pointerId);
     const p = local(e);
     pointers.set(e.pointerId, p);
@@ -639,9 +642,8 @@
         <a class="btn" href="#/settings">Cover settings</a>
       </div>
     {/if}
+    <!-- Three things you use while looking; the rest is in the menu. One icon style (line icons), no colours. -->
     <div class="tools float" role="toolbar" aria-label="Wall options">
-      <button class:on={shape === 'endless'} aria-pressed={shape === 'endless'} title="Endless: scroll forever in every direction"
-        aria-label="Endless scrolling" onclick={() => setQuery({ shape: shape === 'endless' ? 'disc' : undefined })}>∞</button>
       {#if layout.labels.length}
         <button class:on={showLabels} aria-pressed={showLabels} title={showLabels ? 'Hide topic tags' : 'Show topic tags'} aria-label="Topic tags"
           onclick={() => setQuery({ labels: showLabels ? 'off' : undefined })}>
@@ -650,33 +652,43 @@
           </svg>
         </button>
       {/if}
-      {#if hiddenCount || !niceOnly}
-        <button class:on={!niceOnly} aria-pressed={!niceOnly}
-          title={niceOnly ? `Show ${hiddenCount} books without a good cover` : 'Show only good covers'} aria-label="Show books without a good cover"
-          onclick={() => setQuery({ all: niceOnly ? '1' : undefined })}>
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" /><circle cx="12" cy="12" r="3" />
-          </svg>
-        </button>
-      {/if}
-      {#if order === 'topic'}
-        <a class="btn" href="#/topics" aria-label="Topics with AI" title="Better topics: sort your books with an AI chat (or set them yourself on a book's page)">✨</a>
-        <button aria-label="Arrange anew" title="Arrange anew (same neighbourhoods, a fresh layout)"
-          onclick={() => setQuery({ seed: String(1 + Math.floor(Math.random() * 1e6)) })}>🔀</button>
-      {/if}
       <button aria-label="Back to the start" title="Back to the start" onclick={fit}>
-        <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
           <circle cx="12" cy="12" r="7" /><circle cx="12" cy="12" r="2.2" fill="currentColor" stroke="none" /><path d="M12 2v3M12 19v3M2 12h3M19 12h3" />
         </svg>
       </button>
-      <button aria-label="Save as poster" title="Save as poster" disabled={exporting} onclick={exportPoster}>
-        {#if exporting}…{:else}
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M12 4v11M7 10l5 5 5-5M5 20h14" />
-          </svg>
-        {/if}
+      <button class:on={menuOpen} aria-expanded={menuOpen} aria-haspopup="menu" aria-label="More" title="More" onclick={() => (menuOpen = !menuOpen)}>
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.8" /><circle cx="12" cy="12" r="1.8" /><circle cx="19" cy="12" r="1.8" /></svg>
       </button>
     </div>
+    {#if menuOpen}
+      <div class="menu float" role="menu" aria-label="Wall options">
+        <button role="menuitemcheckbox" aria-checked={shape === 'endless'} onclick={() => { setQuery({ shape: shape === 'endless' ? 'disc' : undefined }); menuOpen = false; }}>
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M7 8c-2.2 0-4 1.8-4 4s1.8 4 4 4c3 0 7-8 10-8 2.2 0 4 1.8 4 4s-1.8 4-4 4c-3 0-7-8-10-8z" /></svg>
+          <span>Endless<small>{shape === 'endless' ? 'on: scroll forever' : 'off: one round field'}</small></span>
+        </button>
+        {#if order === 'topic'}
+          <button role="menuitem" onclick={() => { setQuery({ seed: String(1 + Math.floor(Math.random() * 1e6)) }); menuOpen = false; }}>
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h3c4 0 6 10 10 10h3M4 17h3c1.5 0 2.7-1.4 3.8-3.2M14.2 10.2C15.3 8.4 16.5 7 18 7h2M18 4l3 3-3 3M18 14l3 3-3 3" /></svg>
+            <span>Arrange anew<small>same topics, a fresh layout</small></span>
+          </button>
+          <a role="menuitem" href="#/paths">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h6M4 12h6M4 19h6M14 5h6M17 12h3M17 19h3M14 5v14" /></svg>
+            <span>Edit topics<small>rename, move, split with AI</small></span>
+          </a>
+        {/if}
+        {#if hiddenCount || !niceOnly}
+          <button role="menuitemcheckbox" aria-checked={!niceOnly} onclick={() => { setQuery({ all: niceOnly ? '1' : undefined }); menuOpen = false; }}>
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" /><circle cx="12" cy="12" r="3" /></svg>
+            <span>Books without a good cover<small>{niceOnly ? `hidden (${hiddenCount})` : 'shown'}</small></span>
+          </button>
+        {/if}
+        <button role="menuitem" disabled={exporting} onclick={() => { menuOpen = false; exportPoster(); }}>
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg>
+          <span>{exporting ? 'Saving poster…' : 'Save as poster'}<small>the whole wall as one picture</small></span>
+        </button>
+      </div>
+    {/if}
     <canvas bind:this={canvas} tabindex="0" aria-label="Cover wall: drag to move, pinch or +/- to zoom, tap a cover"
       onpointerdown={onDown} onpointermove={onMove} onpointerup={onUp} onpointercancel={onUp} onwheel={onWheel} onkeydown={onKey}></canvas>
   </div>
@@ -718,7 +730,14 @@
     background: transparent; color: var(--text); box-shadow: none; display: grid; place-items: center; }
   @media (hover: hover) { .tools button:hover:not(:disabled) { background: var(--pill-soft); } }
   .tools button:disabled { opacity: 0.5; }
-  .tools a { width: 44px; min-height: 44px; display: grid; place-items: center; padding: 0; border: none; border-radius: 50%; background: transparent; text-decoration: none; font-size: 1.15rem; }
+  .menu { right: 64px; top: 66px; border-radius: 18px; padding: 6px; display: grid; gap: 2px; min-width: 230px; max-width: calc(100% - 80px); }
+  .menu button, .menu a { display: flex; gap: 12px; align-items: center; justify-content: flex-start; text-align: left; padding: 8px 12px; min-height: 44px;
+    border: none; border-radius: 12px; background: none; color: inherit; text-decoration: none; font: inherit; width: 100%; }
+  .menu span { display: grid; line-height: 1.2; }
+  .menu small { color: var(--muted); font-size: 0.75rem; }
+  .menu svg { flex: none; opacity: 0.85; }
+  .menu [aria-checked='true'] { background: var(--pill-on); }
+  @media (hover: hover) { .menu button:hover:not(:disabled), .menu a:hover { background: var(--pill-soft); } }
   .tools .on { background: var(--pill-on); }
   .info { top: 66px; left: 10px; max-width: calc(100% - 90px); display: flex; gap: 6px; flex-wrap: wrap; align-items: center; padding: 6px 12px; border-radius: 18px; }
   .info .chip { background: var(--pill-soft); color: var(--text); border-color: transparent; }

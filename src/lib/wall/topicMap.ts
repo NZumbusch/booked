@@ -96,15 +96,30 @@ export interface MapResult {
  * Fill every cell with a book (books repeat if there are more cells than books) and arrange them.
  * `copiesApart`: copies of one book keep at least this many cells apart.
  */
-export function arrangeByTopic(model: SimilarityModel, n: number, grid: Grid, seed: number, copiesApart: number, variantCount = 1): MapResult {
+export interface ArrangeOptions {
+  /** The book sequence to lay out for each round of copies (topic tree order); else a similarity chain. */
+  order?: (round: number) => number[];
+  /** How many topic levels two books share: sharing a path keeps them together while borders soften. */
+  shared?: (a: number, b: number) => number;
+  /** For measuring: called with the arrangement after each stage. */
+  trace?: (stage: string, slots: number[]) => void;
+}
+
+/** Extra closeness for books that share their broad topic, sub-topic, sub-sub-topic. */
+const SHARED_BONUS = [0, 0.12, 0.24, 0.34];
+
+export function arrangeByTopic(model: SimilarityModel, n: number, grid: Grid, seed: number, copiesApart: number, variantCount = 1, opts: ArrangeOptions = {}): MapResult {
   const random = rng(seed);
   const m = grid.cells.length;
-  // 1. one chain per round of copies, each starting elsewhere, joined end to end along the curve
+  // 1. one sequence per round of copies, joined end to end along the curve
   const slots: number[] = [];
-  while (slots.length < m) slots.push(...chain(model, n, random));
+  for (let round = 0; slots.length < m; round++) slots.push(...(opts.order ? opts.order(round) : chain(model, n, random)));
   slots.length = m;
+  opts.trace?.('order', [...slots]);
 
-  const sim = (a: number, b: number) => (a === b ? 0 : model.sim[a].get(b) ?? 0);
+  const shared = opts.shared;
+  const sim = (a: number, b: number) =>
+    a === b ? 0 : (model.sim[a].get(b) ?? 0) + (shared ? SHARED_BONUS[Math.min(3, shared(a, b))] : 0);
   const where: number[][] = Array.from({ length: n }, () => []);
   slots.forEach((b, i) => where[b].push(i));
   /** How well book `b` fits into cell `c` (its neighbours' similarity), minus a penalty for a copy too close. */
@@ -140,7 +155,7 @@ export function arrangeByTopic(model: SimilarityModel, n: number, grid: Grid, se
   // 2. refine: swaps that move a book next to one of its most similar books (or anywhere close)
   const steps = Math.min(220_000, 45 * m);
   for (let s = 0; s < steps; s++) {
-    const temp = 0.25 * (1 - s / steps) ** 2;
+    const temp = (opts.order ? 0.08 : 0.25) * (1 - s / steps) ** 2;
     const a = Math.floor(random() * m);
     const x = slots[a];
     let c: number;
@@ -161,6 +176,46 @@ export function arrangeByTopic(model: SimilarityModel, n: number, grid: Grid, se
     if (g > 0 || (temp > 0 && random() < Math.exp(g / temp))) swap(a, c);
   }
 
+  opts.trace?.('refined', [...slots]);
+  // 2b. copies too close (the curve folds, so far apart in the order can still be near on the map):
+  // move one to the best-fitting cell elsewhere that is far enough from all its other copies.
+  if (copiesApart > 0) {
+    /** Cells holding a book of the same broad topic (sharing at least the first path level). */
+    const poolCache = new Map<number, number[]>();
+    const sameTopic = (b: number) => {
+      let p = poolCache.get(b);
+      if (!p) {
+        p = [];
+        for (let c = 0; c < m; c++) if (slots[c] !== b && shared!(b, slots[c]) >= 1) p.push(c);
+        poolCache.set(b, p);
+      }
+      return p;
+    };
+    const tooClose = (b: number, c: number, skip = -1) => where[b].some((o) => o !== c && o !== skip && grid.dist(o, c) < copiesApart);
+    for (let pass = 0; pass < 3; pass++) {
+      let fixed = 0;
+      for (let a = 0; a < m; a++) {
+        const x = slots[a];
+        if (!tooClose(x, a)) continue;
+        let best = -1, bestG = -Infinity;
+        // swap with a book of the same topic (both stay in their region), else with any
+        const pool = shared ? sameTopic(x) : undefined;
+        for (let t = 0; t < 300; t++) {
+          const c = pool?.length && t < 240 ? pool[Math.floor(random() * pool.length)] : Math.floor(random() * m);
+          const y = slots[c];
+          if (c === a || y === x || tooClose(x, c, a)) continue;
+          // the book coming back must not end up too close to its own copies either
+          if (where[y].some((o) => o !== c && grid.dist(o, a) < copiesApart)) continue;
+          const g = gain(a, c);
+          if (g > bestG) { bestG = g; best = c; }
+        }
+        if (best >= 0) { swap(a, best); fixed++; }
+      }
+      if (!fixed) break;
+    }
+  }
+
+  opts.trace?.('repaired', [...slots]);
   // 3. variants: a few more small local swaps that hardly change how well things fit, so each repeat
   // of an endless wall is arranged a little differently while the map (and the seams) stay the same.
   const base = [...slots];

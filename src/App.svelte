@@ -29,6 +29,7 @@
   import Wishlist from './routes/Wishlist.svelte';
   import Shared from './routes/Shared.svelte';
   import AiTopics from './routes/AiTopics.svelte';
+  import Paths from './routes/Paths.svelte';
 
   let lib = $state<Library>();
   let error = $state('');
@@ -105,6 +106,8 @@
       <Exchange />
     {:else if section === 'print'}
       <Print loc={$route.query.loc ?? null} />
+    {:else if section === 'paths'}
+      <Paths />
     {:else if section === 'topics'}
       <AiTopics />
     {:else if section === 'shared'}
