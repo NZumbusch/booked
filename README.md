@@ -14,6 +14,8 @@ All data stays on your device (IndexedDB). The app needs no backend and no API k
   - Its own page (Home › Wishlist): add a wish by title search or by hand, remove it, or tap **Bought it** and choose the room
   - Wishes have no room and never appear in the library, room counts, stats, the wall or the map
   - Scanning a book that's on your wishlist moves it into the library instead of adding a second entry
+  - ★ marks the most wanted (listed first); a note per wish (e.g. which edition)
+  - **Share** the list with family as text (for a message) or as a picture with covers
 - **Know where everything is**
   - Place › room (› optional shelf), with counts at every level
   - Move single books, a selection, or a whole room. Every move goes into the book's history

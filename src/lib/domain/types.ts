@@ -143,6 +143,8 @@ export interface Book {
   /** On the "Up next" list since this time (queue order). */
   queuedAt?: Timestamp;
   notes?: string;
+  /** On the wishlist: a must-have (listed first, marked ★ when the list is shared). */
+  mustHave?: boolean;
   condition?: string;
   purchasedOn?: IsoDate;
   /** Price in the user's currency (see settings). */
