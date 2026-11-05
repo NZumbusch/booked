@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import { filterToQuery, type BookFilter } from '../lib/domain/filters';
   import { borrowers, displayTitle, copyDraft, fillMissing, isOverdue, lendingFrom, todayIso } from '../lib/domain/book';
   import { addDays, DEFAULT_LOAN_DAYS, dueOf, dueText, lenders } from '../lib/domain/borrowing';
@@ -11,7 +12,7 @@
   import { navigate } from '../lib/router';
   import { attempt, enricher, knowledge, library, toast } from '../lib/stores/app';
   import { buildIndex, similarTo } from '../lib/domain/similar';
-  import { progressPatch, statusPatch } from '../lib/domain/reading';
+  import { askWhenRead, progressPatch, statusPatch, type ReadWhen } from '../lib/domain/reading';
   import { connectionsOf, KIND_LABEL, seriesStatus } from '../lib/domain/connections';
   import BookForm from '../lib/ui/BookForm.svelte';
   import Confirm from '../lib/ui/Confirm.svelte';
@@ -71,6 +72,27 @@
     moveOpen = false;
     await attempt(() => lib.moveBooks([id], moveTarget), `Moved to ${lib.label(moveTarget)}`, { undo: true });
   }
+
+  // ---- reading status: a book marked read straight from unread may have been read years ago: ask
+  let statusKey = $state(0);
+  let whenOpen = $state(false);
+  let readYear = $state<number | undefined>();
+  function setStatus(status: ReadingStatus) {
+    if (book && askWhenRead(book, status)) {
+      readYear = undefined;
+      whenOpen = true;
+      return;
+    }
+    quick(statusPatch(book!, status, todayIso()));
+  }
+  async function markRead(when: ReadWhen) {
+    whenOpen = false;
+    await quick(statusPatch(book!, 'read', todayIso(), when, when === 'earlier' ? Number(readYear) || undefined : undefined));
+  }
+  $effect(() => {
+    // closed without choosing: the picker shows the status the book still has
+    if (!whenOpen) untrack(() => statusKey++);
+  });
 
   // ---- own topic (from the AI, or set by hand): arranges and names the cover wall
   let topicOpen = $state(false);
@@ -243,7 +265,7 @@
   const mine = $derived(book ? ([
     ['Collections', book.collections.join(', ')],
     ['Started', formatDate(book.startedOn, s.dateFormat)],
-    ['Finished', formatDate(book.finishedOn, s.dateFormat)],
+    ['Finished', book.finishedOn ? formatDate(book.finishedOn, s.dateFormat) : book.status === 'read' ? `earlier${book.readYear ? `, around ${book.readYear}` : ''}` : ''],
     ['Condition', book.condition],
     ['Copies', book.copies > 1 ? book.copies : ''],
     ['Signed', book.signed ? 'Yes' : ''],
@@ -320,10 +342,11 @@
           </div>
         {/if}
         <div class="row">
-          <select class="status" value={book.status} aria-label="Reading status"
-            onchange={(e) => quick(statusPatch(book!, e.currentTarget.value as ReadingStatus, todayIso()))}>
-            {#each Object.entries(STATUS_LABEL) as [v, l]}<option value={v}>{l}</option>{/each}
-          </select>
+          {#key statusKey}
+            <select class="status" value={book.status} aria-label="Reading status" onchange={(e) => setStatus(e.currentTarget.value as ReadingStatus)}>
+              {#each Object.entries(STATUS_LABEL) as [v, l]}<option value={v}>{l}</option>{/each}
+            </select>
+          {/key}
           <Rating value={book.rating} onchange={(rating) => quick({ rating })} />
         </div>
         {#if book.status === 'reading'}
@@ -561,6 +584,17 @@
     {/snippet}
   </Dialog>
 
+  <Dialog bind:open={whenOpen} title="When did you read “{book.title}”?">
+    <p class="muted small">So your reading stats show when you really read it.</p>
+    <div class="stack">
+      <button class="btn-primary" onclick={() => markRead('now')}>Just finished ({formatDate(todayIso(), s.dateFormat)})</button>
+      <div class="earlier">
+        <button onclick={() => markRead('earlier')}>Read earlier</button>
+        <label class="field">around (year, optional)<input type="number" inputmode="numeric" min="1900" max={new Date().getFullYear()} bind:value={readYear} placeholder="e.g. 2015" /></label>
+      </div>
+    </div>
+  </Dialog>
+
   <Dialog bind:open={topicOpen} title="Topic for “{book.title}”">
     <label class="field">Topic, broad to specific <span class="hint">e.g. Belletristik &gt; Kriminalroman &gt; Skandinavischer Krimi</span>
       <input bind:value={topicText} list="own-topic-paths" placeholder="Broad > specific" />
@@ -595,6 +629,7 @@
   .lend { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
   .lend.overdue { border-left: 4px solid var(--danger); }
   .lend.away { border-left: 4px solid var(--brand); }
+  .earlier { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; align-items: end; }
   .own-topic { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
   .lend.borrowed { flex-wrap: wrap; border-left: 4px solid var(--ok); }
   .lend.borrowed.soon { border-left-color: var(--warn); }

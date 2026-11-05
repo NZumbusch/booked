@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createBook } from './book';
-import { breadth, progressPatch, readingStats, roomProfiles, statusPatch } from './reading';
+import { askWhenRead, breadth, markedReadInOneGo, progressPatch, readEarlierPatch, readingStats, roomProfiles, statusPatch } from './reading';
 import type { Location } from './types';
 
 const now = '2026-10-31T10:00:00.000Z';
@@ -53,5 +53,39 @@ describe('breadth and rooms', () => {
     const locs: Location[] = [{ id: 'p', kind: 'place', name: 'Flat', parentId: null, order: 0, createdAt: t, updatedAt: t }, { id: 'r', kind: 'room', name: 'Study', parentId: 'p', order: 0, createdAt: t, updatedAt: t }];
     const books = ['History', 'History', 'Poetry'].map((g, i) => mk(String(i), { title: String(i), genres: [g], locationId: 'r' }));
     expect(roomProfiles(books, locs)).toEqual([{ id: 'r', label: 'Flat › Study', total: 3, top: [{ topic: 'History', share: 2 / 3 }, { topic: 'Poetry', share: 1 / 3 }] }]);
+  });
+});
+
+describe('read earlier, or just finished', () => {
+  const today = '2026-11-05';
+  it('just finished: today; read earlier: no date (a year if given), and no made-up start date', () => {
+    expect(statusPatch({ status: 'unread' }, 'read', today)).toMatchObject({ status: 'read', finishedOn: today });
+    expect(statusPatch({ status: 'unread' }, 'read', today).startedOn).toBeUndefined();
+    const earlier = statusPatch({ status: 'unread' }, 'read', today, 'earlier', 2015);
+    expect(earlier).toMatchObject({ status: 'read', readYear: 2015 });
+    expect(earlier.finishedOn).toBeUndefined();
+  });
+  it('asks only when it could have been read long ago', () => {
+    expect(askWhenRead({ status: 'unread' }, 'read')).toBe(true);
+    expect(askWhenRead({ status: 'reading' }, 'read')).toBe(false);
+    expect(askWhenRead({ status: 'unread' }, 'reading')).toBe(false);
+  });
+  it('finds books marked read in one go, and turns them into read earlier', () => {
+    const mk = (i: number, finishedOn: string, startedOn?: string) =>
+      ({ id: `b${i}`, status: 'read', finishedOn, startedOn, genres: [] }) as unknown as Parameters<typeof markedReadInOneGo>[0][number];
+    const books = [
+      ...Array.from({ length: 6 }, (_, i) => mk(i, '2026-11-03', i % 2 ? '2026-11-03' : undefined)),
+      mk(10, '2026-11-03', '2026-10-01'), // really read then: not part of it
+      mk(11, '2026-09-01'), mk(12, '2026-09-01')
+    ];
+    expect(markedReadInOneGo(books)).toEqual([{ date: '2026-11-03', ids: ['b0', 'b1', 'b2', 'b3', 'b4', 'b5'] }]);
+    expect(markedReadInOneGo(books, ['2026-11-03'])).toEqual([]);
+    expect(readEarlierPatch({ startedOn: '2026-11-03', finishedOn: '2026-11-03' })).toEqual({ finishedOn: undefined, startedOn: undefined });
+  });
+  it('counts a year you gave in that year, never in a month', () => {
+    const b = { id: 'x', status: 'read', readYear: 2026, genres: [], authors: [], title: 'x' } as never;
+    const r = readingStats([b], today);
+    expect(r.readThisYear).toBe(1);
+    expect(r.perMonth.every((m) => m.books === 0)).toBe(true);
   });
 });

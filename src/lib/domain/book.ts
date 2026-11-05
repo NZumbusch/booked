@@ -204,7 +204,7 @@ export function borrowers(books: Pick<Book, 'lending'>[]): string[] {
 export function copyDraft(book: Book): BookDraft {
   const {
     id: _id, createdAt: _c, updatedAt: _u, locationId: _l, tags: _t, collections: _co, status: _s, rating: _r, startedOn: _so,
-    finishedOn: _f, notes: _n, condition: _cd, purchasedOn: _p, price: _pr, signed: _sg, lending: _le, pendingLookup: _pl, mustHave: _mh, borrowed: _bw,
+    finishedOn: _f, notes: _n, condition: _cd, purchasedOn: _p, price: _pr, signed: _sg, lending: _le, pendingLookup: _pl, mustHave: _mh, borrowed: _bw, readYear: _ry,
     copies: _cp, ownership: _o, ...biblio
   } = book;
   return { ...biblio, ownership: 'owned' };
