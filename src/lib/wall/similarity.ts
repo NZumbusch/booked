@@ -43,7 +43,8 @@ function featuresOf(b: Book): Feature[] {
     if (kind === 'genre' || kind === 'subject' || kind === 'ai') {
       // one vocabulary for genres, subjects and AI topics, synonyms merged ("Krimi" = "Detective and mystery stories")
       const t = canonicalTopic(l);
-      if (t) out.push({ key: t.key, kind, label: t.label });
+      // your own topics keep your wording; catalogue words get the merged name
+      if (t) out.push({ key: t.key, kind, label: kind === 'ai' ? l : t.label });
       return;
     }
     out.push({ key: `${kind}:${fold(l)}`, kind, label: l });
@@ -100,6 +101,8 @@ export function similarityModel(books: Book[]): SimilarityModel {
   // The topic tree; a book's broad topic (its root) always carries some weight, so a whole branch
   // (all the fiction, all the history) stays together on the map, with its sub-topics inside.
   const topicLabel = new Map<string, string>();
+  // names: your own wording wins over the catalogue's
+  for (const fs of weighted) for (const f of fs) if (f.kind === 'ai' && !topicLabel.has(f.key)) topicLabel.set(f.key, f.label);
   for (const fs of weighted) for (const f of fs) if (isTopic(f.kind) && !topicLabel.has(f.key)) topicLabel.set(f.key, f.label);
   const ai = books.map((b) => (b.aiTopics ?? []).map((t) => canonicalTopic(t)?.key).filter((k): k is string => !!k));
   const tree = topicTree(weighted.map((fs) => fs.filter((f) => isTopic(f.kind))), ai);

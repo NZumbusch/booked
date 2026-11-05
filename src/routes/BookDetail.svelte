@@ -2,6 +2,8 @@
   import { filterToQuery, type BookFilter } from '../lib/domain/filters';
   import { borrowers, displayTitle, copyDraft, fillMissing, isOverdue, lendingFrom, todayIso } from '../lib/domain/book';
   import { addDays, DEFAULT_LOAN_DAYS, dueOf, dueText, lenders } from '../lib/domain/borrowing';
+  import { parsePath, pathText } from '../lib/domain/aiTopics';
+  import { libraryTopics } from '../lib/wall/topicPaths';
   import { addReturnToCalendar, enableDueNotifications, notificationsOn, notificationsSupported } from '../lib/ui/dueReminders';
   import type { BookDraft, MoveRecord, PlaceBasis, ReadingStatus } from '../lib/domain/types';
   import { lookupIsbn, searchBooks, lookupCandidate } from '../lib/metadata/lookup';
@@ -67,6 +69,30 @@
   async function doMove() {
     moveOpen = false;
     await attempt(() => lib.moveBooks([id], moveTarget), `Moved to ${lib.label(moveTarget)}`, { undo: true });
+  }
+
+  // ---- own topic (from the AI, or set by hand): arranges and names the cover wall
+  let topicOpen = $state(false);
+  let topicText = $state('');
+  let topicChoices = $state<string[]>([]);
+  let autoTopic = $state('');
+  $effect(() => {
+    // the worked-out path for this book (cheap enough per page; only when there's no own topic)
+    if (!book || book.aiTopics?.length) return;
+    const id = book.id;
+    const t = setTimeout(() => (autoTopic = libraryTopics(lib.owned()).pathOf(id).join(' › ')), 50);
+    return () => clearTimeout(t);
+  });
+  function openTopic() {
+    const t = libraryTopics(lib.owned());
+    topicChoices = t.vocabulary;
+    topicText = pathText(book?.aiTopics?.length ? book.aiTopics : t.pathOf(id));
+    topicOpen = true;
+  }
+  async function saveTopic(clear = false) {
+    topicOpen = false;
+    const path = clear ? [] : parsePath(topicText);
+    await attempt(() => lib.updateBook(id, { aiTopics: path.length ? path : undefined }), path.length ? `Topic: ${path.join(' › ')}` : 'Topic from the catalogue again', { undo: true });
   }
 
   // ---- borrowed: give it back, extend the loan, reminders
@@ -408,6 +434,20 @@
       {/if}
     </section>
 
+    {#if book.ownership !== 'wishlist'}
+      <section class="card own-topic">
+        <div class="stack tight">
+          <span class="muted small">Topic on the cover wall</span>
+          {#if book.aiTopics?.length}
+            <span class="strong">{book.aiTopics.join(' › ')}</span>
+          {:else}
+            <span class="muted">{autoTopic ? `${autoTopic} (from the catalogue)` : 'Not sorted yet'}</span>
+          {/if}
+        </div>
+        <button class="btn-sm" onclick={openTopic}>✎ {book.aiTopics?.length ? 'Change' : 'Set'}</button>
+      </section>
+    {/if}
+
     {#if topics.length}
       <section class="row topics">
         {#each topics as t (t)}<a class="chip" href="#/topic/{encodeURIComponent(t)}">{t}</a>{/each}
@@ -518,6 +558,18 @@
     {/snippet}
   </Dialog>
 
+  <Dialog bind:open={topicOpen} title="Topic for “{book.title}”">
+    <label class="field">Topic, broad to specific <span class="hint">e.g. Belletristik &gt; Kriminalroman &gt; Skandinavischer Krimi</span>
+      <input bind:value={topicText} list="own-topic-paths" placeholder="Broad > specific" />
+    </label>
+    <datalist id="own-topic-paths">{#each topicChoices as v}<option value={v}></option>{/each}</datalist>
+    <p class="muted small">Pick one of your topics or type a new one. For many books at once: <a href="#/topics">✨ Topics with AI</a>.</p>
+    {#snippet actions()}
+      {#if book.aiTopics?.length}<button onclick={() => saveTopic(true)}>Use the catalogue’s</button>{/if}
+      <button class="btn-primary" onclick={() => saveTopic()} disabled={!parsePath(topicText).length}>Save</button>
+    {/snippet}
+  </Dialog>
+
   <CoverPicker {book} bind:open={coverOpen} />
 <Confirm bind:open={deleteOpen} title={book.ownership === 'wishlist' ? 'Remove from wishlist?' : 'Delete book?'}
     message="“{book.title}” will be removed from your {book.ownership === 'wishlist' ? 'wishlist' : 'library'}. You can undo this right after."
@@ -540,6 +592,7 @@
   .lend { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
   .lend.overdue { border-left: 4px solid var(--danger); }
   .lend.away { border-left: 4px solid var(--brand); }
+  .own-topic { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
   .lend.borrowed { flex-wrap: wrap; border-left: 4px solid var(--ok); }
   .lend.borrowed.soon { border-left-color: var(--warn); }
   .lend.borrowed.overdue { border-left-color: var(--danger); }

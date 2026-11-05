@@ -599,6 +599,7 @@
         </button>
       {/if}
       {#if order === 'topic'}
+        <a class="btn" href="#/topics" aria-label="Topics with AI" title="Better topics: sort your books with an AI chat (or set them yourself on a book's page)">✨</a>
         <button aria-label="Arrange anew" title="Arrange anew (same neighbourhoods, a fresh layout)"
           onclick={() => setQuery({ seed: String(1 + Math.floor(Math.random() * 1e6)) })}>🔀</button>
       {/if}
@@ -656,6 +657,7 @@
     background: transparent; color: var(--text); box-shadow: none; display: grid; place-items: center; }
   @media (hover: hover) { .tools button:hover:not(:disabled) { background: var(--pill-soft); } }
   .tools button:disabled { opacity: 0.5; }
+  .tools a { width: 44px; min-height: 44px; display: grid; place-items: center; padding: 0; border: none; border-radius: 50%; background: transparent; text-decoration: none; font-size: 1.15rem; }
   .tools .on { background: var(--pill-on); }
   .info { top: 66px; left: 10px; max-width: calc(100% - 90px); display: flex; gap: 6px; flex-wrap: wrap; align-items: center; padding: 6px 12px; border-radius: 18px; }
   .info .chip { background: var(--pill-soft); color: var(--text); border-color: transparent; }

@@ -42,6 +42,8 @@ All data stays on your device (IndexedDB). The app needs no backend and no API k
   - **Arrangements:**
     - Colour, as a colour wheel
     - Topic, as a map: similar books side by side (same series and author count most, then shared topics, rarer ones more; a little era, language and publisher line), regions flowing into each other. Tags name the regions on several levels as you zoom in: broad topics (Fiction, History), their sub-topics (Crime & mystery, Historical fiction), sub-sub-topics (Police), then series and authors. The topic tree comes from your own books (a topic goes under a broader one it mostly comes with; English and German catalogue synonyms are merged). 🔀 lays the map out anew
+    - **✨ Topics with AI** (#/topics): Booked writes a request listing your books (all, those without topics of your own, or those with no topic at all) together with your existing topics; paste it into any chat AI, paste the answer back, check or change each book's topic, save. The AI is asked to reuse your topics, add new ones only where needed, and search the web when unsure. Nothing is sent anywhere by Booked
+    - Every book page has **Topic on the cover wall**: set or change it yourself (suggestions from your topics), or go back to the catalogue's
     - Endless topic wall: small libraries show each book a few times, each copy in a different neighbourhood and never near another; every repeat of the field is arranged a little differently
     - Title, author › title, century › decade, place › room
   - **Topic dropdown:** narrows the field to one topic, clustered by its subtopics

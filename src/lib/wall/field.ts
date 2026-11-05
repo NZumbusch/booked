@@ -147,7 +147,7 @@ interface Keyed {
 
 const colorKey = (it: FieldItem) => (it.analysis ? colorSortKey(it.analysis) : 2000);
 const titleKey = (b: Book) => fold(b.title.replace(/^(the|a|an|der|die|das|le|la|les|el|il)\s+/i, ''));
-const topicsOf = (b: Book) => [...new Set([...b.genres, ...(b.subjects ?? [])].map((t) => t.trim()).filter(Boolean))];
+const topicsOf = (b: Book) => [...new Set([...(b.aiTopics ?? []), ...b.genres, ...(b.subjects ?? [])].map((t) => t.trim()).filter(Boolean))];
 
 /**
  * Topic › subtopic for every book. Genres are the broad categories, subjects the specific ones:

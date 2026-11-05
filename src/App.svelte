@@ -28,6 +28,7 @@
   import CoverReview from './routes/CoverReview.svelte';
   import Wishlist from './routes/Wishlist.svelte';
   import Shared from './routes/Shared.svelte';
+  import AiTopics from './routes/AiTopics.svelte';
 
   let lib = $state<Library>();
   let error = $state('');
@@ -104,6 +105,8 @@
       <Exchange />
     {:else if section === 'print'}
       <Print loc={$route.query.loc ?? null} />
+    {:else if section === 'topics'}
+      <AiTopics />
     {:else if section === 'shared'}
       <Shared />
     {:else if section === 'wishlist'}
