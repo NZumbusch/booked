@@ -143,6 +143,8 @@ export interface Book {
   tags: string[];
   collections: string[];
   status: ReadingStatus;
+  /** Read earlier, without a date: roughly which year (optional). Counts in that year, never in a month. */
+  readYear?: number;
   /** 1–5, or undefined for unrated. */
   rating?: number;
   startedOn?: IsoDate;
@@ -231,6 +233,8 @@ export interface Settings {
   loanDays?: number;
   /** Day a "due soon" notification was last shown (one a day at most). */
   lastDueNotice?: IsoDate;
+  /** Finish dates you confirmed as real when Booked asked whether many books were marked read in one go. */
+  readDatesOk?: IsoDate[];
   /** Your name, shown to family on books you add to a shared place. */
   userName?: string;
   /** Places/rooms shared with family (per device; the key never leaves the share link). */

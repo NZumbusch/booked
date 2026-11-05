@@ -7,20 +7,62 @@ import type { Book, IsoDate, Location, ReadingStatus } from './types';
  * Dates that follow from a status change, so nobody has to type them:
  * starting a book records the start date, finishing it the finish date.
  */
-export function statusPatch(book: Pick<Book, 'status' | 'startedOn' | 'finishedOn' | 'currentPage'>, status: ReadingStatus, today: IsoDate): Partial<Book> {
+/** When a book marked "read" was read: just now (today's date), or earlier (no date, optionally a year). */
+export type ReadWhen = 'now' | 'earlier';
+
+export function statusPatch(
+  book: Pick<Book, 'status' | 'startedOn' | 'finishedOn' | 'currentPage'>, status: ReadingStatus, today: IsoDate, when: ReadWhen = 'now', year?: number
+): Partial<Book> {
   const patch: Partial<Book> = { status };
   if (status === 'reading' && !book.startedOn) patch.startedOn = today;
   if (status === 'read') {
-    if (!book.finishedOn) patch.finishedOn = today;
+    if (when === 'earlier') {
+      // read before, no date: it counts as read, but not in this month or year (unless a year is given)
+      patch.finishedOn = undefined;
+      if (book.startedOn && book.startedOn === book.finishedOn) patch.startedOn = undefined;
+      patch.readYear = year && year > 0 ? year : undefined;
+    } else {
+      if (!book.finishedOn) patch.finishedOn = today;
+      patch.readYear = undefined;
+    }
     // No start date is made up: a book marked read straight away (often while cataloguing) wasn't
     // started today, and it would make every book look read within a day.
     patch.currentPage = undefined;
-  }
+  } else patch.readYear = undefined;
   if (status === 'unread') patch.currentPage = undefined;
   return patch;
 }
 
-/** Progress update; reaching the last page finishes the book. */
+/**
+ * Should Booked ask "just finished, or read earlier?" A book you were reading has just been
+ * finished; one going straight from unread to read may have been read years ago.
+ */
+export function askWhenRead(book: Pick<Book, 'status' | 'finishedOn'>, status: ReadingStatus): boolean {
+  return status === 'read' && book.status !== 'read' && book.status !== 'reading' && !book.finishedOn;
+}
+
+/**
+ * Books that look marked read in one go (bulk, or by an older version while cataloguing): at least
+ * `min` read books with the very same finish date and no reading span (no start date, or the same
+ * day). Largest groups first; dates you confirmed as real are left out.
+ */
+export function markedReadInOneGo(books: Book[], confirmed: IsoDate[] = [], min = 5): { date: IsoDate; ids: string[] }[] {
+  const groups = new Map<IsoDate, string[]>();
+  for (const b of books) {
+    if (b.status !== 'read' || !b.finishedOn || (b.startedOn && b.startedOn < b.finishedOn)) continue;
+    groups.set(b.finishedOn, [...(groups.get(b.finishedOn) ?? []), b.id]);
+  }
+  return [...groups.entries()]
+    .filter(([date, ids]) => ids.length >= min && !confirmed.includes(date))
+    .map(([date, ids]) => ({ date, ids }))
+    .sort((a, b) => b.ids.length - a.ids.length);
+}
+
+/** Turn a dated "read" into "read earlier" (no date; a start date that only repeated it goes too). */
+export function readEarlierPatch(book: Pick<Book, 'startedOn' | 'finishedOn'>): Partial<Book> {
+  return { finishedOn: undefined, ...(book.startedOn && book.startedOn === book.finishedOn ? { startedOn: undefined } : {}) };
+}
+
 export function progressPatch(book: Pick<Book, 'status' | 'startedOn' | 'finishedOn' | 'pageCount' | 'currentPage'>, page: number, today: IsoDate): Partial<Book> {
   const p = Math.max(0, Math.round(page));
   if (book.pageCount && p >= book.pageCount) return statusPatch(book, 'read', today);
@@ -45,7 +87,8 @@ export interface ReadingStats {
 export function readingStats(books: Book[], today: IsoDate, goal?: number): ReadingStats {
   const year = Number(today.slice(0, 4));
   const read = books.filter((b) => b.status === 'read' && b.finishedOn);
-  const thisYear = read.filter((b) => b.finishedOn!.startsWith(String(year)));
+  // books read earlier with a year count for that year (not for a month)
+  const thisYear = [...read.filter((b) => b.finishedOn!.startsWith(String(year))), ...books.filter((b) => b.status === 'read' && !b.finishedOn && b.readYear === year)];
   const dayOfYear = (Date.parse(today) - Date.UTC(year, 0, 1)) / 86400000 + 1;
   const months: string[] = [];
   const d = new Date(Date.UTC(year, Number(today.slice(5, 7)) - 1, 1));

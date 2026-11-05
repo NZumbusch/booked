@@ -54,6 +54,8 @@ All data stays on your device (IndexedDB). The app needs no backend and no API k
   - Follows your library filter; "Show on wall" from any book; export as a poster image
 - **Reading and analysis**
   - Up next queue, reading progress and a yearly goal
+  - Marking a book read that you weren't reading asks: **Just finished** (today's date) or **Read earlier** (no date, optionally a year). Marking several at once means read earlier. Read-earlier books count as read, but not for a month or this year's goal (a year you give counts in that year)
+  - If many books share one finish date without a reading span (marked read in one go), Stats offers to turn them into read earlier, or keep the date
   - Stats: per month, pace, abandon rate, breadth (languages, centuries), what each room is about
   - List prices (DNB fixed German price, price barcode, Google) and collection value
   - Lending tracker with overdue highlighting

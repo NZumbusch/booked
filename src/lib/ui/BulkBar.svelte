@@ -166,7 +166,13 @@
   {:else if panel === 'status'}
     <div class="grid2">
       {#each Object.entries(STATUS_LABEL) as [v, l]}
-        <button onclick={() => { status = v as ReadingStatus; run(() => lib.bulkUpdate(ids, (b) => statusPatch(b, status, todayIso()), `Marked ${what} as ${l}`), (c) => `Marked ${plural(c, 'book')} as ${l.toLowerCase()}`); }}>{l}</button>
+        {#if v === 'read'}
+          <!-- several books marked read at once were nearly always read earlier: no date unless you say so -->
+          <button onclick={() => run(() => lib.bulkUpdate(ids, (b) => statusPatch(b, 'read', todayIso(), b.status === 'reading' ? 'now' : 'earlier'), `Marked ${what} as read`), (c) => `Marked ${plural(c, 'book')} as read (earlier, no date)`)}>Read earlier</button>
+          <button onclick={() => run(() => lib.bulkUpdate(ids, (b) => statusPatch(b, 'read', todayIso(), 'now'), `Marked ${what} as finished today`), (c) => `Marked ${plural(c, 'book')} as finished today`)}>Finished today</button>
+        {:else}
+          <button onclick={() => { status = v as ReadingStatus; run(() => lib.bulkUpdate(ids, (b) => statusPatch(b, status, todayIso()), `Marked ${what} as ${l}`), (c) => `Marked ${plural(c, 'book')} as ${l.toLowerCase()}`); }}>{l}</button>
+        {/if}
       {/each}
     </div>
   {:else if panel === 'lend'}

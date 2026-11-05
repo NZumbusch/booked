@@ -60,6 +60,8 @@
       publishedYear: num(b.publishedYear),
       firstPublishedYear: num(b.firstPublishedYear),
       pageCount: num(b.pageCount),
+      // a finish date makes the rough year unnecessary
+      readYear: b.status === 'read' && !str(b.finishedOn) ? num(b.readYear) : undefined,
       price: num(b.price),
       copies: num(b.copies) ?? 1,
       listPrice: num(listAmount) !== undefined
@@ -171,6 +173,9 @@
       <div class="grid">
         <label class="field">Started<input type="date" bind:value={b.startedOn} /></label>
         <label class="field">Finished<input type="date" bind:value={b.finishedOn} /></label>
+        {#if b.status === 'read' && !b.finishedOn}
+          <label class="field">Read around (year, if no date)<input type="number" inputmode="numeric" min="1900" bind:value={b.readYear} placeholder="e.g. 2015" /></label>
+        {/if}
         <label class="field">Condition<input bind:value={b.condition} placeholder="e.g. Very good" /></label>
         <label class="field">Copies<input type="number" min="1" bind:value={b.copies} /></label>
         <label class="field">Purchased<input type="date" bind:value={b.purchasedOn} /></label>

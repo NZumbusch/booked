@@ -6,7 +6,8 @@
   import { library } from '../lib/stores/app';
   import BarList from '../lib/ui/BarList.svelte';
   import PaletteStrip from '../lib/ui/PaletteStrip.svelte';
-  import { breadth, readingStats, roomProfiles } from '../lib/domain/reading';
+  import { breadth, markedReadInOneGo, readEarlierPatch, readingStats, roomProfiles } from '../lib/domain/reading';
+  import { formatDate } from '../lib/format';
   import { languageName, ordinal } from '../lib/format';
   import { attempt } from '../lib/stores/app';
 
@@ -28,6 +29,15 @@
   let hoverMonth = $state<string>();
 
   const r = $derived(readingStats($lib.books, todayIso(), $lib.settings.readingGoal));
+  /** Many books with the same finish date and no reading span: probably marked read in one go. */
+  const oneGo = $derived(markedReadInOneGo($lib.books, $lib.settings.readDatesOk ?? []));
+  async function makeEarlier(g: { date: string; ids: string[] }) {
+    await attempt(() => lib.bulkUpdate(g.ids, (b) => readEarlierPatch(b), `${plural(g.ids.length, 'book')} read earlier`),
+      `${plural(g.ids.length, 'book')} now count as read earlier`, { undo: true });
+  }
+  async function keepDates(g: { date: string }) {
+    await attempt(() => lib.updateSettings({ readDatesOk: [...($lib.settings.readDatesOk ?? []), g.date] }));
+  }
   const maxMonth = $derived(Math.max(1, ...r.perMonth.map((m) => m.books)));
   const monthLabel = (m: string) => new Date(`${m}-01T00:00:00Z`).toLocaleDateString(undefined, { month: 'short' });
   const wide = $derived(breadth($lib.books.filter((b) => b.ownership === 'owned')));
@@ -71,6 +81,16 @@
 
     <section class="card stack">
       <h2>Reading in {r.year}</h2>
+      {#each oneGo.slice(0, 2) as g (g.date)}
+        <div class="one-go">
+          <p class="small"><strong>{plural(g.ids.length, 'book')} got the same finish date ({formatDate(g.date, $lib.settings.dateFormat)}).</strong>
+            Marked read in one go? Then they were read earlier: they still count as read, but not for {g.date.slice(0, 4)} or that month.</p>
+          <div class="row">
+            <button class="btn-sm btn-primary" onclick={() => makeEarlier(g)}>Yes, read earlier</button>
+            <button class="btn-sm" onclick={() => keepDates(g)}>No, the date is right</button>
+          </div>
+        </div>
+      {/each}
       <div class="goal">
         <span class="v">{r.readThisYear}{#if r.goal}<span class="muted"> / {r.goal}</span>{/if}</span>
         <span class="k">books read{r.pagesThisYear ? ` · ${r.pagesThisYear.toLocaleString()} pages` : ''}</span>
@@ -199,6 +219,8 @@
 </div>
 
 <style>
+  .one-go { display: grid; gap: 8px; padding: 10px 12px; border-radius: 12px; background: color-mix(in srgb, var(--warn) 12%, var(--surface)); }
+  .one-go p { margin: 0; }
   .money { white-space: nowrap; font-size: clamp(1.1rem, 6vw, 1.6rem); }
   .tiles { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
   .tile { background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow); padding: 14px; display: grid; gap: 2px; text-decoration: none; }

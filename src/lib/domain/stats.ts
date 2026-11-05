@@ -75,8 +75,9 @@ export function computeStats(books: Book[], locations: Location[], today: IsoDat
 
   const perYear = new Map<number, { books: number; pages: number }>();
   for (const b of books) {
-    if (b.status !== 'read' || !b.finishedOn) continue;
-    const y = Number(b.finishedOn.slice(0, 4));
+    if (b.status !== 'read' || (!b.finishedOn && !b.readYear)) continue;
+    // a book read earlier counts in the year you gave for it (never in a month)
+    const y = b.finishedOn ? Number(b.finishedOn.slice(0, 4)) : b.readYear!;
     const e = perYear.get(y) ?? { books: 0, pages: 0 };
     e.books++;
     e.pages += b.pageCount ?? 0;
