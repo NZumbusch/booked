@@ -103,6 +103,9 @@ export async function matchingCover(book: Book, reference: CoverAnalysis[], ctx:
 export async function coverFor(book: Book, ctx: SeriesCoverContext): Promise<string | undefined> {
   const reference = ctx.siblings(book);
   if (reference.length) {
+    // The cover of this very edition beats any look-alike: it's the one on the shelf.
+    const { early } = await isbnCovers(book, ctx.fetcher ?? fetch.bind(globalThis));
+    for (const u of early) if (u !== book.cover && (await ctx.probe(u))) return u;
     const match = await matchingCover(book, reference, ctx);
     if (match) return match;
   }

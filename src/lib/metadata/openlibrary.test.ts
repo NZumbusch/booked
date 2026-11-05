@@ -44,10 +44,12 @@ describe('Open Library by ISBN', () => {
     expect(await olByIsbn('9780000000002', fakeFetch({}))).toBeUndefined();
   });
 
-  it('still works when only the search index knows the book', async () => {
+  it('still works when only the search index knows the book, keeping its (work) cover apart', async () => {
     const r = await olByIsbn('9780441172719', fakeFetch({ 'search.json?isbn=9780441172719': searchIsbn }));
     expect(r!.result.fields).toMatchObject({ title: 'Dune', authors: ['Frank Herbert'], firstPublishedYear: 1965 });
-    expect(r!.result.fields.cover).toBe('https://covers.openlibrary.org/b/id/11481354-L.jpg?default=false');
+    // The search index's cover belongs to the work (often another edition): never this edition's cover.
+    expect(r!.result.fields.cover).toBeUndefined();
+    expect(r!.workCover).toBe('https://covers.openlibrary.org/b/id/11481354-L.jpg?default=false');
   });
 });
 

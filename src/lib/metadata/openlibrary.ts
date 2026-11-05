@@ -65,6 +65,11 @@ interface OlSearch {
 export interface OlLookup {
   result: ProviderResult;
   workId?: string;
+  /**
+   * The work's representative cover (often a different edition, language or publisher). Only a
+   * last resort: `result.fields.cover` is the cover of this very edition, if it has one.
+   */
+  workCover?: string;
   /** Wikidata ids of the authors, for enrichment. */
   authorQids: string[];
 }
@@ -84,12 +89,26 @@ const coverUrl = (id: number | undefined, size: 'M' | 'L') =>
   id && id > 0 ? `https://covers.openlibrary.org/b/id/${id}-${size}.jpg?default=false` : undefined;
 
 /**
- * The cover of an ISBN's edition as a stable numeric-id URL. Open Library throttles and slows
+ * The cover of an ISBN's own edition as a stable numeric-id URL. Open Library throttles and slows
  * the by-ISBN cover URLs (about 100 per 5 minutes), numeric ids it doesn't.
+ *
+ * Read from the edition record, never from the search index: the search index's `cover_i` is the
+ * *work's* cover, which is often another edition (another language, publisher or decade).
  */
 export async function olCoverByIsbn(isbn: string, f: Fetcher): Promise<string | undefined> {
-  const res = await getJson<OlSearch>(f, `${OL}/search.json?isbn=${isbn}&limit=1&fields=cover_i`, { timeoutMs: 8000 });
-  return coverUrl(res?.docs?.[0]?.cover_i, 'L');
+  return coverUrl((await olEditionCoverIds(isbn, f))[0], 'L');
+}
+
+/** The cover ids Open Library has for this ISBN's edition (empty if it has none). */
+export async function olEditionCoverIds(isbn: string, f: Fetcher): Promise<number[]> {
+  const edition = await getJson<OlEdition>(f, `${OL}/isbn/${isbn}.json`, { timeoutMs: 8000 });
+  return (edition?.covers ?? []).filter((c) => c > 0);
+}
+
+/** The numeric cover id in an Open Library cover URL, if it is one. */
+export function olCoverId(url: string | undefined): number | undefined {
+  const m = url?.match(/covers\.openlibrary\.org\/b\/id\/(\d+)-/);
+  return m ? Number(m[1]) : undefined;
 }
 
 function format(physical: string | undefined): BookFormat | undefined {
@@ -168,7 +187,8 @@ export async function olByIsbn(isbn: string, f: Fetcher): Promise<OlLookup | und
     isbn10: edition?.isbn_10?.[0],
     isbn13: edition?.isbn_13?.[0],
     description: text(edition?.description) ?? text(work?.description),
-    cover: coverUrl(edition?.covers?.[0], 'L') ?? coverUrl(doc?.cover_i, 'L'),
+    // Only this edition's own cover; the work's cover is kept apart as a last resort (see workCover).
+    cover: coverUrl(edition?.covers?.find((c) => c > 0), 'L'),
     subjects: cleanSubjects(work?.subjects ?? edition?.subjects ?? doc?.subject),
     series: edition?.series?.[0],
     identifiers: compact({
@@ -185,6 +205,7 @@ export async function olByIsbn(isbn: string, f: Fetcher): Promise<OlLookup | und
       url: editionId ? `${OL}/books/${editionId}` : workId ? `${OL}/works/${workId}` : undefined
     },
     workId,
+    workCover: coverUrl(doc?.cover_i, 'L') ?? coverUrl(work?.covers?.find((c) => c > 0), 'L'),
     authorQids: authors.map((a) => a.remote_ids?.wikidata).filter((q): q is string => !!q)
   };
 }
@@ -249,7 +270,8 @@ export async function olQuickIsbn(isbn: string, f: Fetcher): Promise<ProviderRes
       subtitle: d.subtitle,
       authors: d.author_name,
       firstPublishedYear: d.first_publish_year,
-      cover: coverUrl(d.cover_i, 'L'),
+      // No cover: the search index only knows the work's cover, which is often another edition's.
+      // The edition's own cover arrives with the full lookup a moment later.
       subjects: cleanSubjects(d.subject),
       identifiers: workId ? { olwork: workId } : undefined
     }

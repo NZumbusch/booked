@@ -130,15 +130,22 @@ export async function isbnCovers(book: Pick<Book, 'isbn13' | 'isbn10'>, f: Fetch
   }
 }
 
-/** First working cover for a book: by ISBN, then other editions of the same work, then Google's ISBN image. */
+/** First working cover for a book: this edition's (by ISBN, from any source), then other editions of the same work. */
 export async function findCover(book: Book, f: Fetcher, probe: ImageProbe, key?: string): Promise<string | undefined> {
   const { early, last } = await isbnCovers(book, f);
   for (const u of early) if (await probe(u)) return u;
   try {
     const options = await alternativeCovers(book, f, key);
-    // Open Library answers 404 for a missing cover, so its covers are safe; Google may serve a blank tile.
-    const ordered = [...options.filter((o) => o.source === 'openlibrary'), ...options.filter((o) => o.source !== 'openlibrary')];
-    for (const o of ordered.slice(0, 6)) if (await probe(o.thumb)) return o.url;
+    // This edition first (whatever the source), then the same language, then the rest. Within each,
+    // Open Library first: it answers 404 for a missing cover, while Google may serve a blank tile.
+    const rank = (o: CoverOption) => (o.sameEdition ? 0 : o.sameLanguage ? 2 : 4) + (o.source === 'openlibrary' ? 0 : 1);
+    const ordered = options.map((o, i) => ({ o, i })).sort((a, b) => rank(a.o) - rank(b.o) || a.i - b.i).map(({ o }) => o);
+    const editionOnes = ordered.filter((o) => o.sameEdition);
+    for (const o of editionOnes) if (await probe(o.thumb)) return o.url;
+    // Google's by-ISBN image is this edition too (if it isn't a blank tile): before other editions.
+    for (const u of last) if (await probe(u)) return u;
+    for (const o of ordered.filter((o) => !o.sameEdition).slice(0, 6)) if (await probe(o.thumb)) return o.url;
+    return undefined;
   } catch {
     // catalogue unreachable: still try the last resort below
   }
