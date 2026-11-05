@@ -44,7 +44,10 @@
 </script>
 
 <div class="page stack">
-  <h1>Tags & collections</h1>
+  <header class="spread">
+    <h1>Tags & collections</h1>
+    <a class="btn btn-sm" href="#/paths" title="Topic paths: they arrange the cover wall">🗂️ Topics</a>
+  </header>
   <div class="seg" role="tablist">
     {#each TABS as [k, label]}
       <a role="tab" href="#/tags/{k}" aria-selected={kind === k} class:on={kind === k}>{label}</a>

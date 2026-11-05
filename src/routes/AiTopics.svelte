@@ -85,7 +85,10 @@
 </script>
 
 <div class="page stack">
-  <h1>✨ Topics with AI</h1>
+  <header class="spread">
+    <h1>✨ Topics with AI</h1>
+    <a class="btn btn-sm" href="#/paths">🗂️ Edit topics</a>
+  </header>
   <p class="muted">Booked writes a request listing your books. Paste it into any chat AI (ChatGPT, Claude, Gemini…), then paste the answer back here. Every book gets a topic path like <em>Belletristik › Kriminalroman › Skandinavischer Krimi</em>, which arranges and names the cover wall. You can check and change each one before it’s saved, and change any book later on its page. Nothing is sent anywhere by Booked.</p>
 
   <section class="card stack">

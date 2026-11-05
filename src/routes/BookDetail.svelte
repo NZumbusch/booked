@@ -600,7 +600,7 @@
       <input bind:value={topicText} list="own-topic-paths" placeholder="Broad > specific" />
     </label>
     <datalist id="own-topic-paths">{#each topicChoices as v}<option value={v}></option>{/each}</datalist>
-    <p class="muted small">Pick one of your topics or type a new one. For many books at once: <a href="#/topics">✨ Topics with AI</a>.</p>
+    <p class="muted small">Pick one of your topics or type a new one. For many books at once: <a href="#/paths">🗂️ edit all topics</a> or <a href="#/topics">✨ sort with AI</a>.</p>
     {#snippet actions()}
       {#if book.aiTopics?.length}<button onclick={() => saveTopic(true)}>Use the catalogue’s</button>{/if}
       <button class="btn-primary" onclick={() => saveTopic()} disabled={!parsePath(topicText).length}>Save</button>
