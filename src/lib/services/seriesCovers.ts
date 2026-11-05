@@ -7,7 +7,8 @@ import type { Fetcher } from '../metadata/http';
 import type { ImageProbe } from '../metadata/lookup';
 
 /** Volumes of a series should look alike (same colour scheme); beyond this distance a cover is not a match. */
-export const LOOK_LIMIT = 0.35;
+export { LOOK_LIMIT } from '../metadata/coverRank';
+import { LOOK_LIMIT } from '../metadata/coverRank';
 
 export interface Candidate {
   url: string;

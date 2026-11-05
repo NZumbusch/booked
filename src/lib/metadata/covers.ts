@@ -5,6 +5,7 @@ import { gbSearch } from './googlebooks';
 import { marcToIso, olCoverByIsbn, olSearch } from './openlibrary';
 import type { ImageProbe } from './lookup';
 import { titlesMatch } from './wikidata';
+import { rankCovers } from './coverRank';
 
 /**
  * Alternative covers for a book: every edition of the same work on Open Library (yours first:
@@ -89,13 +90,8 @@ export async function alternativeCovers(book: Book, f: Fetcher, key?: string): P
   const [ol, gb] = await Promise.allSettled([olEditionCovers(book, f), googleCovers(book, f, key)]);
   const all = [...(ol.status === 'fulfilled' ? ol.value : []), ...(gb.status === 'fulfilled' ? gb.value : [])];
   if (ol.status === 'rejected' && gb.status === 'rejected') throw ol.reason;
-  const rank = (o: CoverOption) => (o.sameEdition ? 0 : o.sameLanguage ? 1 : 2);
   const seen = new Set<string>([book.cover ?? '']);
-  return all
-    .map((o, i) => ({ o, i }))
-    .sort((a, b) => rank(a.o) - rank(b.o) || a.i - b.i)
-    .map(({ o }) => o)
-    .filter((o) => !seen.has(o.url) && !seen.has(o.thumb) && seen.add(o.url) && seen.add(o.thumb));
+  return rankCovers(all).filter((o) => !seen.has(o.url) && !seen.has(o.thumb) && seen.add(o.url) && seen.add(o.thumb));
 }
 
 /**
@@ -136,10 +132,7 @@ export async function findCover(book: Book, f: Fetcher, probe: ImageProbe, key?:
   for (const u of early) if (await probe(u)) return u;
   try {
     const options = await alternativeCovers(book, f, key);
-    // This edition first (whatever the source), then the same language, then the rest. Within each,
-    // Open Library first: it answers 404 for a missing cover, while Google may serve a blank tile.
-    const rank = (o: CoverOption) => (o.sameEdition ? 0 : o.sameLanguage ? 2 : 4) + (o.source === 'openlibrary' ? 0 : 1);
-    const ordered = options.map((o, i) => ({ o, i })).sort((a, b) => rank(a.o) - rank(b.o) || a.i - b.i).map(({ o }) => o);
+    const ordered = rankCovers(options); // already in this order; kept explicit, it's the rule that matters here
     const editionOnes = ordered.filter((o) => o.sameEdition);
     for (const o of editionOnes) if (await probe(o.thumb)) return o.url;
     // Google's by-ISBN image is this edition too (if it isn't a blank tile): before other editions.

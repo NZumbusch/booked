@@ -6,6 +6,7 @@
   import { siblingLooks } from '../services/seriesCovers';
   import type { Book } from '../domain/types';
   import { alternativeCovers, type CoverOption } from '../metadata/covers';
+  import { rankCovers } from '../metadata/coverRank';
   import { attempt, coverFromLink, covers, library, photoCover, toast } from '../stores/app';
   import { googleImagesUrl, pasteImage, rememberCoverSearch } from './sharedCover';
   import CoverStack from './CoverStack.svelte';
@@ -84,12 +85,10 @@
     const a = looks.get(o.thumb);
     return a && siblings.length ? Math.min(...siblings.map((s) => lookDistance(a, s))) : Infinity;
   };
-  const rank = (o: CoverOption) => (o.sameEdition ? -1 : distance(o));
   const visible = $derived.by(() => {
     const ok = options.filter((o) => !broken.has(o.thumb));
-    if (!matchSeries || !siblings.length) return ok;
-    // Looks-alike first; the same edition (by ISBN) still wins over a mere look-alike.
-    return ok.map((o, i) => ({ o, i })).sort((x, y) => rank(x.o) - rank(y.o) || x.i - y.i).map(({ o }) => o);
+    // One rule everywhere: this edition, then look-alikes of the series, then same language (see coverRank).
+    return rankCovers(ok, matchSeries && siblings.length ? distance : undefined);
   });
 
   async function use(cover: string, message = 'Cover changed') {
