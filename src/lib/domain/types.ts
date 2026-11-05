@@ -120,6 +120,8 @@ export interface Book {
   genres: string[];
   /** Finer-grained subjects / topics from catalogues. */
   subjects?: string[];
+  /** Topics from your own AI clustering (broad first, e.g. ["Philosophy", "Marxism"]); arranges the cover wall. */
+  aiTopics?: string[];
   series?: string;
   seriesNumber?: string;
   /** The publisher's paperback line ("dtv", "Reclam"…): numbered by catalogue, so not a series to complete, but its covers may share a design. */

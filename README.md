@@ -41,7 +41,8 @@ All data stays on your device (IndexedDB). The app needs no backend and no API k
   - Seamless: every cover gets the same 2:3 tile with no gaps; covers are cropped to fill (never stretched), taking less from the top where the title usually is
   - **Arrangements:**
     - Colour, as a colour wheel
-    - Topic › subtopic, as seamless clusters with floating labels
+    - Topic, as a map: similar books side by side (same series and author count most, then shared topics, rarer ones more; a little era, language and publisher line), regions flowing into each other. Tags name the regions on several levels as you zoom in: broad topics (Fiction, History), their sub-topics (Crime & mystery, Historical fiction), sub-sub-topics (Police), then series and authors. The topic tree comes from your own books (a topic goes under a broader one it mostly comes with; English and German catalogue synonyms are merged). 🔀 lays the map out anew
+    - Endless topic wall: small libraries show each book a few times, each copy in a different neighbourhood and never near another; every repeat of the field is arranged a little differently
     - Title, author › title, century › decade, place › room
   - **Topic dropdown:** narrows the field to one topic, clustered by its subtopics
   - **Topic tags** float over the clusters (broad topics zoomed out, subtopics closer in); the tag button hides them

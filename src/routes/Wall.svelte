@@ -59,7 +59,9 @@
   const topics = $derived(fieldTopics(baseItems));
   const items = $derived(topic ? baseItems.filter((it) => hasTopic(it.book, topic)) : baseItems);
   const geometry = RECT;
-  const layout = $derived(fieldLayout(items, order, shape, $lib.locations, 7, geometry));
+  /** 🔀 gives the topic map a fresh arrangement (same neighbourhoods, laid out anew). */
+  const seed = $derived(Number(query.seed) || 7);
+  const layout = $derived(fieldLayout(items, order, shape, $lib.locations, seed, geometry));
   const period = $derived(layout.wrap);
   const byId = $derived(new Map(items.map((it) => [it.book.id, it])));
   const hiddenCount = $derived($lib && lib.owned().filter((b) => b.cover).length - items.length);
@@ -187,14 +189,23 @@
       for (let v = x + Math.ceil((lo - 2 - x) / period) * period; v <= hi; v += period) out.push(v);
       return out;
     };
-    for (const t of layout.tiles) {
-      const it = byId.get(t.id);
-      if (!it) continue;
+    // Endless topic map: each repeat of the field uses one of a few arrangements (neighbours always differ).
+    const variants = layout.variants;
+    const variantAt = (wx: number, wy: number, base: { x: number; y: number }) => {
+      const pi = Math.round((wx - base.x) / (periodX || 1));
+      const pj = Math.round((wy - base.y) / (periodY || 1));
+      return ((((pi + 2 * pj) % variants!.length) + variants!.length) % variants!.length);
+    };
+    layout.tiles.forEach((t, i) => {
       const base = worldOf(t.col, t.row);
       for (const wx of copies(base.x, periodX, vx0, vx1)) {
-        for (const wy of copies(base.y, periodY, vy0, vy1)) drawTile(ctx, it, t.id, wx, wy, { grey, ring, cx, cy, reach });
+        for (const wy of copies(base.y, periodY, vy0, vy1)) {
+          const id = variants ? variants[variantAt(wx, wy, base)][i] : t.id;
+          const it = byId.get(id);
+          if (it) drawTile(ctx, it, id, wx, wy, { grey, ring, cx, cy, reach });
+        }
       }
-    }
+    });
     if (showLabels) drawLabels(ctx, copies, periodX, periodY, [vx0, vy0, vx1, vy1]);
     ctx.textAlign = 'start';
   }
@@ -204,9 +215,14 @@
    * pills with the count in a lighter weight; bigger groups win when tags would overlap.
    */
   function drawLabels(ctx: CanvasRenderingContext2D, copies: (x: number, period: number, lo: number, hi: number) => number[], periodX: number, periodY: number, v: number[]) {
-    // Zoomed out: broad groups (or the subgroups, if there is only one broad group anyway).
-    const level: 1 | 2 = scale < 40 && layout.labels.some((l) => l.level === 1) ? 1 : 2;
+    // Zoomed out: broad topics; closer in: their sub-topics, then sub-sub-topics, then series and
+    // authors (topic map). The deepest level available up to the one this zoom asks for.
     if (scale >= 150) return;
+    const want = scale < 34 ? 1 : scale < 55 ? 2 : scale < 85 ? 3 : 4;
+    const have = new Set(layout.labels.map((l) => l.level));
+    let level = want;
+    while (level > 1 && !have.has(level)) level--;
+    if (!have.has(level)) level = Math.min(...have);
     // Same colours as the rest of the app (light or dark), like the floating controls.
     const t = { surface: css('--surface', '#fff'), text: css('--text', '#222'), muted: css('--muted', '#777'), line: 'rgba(127,127,127,0.25)' };
     const placed: { x0: number; y0: number; x1: number; y1: number }[] = [];
@@ -581,6 +597,10 @@
             <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" /><circle cx="12" cy="12" r="3" />
           </svg>
         </button>
+      {/if}
+      {#if order === 'topic'}
+        <button aria-label="Arrange anew" title="Arrange anew (same neighbourhoods, a fresh layout)"
+          onclick={() => setQuery({ seed: String(1 + Math.floor(Math.random() * 1e6)) })}>🔀</button>
       {/if}
       <button aria-label="Back to the start" title="Back to the start" onclick={fit}>
         <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">

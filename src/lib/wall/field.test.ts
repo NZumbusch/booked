@@ -59,7 +59,9 @@ describe('fieldLayout', () => {
     const at = new Map(l.tiles.map((t) => [key(t), topicOf.get(t.id)]));
     const withNeighbour = l.tiles.filter((t) => [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dc, dr]) => at.get(key({ col: t.col + dc, row: t.row + dr })) === topicOf.get(t.id)));
     expect(withNeighbour.length / l.tiles.length).toBeGreaterThan(0.95);
-    expect(l.labels.filter((x) => x.level === 1).map((x) => x.text).sort()).toEqual([...topics].sort());
+    // every book is "Fiction" too: that's the broad tag, the five topics are its sub-topics
+    expect(l.labels.filter((x) => x.level === 1).map((x) => x.text)).toEqual(['Fiction']);
+    expect(l.labels.filter((x) => x.level === 2).map((x) => x.text)).toEqual(expect.arrayContaining(topics));
   });
 
   it('colour wheel: covers sit at the angle of their hue', () => {
@@ -99,10 +101,39 @@ describe('fieldLayout', () => {
 });
 
 describe('labels', () => {
-  it('skips subgroup labels that would only repeat their group', () => {
-    const items = Array.from({ length: 30 }, (_, i) => item({ genres: ['Fiction', i % 2 ? 'Art' : 'Poetry'], subjects: [i % 2 ? 'Painting' : (i % 4 ? 'Love' : 'War')] }));
+  it('tags series and authors at the closer zoom, and keeps a series together', () => {
+    const items = [
+      ...Array.from({ length: 3 }, (_, i) => item({ title: `Trilogy ${i}`, authors: ['Günter de Bruyn'], series: 'Preußische Trilogie', genres: [['Berlin', 'Prussia', 'Nobility'][i]] })),
+      ...Array.from({ length: 40 }, (_, i) => item({ authors: [`A${i % 8}`], genres: [['Poetry', 'Art', 'War', 'Cooking'][i % 4]] }))
+    ];
     const l = fieldLayout(items, 'topic', 'disc', []);
-    expect(l.labels.filter((x) => x.level === 2).map((x) => x.text).sort()).toEqual(['Love', 'War']);
+    const pos = (id: string) => l.tiles.find((t) => t.id === id)!;
+    const tri = items.slice(0, 3).map((it) => pos(it.book.id));
+    const spread = Math.max(...tri.flatMap((a) => tri.map((b) => Math.max(Math.abs(a.col - b.col), Math.abs(a.row - b.row)))));
+    expect(spread).toBeLessThanOrEqual(2);
+    const deepest = Math.max(...l.labels.map((x) => x.level));
+    expect(l.labels.filter((x) => x.level === deepest).map((x) => x.text)).toContain('Preußische Trilogie');
+  });
+
+  it('endless: books repeat in different neighbourhoods, never side by side, and each repeat is arranged differently', () => {
+    const items = Array.from({ length: 200 }, (_, i) => item({ authors: [`A${i % 30}`], genres: [['Poetry', 'Art', 'War', 'Cooking', 'Ecology'][i % 5]], subjects: [`S${i % 17}`] }));
+    const l = fieldLayout(items, 'topic', 'endless', []);
+    expect(l.tiles.length).toBeGreaterThan(items.length);
+    const w = l.wrap!;
+    const byId = new Map<string, { col: number; row: number }[]>();
+    for (const t of l.tiles) byId.set(t.id, [...(byId.get(t.id) ?? []), t]);
+    for (const spots of byId.values()) {
+      for (const a of spots) for (const b of spots) {
+        if (a === b) continue;
+        const dc = Math.min(Math.abs(a.col - b.col), w.cols - Math.abs(a.col - b.col));
+        const dr = Math.min(Math.abs(a.row - b.row), w.rows - Math.abs(a.row - b.row));
+        expect(Math.max(dc, dr)).toBeGreaterThan(1);
+      }
+    }
+    expect(l.variants?.length).toBe(3);
+    const differ = l.variants![1].filter((id, i) => id !== l.variants![0][i]).length;
+    expect(differ).toBeGreaterThan(0);
+    expect(differ).toBeLessThan(l.tiles.length * 0.8); // the same map, not a different one
   });
 });
 
