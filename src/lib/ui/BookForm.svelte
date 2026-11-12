@@ -9,7 +9,7 @@
   import LocationPicker from './LocationPicker.svelte';
   import Rating from './Rating.svelte';
 
-  let { initial, locations, submitLabel = 'Save', onsubmit, oncancel, loanDays = DEFAULT_LOAN_DAYS, lenderNames = [] }: {
+  let { initial, locations, submitLabel = 'Save', onsubmit, onsubmitnext, oncancel, loanDays = DEFAULT_LOAN_DAYS, lenderNames = [] }: {
     initial: Partial<Book>;
     locations: Location[];
     /** Usual loan period, for the due date of a borrowed book. */
@@ -18,6 +18,8 @@
     lenderNames?: string[];
     submitLabel?: string;
     onsubmit: (draft: BookDraft) => void;
+    /** "Save & next volume" (when adding): saves, then opens the form again for the next volume of the set. */
+    onsubmitnext?: (draft: BookDraft) => void;
     oncancel?: () => void;
   } = $props();
 
@@ -42,6 +44,10 @@
     from: initial.borrowed?.from ?? '', on: initial.borrowed?.on ?? todayIso(),
     dueOn: initial.borrowed?.dueOn ?? addDays(initial.borrowed?.on ?? todayIso(), loanDays)
   });
+
+  /** No ISBN: an old book, often one volume of a set. Series and volume then come first. */
+  // svelte-ignore state_referenced_locally
+  const noIsbn = !initial.isbn13 && !initial.isbn10;
 
   const num = (v: unknown) => (v === '' || v === null || v === undefined || Number.isNaN(Number(v)) ? undefined : Number(v));
   const str = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : undefined);
@@ -80,7 +86,8 @@
       'startedOn', 'finishedOn', 'purchasedOn', 'series', 'seriesNumber', 'line', 'volume', 'cover'] as const) {
       (draft as Record<string, unknown>)[k] = str(draft[k]);
     }
-    onsubmit(draft);
+    if (onsubmitnext && (e.submitter as HTMLElement | null)?.dataset.next) onsubmitnext(draft);
+    else onsubmit(draft);
   }
 
   async function upload(e: Event) {
@@ -99,6 +106,13 @@
       </div>
     </div>
     <label class="field">Subtitle<input bind:value={b.subtitle} /></label>
+    {#if noIsbn}
+      <div class="grid">
+        <label class="field">Series / edition <span class="hint">e.g. Sämtliche Werke</span><input bind:value={b.series} /></label>
+        <label class="field">Volume no.<input bind:value={b.seriesNumber} inputmode="numeric" /></label>
+        <label class="field">Part <span class="hint">if a volume has several</span><input bind:value={b.volume} /></label>
+      </div>
+    {/if}
     <div class="grid">
       <label class="field">ISBN-13<input bind:value={b.isbn13} inputmode="numeric" /></label>
       <label class="field">ISBN-10<input bind:value={b.isbn10} /></label>
@@ -150,10 +164,12 @@
         <label class="field">Edition<input bind:value={b.edition} /></label>
         <label class="field">Language<input bind:value={b.language} placeholder="e.g. en" /></label>
         <label class="field">First published<input type="number" bind:value={b.firstPublishedYear} /></label>
-        <label class="field">Series<input bind:value={b.series} /></label>
-        <label class="field">No. in series<input bind:value={b.seriesNumber} /></label>
+        {#if !noIsbn}
+          <label class="field">Series<input bind:value={b.series} /></label>
+          <label class="field">No. in series<input bind:value={b.seriesNumber} /></label>
+        {/if}
         <label class="field">Publisher line (e.g. dtv, Reclam)<input bind:value={b.line} /></label>
-        <label class="field">Volume (if the work has several, e.g. 2)<input bind:value={b.volume} /></label>
+        {#if !noIsbn}<label class="field">Volume (if the work has several, e.g. 2)<input bind:value={b.volume} /></label>{/if}
       </div>
       <label class="field">Genres <span class="hint">comma-separated</span><input bind:value={lists.genres} /></label>
       <label class="field">Subjects / topics<input bind:value={lists.subjects} /></label>
@@ -201,6 +217,7 @@
 
   <div class="actions">
     {#if oncancel}<button type="button" onclick={oncancel}>Cancel</button>{/if}
+    {#if onsubmitnext}<button type="submit" data-next="1" title="Saves this one and keeps author, publisher, year, series and room for the next">Save & next volume</button>{/if}
     <button type="submit" class="btn-primary">{submitLabel}</button>
   </div>
 </form>

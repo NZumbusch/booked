@@ -8,7 +8,7 @@ import { booksKeyOf } from '../config';
 import { olCoverByIsbn, olCoverId, olEditionCoverIds } from '../metadata/openlibrary';
 import { gbByIsbn } from '../metadata/googlebooks';
 import { coverFor, siblingLooks, type SeriesCoverContext } from '../services/seriesCovers';
-import { browserProbe, lookupCandidate, lookupIsbn } from '../metadata/lookup';
+import { browserProbe, lookupCandidate, lookupIsbn, lookupWithoutIsbn } from '../metadata/lookup';
 import { Enricher } from '../services/enrich';
 import { KnowledgeStore } from '../services/knowledge';
 import { browserProcessor, CoverCache } from '../covers/cache';
@@ -63,7 +63,7 @@ export function library(): Library {
 export async function openLibrary(): Promise<Library> {
   if (!instance) {
     instance = await Library.open(new DexieRepository());
-    enricherInstance = new Enricher(instance, { lookupIsbn: (isbn) => lookupIsbn(isbn), lookupCandidate: (c) => lookupCandidate(c) });
+    enricherInstance = new Enricher(instance, { lookupIsbn: (isbn) => lookupIsbn(isbn), lookupCandidate: (c) => lookupCandidate(c), lookupWithoutIsbn: (b) => lookupWithoutIsbn(b) });
     enricherInstance.resumeAll();
     window.addEventListener('online', () => enricherInstance?.resumeAll());
     syncInstance = new SyncController(instance);

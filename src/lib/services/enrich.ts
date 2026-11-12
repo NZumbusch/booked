@@ -1,5 +1,5 @@
 import { writable, type Readable } from 'svelte/store';
-import { enrichmentPatch } from '../domain/book';
+import { enrichmentPatch, hasPlaceholderTitle } from '../domain/book';
 import type { Book, Id } from '../domain/types';
 import type { LookupResult } from '../metadata/lookup';
 import type { Candidate } from '../metadata/types';
@@ -8,6 +8,8 @@ import type { Library } from './library';
 export interface EnrichDeps {
   lookupIsbn(isbn: string): Promise<LookupResult>;
   lookupCandidate(c: Candidate): Promise<LookupResult>;
+  /** Books without ISBN: their DNB record (if added from there) and facts about the work. */
+  lookupWithoutIsbn?(book: Book): Promise<LookupResult>;
 }
 
 /**
@@ -70,17 +72,34 @@ export class Enricher {
       return; // unexpected failure: keep pending, retry later
     }
     if (!result || result.status === 'error') return; // offline: retry later
+    let found: Partial<Book> = result.status === 'found' ? result.draft : {};
+    // Old books with an ISBN (or volumes that share one) are often known only to the DNB, which says nothing
+    // about the work: ask for the work by title and author too.
+    if ((book.isbn13 || book.isbn10) && this.deps.lookupWithoutIsbn && !found.description && !found.firstPublishedYear) {
+      const title = hasPlaceholderTitle(book) ? (found.title ?? '') : book.title;
+      const authors = book.authors.length ? book.authors : (found.authors ?? []);
+      const work = title ? await this.deps.lookupWithoutIsbn({ ...book, title, authors, identifiers: {} }).catch(() => undefined) : undefined;
+      if (work?.status === 'found') {
+        found = {
+          ...work.draft, ...found,
+          identifiers: { ...work.draft.identifiers, ...found.identifiers },
+          provenance: { ...work.draft.provenance, ...found.provenance },
+          sources: [...new Set([...(found.sources ?? []), ...(work.draft.sources ?? [])])]
+        };
+      }
+    }
     const current = this.lib.book(id); // may have been edited or deleted meanwhile
     if (!current) return;
-    await this.lib.enrichBook(id, enrichmentPatch(current, result.status === 'found' ? result.draft : {}));
+    await this.lib.enrichBook(id, enrichmentPatch(current, found));
   }
 
   private lookup(book: Book): Promise<LookupResult> | undefined {
     if (book.isbn13 || book.isbn10) return this.deps.lookupIsbn(book.isbn13 ?? book.isbn10!);
     const olWorkId = book.identifiers?.olwork;
-    if (olWorkId) {
+    if (olWorkId && !book.identifiers?.dnb) {
       return this.deps.lookupCandidate({ key: olWorkId, olWorkId, title: book.title, authors: book.authors, source: 'openlibrary' });
     }
+    if (this.deps.lookupWithoutIsbn && book.title.trim()) return this.deps.lookupWithoutIsbn(book);
     return undefined;
   }
 }

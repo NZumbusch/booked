@@ -3,7 +3,11 @@
   import { onWishlist, todayIso } from '../lib/domain/book';
   import { DEFAULT_LOAN_DAYS, lenders } from '../lib/domain/borrowing';
   import type { Book, BookDraft, ListPrice } from '../lib/domain/types';
-  import { mergeResults, quickLookupIsbn, searchBooks, type LookupResult } from '../lib/metadata/lookup';
+  import { mergeResults, quickLookupIsbn, searchBooks, searchEditions, type LookupResult } from '../lib/metadata/lookup';
+  import type { DnbHit } from '../lib/metadata/dnb';
+  import { groupSets, setKey, volumeLabel, type EditionSet } from '../lib/metadata/dnbSets';
+  import SetPicker from '../lib/ui/SetPicker.svelte';
+  import BookList from '../lib/ui/BookList.svelte';
   import type { Candidate } from '../lib/metadata/types';
   import { plural } from '../lib/format';
   import { navigate } from '../lib/router';
@@ -15,7 +19,7 @@
   import Icon from '../lib/ui/Icon.svelte';
   import Scanner from '../lib/ui/Scanner.svelte';
 
-  type Mode = 'scan' | 'isbn' | 'search';
+  type Mode = 'scan' | 'isbn' | 'search' | 'list';
   /** `wish`: adding to the wishlist (no room; not part of the library). */
   /** `borrow`: a book borrowed from a library or a friend (on your shelf, to give back by a date). */
   let { mode: initialMode = 'isbn', wish = false, borrow = false }: { mode?: Mode; wish?: boolean; borrow?: boolean } = $props();
@@ -30,6 +34,12 @@
   let searchInput = $state('');
   let hits = $state<Candidate[]>();
   let searchError = $state('');
+  /** Editions from the German National Library: also books from before ISBNs. */
+  let editions = $state.raw<DnbHit[]>();
+  const sets = $derived(groupSets(editions ?? []));
+  const bigSets = $derived(sets.filter((st) => st.volumes.length >= 2));
+  /** A set of volumes being added from the checklist. */
+  let chosenSet = $state.raw<EditionSet>();
 
   /** Form state: undefined = still choosing how to add. */
   let initial = $state<Partial<Book>>();
@@ -109,14 +119,34 @@
     if (!searchInput.trim()) return;
     busy = 'Searching…';
     searchError = '';
-    try {
-      hits = await searchBooks(searchInput.trim());
-    } catch {
+    const q = searchInput.trim();
+    const [works, eds] = await Promise.allSettled([searchBooks(q), searchEditions(q)]);
+    hits = works.status === 'fulfilled' ? works.value : [];
+    editions = eds.status === 'fulfilled' ? eds.value : [];
+    if (works.status === 'rejected' && eds.status === 'rejected') {
       hits = undefined;
+      editions = undefined;
       searchError = 'Couldn’t reach the online catalogues. Are you offline?';
-    } finally {
-      busy = '';
     }
+    busy = '';
+  }
+
+  /** A DNB edition: its own record (publisher, year, pages, series and volume) goes straight into the form. */
+  function pickEdition(hit: DnbHit) {
+    const draft = mergeResults([hit.result]);
+    openForm(draft as Partial<Book>, { status: 'found', draft, warnings: [] });
+  }
+
+  /** The set a single hit belongs to (to add its other volumes too). */
+  function setOf(hit: DnbHit): EditionSet | undefined {
+    const key = setKey(hit);
+    return key ? sets.find((s) => s.key === key) : undefined;
+  }
+
+  function setsAdded(added: Book[]) {
+    chosenSet = undefined;
+    if (added.length === 1) navigate(`/book/${added[0].id}`);
+    else navigate(wish ? '/wishlist' : '/books');
   }
 
   /** Open the form right away with what the search hit already has; details follow after saving. */
@@ -131,8 +161,15 @@
     openForm(draft as Partial<Book>, { status: 'found', draft, warnings: [] });
   }
 
+  /** "Save & next volume": the form opens again with what volumes of one set share. */
+  let next = false;
+  async function submitNext(draft: BookDraft) {
+    next = true;
+    await submit(draft);
+  }
+
   async function submit(draft: BookDraft) {
-    const existing = lib.duplicatesOf(draft);
+    const existing = draft.isbn13 || draft.isbn10 ? lib.duplicatesOf(draft) : lib.likelySame(draft);
     const confirmed = !!confirmedIsbn && normalizeIsbn(draft.isbn13 ?? draft.isbn10 ?? '')?.isbn13 === confirmedIsbn;
     if (existing.length && !confirmed) {
       dups = existing;
@@ -145,8 +182,10 @@
   }
 
   async function add(draft: BookDraft) {
-    // Anything we can look up online gets completed in the background.
-    const pendingLookup = !!(draft.isbn13 || draft.isbn10 || draft.identifiers?.olwork) || undefined;
+    const andNext = next;
+    next = false;
+    // Everything gets completed in the background: by ISBN, or (old books) by its DNB record and the work's title and author.
+    const pendingLookup = !!(draft.isbn13 || draft.isbn10 || draft.identifiers?.olwork || draft.identifiers?.dnb || draft.title.trim()) || undefined;
     const scanned = draft.isbn13 ? scannedPrices.get(draft.isbn13) : undefined;
     if (scanned && !draft.listPrice) draft = { ...draft, listPrice: scanned };
     const toWishlist = draft.ownership === 'wishlist';
@@ -154,7 +193,29 @@
       toWishlist ? `“${draft.title}” is on your wishlist` : `Added “${draft.title}”`, { undo: true });
     if (!book) return;
     if (pendingLookup) enricher().enqueue(book.id);
-    navigate(toWishlist && wish ? '/wishlist' : `/book/${book.id}`);
+    if (andNext) {
+      openForm(nextVolume(book));
+      window.scrollTo?.({ top: 0 });
+    }
+    else navigate(toWishlist && wish ? '/wishlist' : `/book/${book.id}`);
+  }
+
+  /** "12" → "13", "Bd. 4" → "Bd. 5", "18a" → "19"; anything else stays empty. */
+  function bump(n: string | undefined): string | undefined {
+    const m = n?.match(/^(.*?)(\d+)\D*$/);
+    return m ? `${m[1]}${Number(m[2]) + 1}` : undefined;
+  }
+
+  /** What the next volume of the same set shares with this one; title, pages and contents are new. */
+  function nextVolume(b: Book): Partial<Book> {
+    return {
+      authors: b.authors, publisher: b.publisher, publishedYear: b.publishedYear, format: b.format, language: b.language,
+      edition: b.edition, series: b.series, line: b.line, locationId: b.locationId, ownership: b.ownership, status: b.status,
+      tags: b.tags, collections: b.collections, condition: b.condition, borrowed: b.borrowed,
+      cover: b.cover?.startsWith('photo:') ? b.cover : undefined,
+      seriesNumber: b.series ? bump(b.seriesNumber) : undefined,
+      volume: b.volume ? bump(b.volume) : undefined
+    };
   }
 
   /** The user confirmed it's really another copy: always a separate entry. */
@@ -181,6 +242,7 @@
 
   function cancelDup() {
     dupOpen = false;
+    next = false;
     isbnInput = '';
   }
 
@@ -193,8 +255,8 @@
 <div class="page stack">
   <header class="spread">
     <div class="row">
-      {#if initial}
-        <button class="btn-ghost btn-icon" aria-label="Back" onclick={backToStart}><Icon name="back" /></button>
+      {#if initial || chosenSet}
+        <button class="btn-ghost btn-icon" aria-label="Back" onclick={() => { backToStart(); chosenSet = undefined; }}><Icon name="back" /></button>
       {/if}
       <h1>{wish ? 'Add to your wishlist' : borrow ? 'Add a borrowed book' : 'Add a book'}</h1>
     </div>
@@ -203,9 +265,11 @@
 
   {#if busy}
     <div class="card busy" role="status"><span class="spinner"></span>{busy}</div>
+  {:else if chosenSet}
+    <SetPicker set={chosenSet} ownership={wish ? 'wishlist' : borrow ? 'borrowed' : 'owned'} ondone={setsAdded} />
   {:else if !initial}
     <div class="seg" role="tablist" aria-label="How to add">
-      {#each [['scan', 'Scan'], ['isbn', 'ISBN'], ['search', 'Title / author']] as [m, label]}
+      {#each [['scan', 'Scan'], ['isbn', 'ISBN'], ['search', 'Title / author'], ['list', 'List']] as [m, label]}
         <button role="tab" aria-selected={mode === m} class:on={mode === m} onclick={() => (mode = m as Mode)}>{label}</button>
       {/each}
     </div>
@@ -226,14 +290,51 @@
     {:else if mode === 'search'}
       <form class="search" role="search" onsubmit={search}>
         <Icon name="search" />
-        <input type="search" bind:value={searchInput} placeholder="e.g. Steppenwolf Hesse" aria-label="Title or author" />
+        <input type="search" bind:value={searchInput} placeholder="e.g. Steppenwolf Hesse, Fontane Nymphenburger" aria-label="Title or author" />
         <button class="btn-sm btn-primary" type="submit" disabled={!searchInput.trim()}>Search</button>
       </form>
       {#if searchError}<p class="error small">{searchError}</p>{/if}
+      {#if bigSets.length}
+        <h3 class="sec">Editions in several volumes</h3>
+        <ul class="hits">
+          {#each bigSets.slice(0, 4) as st (st.key)}
+            <li>
+              <button class="hit set" onclick={() => (chosenSet = st)}>
+                <span class="stackicon" aria-hidden="true">📚</span>
+                <span class="hit-text">
+                  <strong>{st.title}</strong>
+                  <span class="muted small">{[st.author, st.publisher, st.firstYear].filter(Boolean).join(' · ')}</span>
+                  <span class="small">{plural(st.volumes.length, 'volume')} found · tick the ones you have →</span>
+                </span>
+              </button>
+            </li>
+          {/each}
+        </ul>
+      {/if}
+      {#if editions?.length}
+        <h3 class="sec">Editions <span class="muted small">(Deutsche Nationalbibliothek: publisher, year, also without ISBN)</span></h3>
+        <ul class="hits">
+          {#each editions.slice(0, 12) as e (e.result.url ?? e.result.fields.title)}
+            {@const f = e.result.fields}
+            {@const st = setOf(e)}
+            <li class="ed">
+              <button class="hit" onclick={() => pickEdition(e)}>
+                <span class="hit-text">
+                  <strong>{f.title}</strong>
+                  <span class="muted small">{[(f.authors ?? []).join(', '), f.publisher, f.publishedYear].filter(Boolean).join(' · ')}</span>
+                  {#if e.set}<span class="small">{e.set.title}{volumeLabel(e.set) ? `, ${volumeLabel(e.set)}` : ''}</span>{/if}
+                </span>
+              </button>
+              {#if st}<button class="btn-sm" onclick={() => (chosenSet = st)}>Whole set</button>{/if}
+            </li>
+          {/each}
+        </ul>
+      {/if}
       {#if hits}
-        {#if hits.length === 0}
+        {#if hits.length === 0 && !editions?.length}
           <p class="muted center">No matches. Try fewer words, or add it by hand.</p>
-        {:else}
+        {:else if hits.length}
+          {#if editions?.length}<h3 class="sec">Works <span class="muted small">(Open Library)</span></h3>{/if}
           <ul class="hits">
             {#each hits as hit (hit.key)}
               <li>
@@ -249,6 +350,8 @@
           </ul>
         {/if}
       {/if}
+    {:else if mode === 'list'}
+      <BookList {wish} {borrow} />
     {/if}
 
     <button class="ghost-link" onclick={() => openForm({})}><Icon name="edit" size={18} /> Enter everything by hand</button>
@@ -261,7 +364,8 @@
     {/if}
     {#key formKey}
       <BookForm {initial} locations={$lib.locations} loanDays={$lib.settings.loanDays ?? DEFAULT_LOAN_DAYS} lenderNames={lenders($lib.books)}
-        submitLabel={initial.ownership === 'wishlist' ? 'Add to wishlist' : initial.ownership === 'borrowed' ? 'Add as borrowed' : 'Add to library'} onsubmit={submit} />
+        submitLabel={initial.ownership === 'wishlist' ? 'Add to wishlist' : initial.ownership === 'borrowed' ? 'Add as borrowed' : 'Add to library'} onsubmit={submit}
+        onsubmitnext={initial.isbn13 || initial.isbn10 ? undefined : submitNext} />
     {/key}
   {/if}
 </div>
@@ -271,7 +375,7 @@
     <p><strong>{wished.title}</strong> is on your wishlist. Did you buy it?</p>
     <p class="muted small">It moves into your library ({lib.label($lib.settings.defaultLocationId ?? null)}) with everything it already has.</p>
   {:else}
-    <p>{wish ? 'This ISBN is already in your books:' : `You already have ${dups.length === 1 ? 'a copy' : `${dups.length} copies`} of this ISBN:`}</p>
+    <p>{wish ? 'This book is already in your books:' : `You already have ${dups.length === 1 ? 'a copy' : `${dups.length} copies`} of this book:`}</p>
     <ul class="dups">
       {#each dups as d (d.id)}
         <li><strong>{d.title}</strong> <span class="muted small">· {onWishlist(d) ? 'on your wishlist' : lib.label(d.locationId)}</span></li>
@@ -292,7 +396,7 @@
 </Dialog>
 
 <style>
-  .seg { display: grid; grid-template-columns: repeat(3, 1fr); background: var(--surface-2); border-radius: 999px; padding: 4px; gap: 4px; }
+  .seg { display: grid; grid-template-columns: repeat(4, auto); background: var(--surface-2); border-radius: 999px; padding: 4px; gap: 4px; }
   .seg button { border: none; background: transparent; min-height: 44px; padding: 0 8px; }
   .seg button.on { background: var(--surface); box-shadow: var(--shadow); font-weight: 600; }
   .center { text-align: center; margin: 0; }
@@ -312,4 +416,8 @@
   .notice.notfound { background: color-mix(in srgb, var(--warn) 12%, var(--surface)); }
   .notice.error { background: color-mix(in srgb, var(--danger) 10%, var(--surface)); }
   .dups { margin: 0; padding-left: 20px; }
+  .sec { margin: 8px 0 0; font-size: 1rem; }
+  .ed { display: flex; gap: 8px; align-items: center; }
+  .ed .hit { flex: 1; min-height: 56px; }
+  .stackicon { font-size: 2rem; width: 48px; text-align: center; }
 </style>

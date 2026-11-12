@@ -2,13 +2,13 @@ import { cleanList } from '../domain/book';
 import { normalizeIsbn } from '../domain/isbn';
 import type { BookDraft, SourceId, SourceRef } from '../domain/types';
 import { isCoverShape, isKnownPlaceholder } from '../covers/colors';
-import { dnbByIsbn } from './dnb';
+import { dnbById, dnbByIsbn, dnbSearch, type DnbHit } from './dnb';
 import { isbnCoverUrls } from './covers';
 import { gbByIsbn, gbSearch } from './googlebooks';
 import { HttpError, type Fetcher } from './http';
 import { olByIsbn, olQuickIsbn, olSearch, olWork } from './openlibrary';
 import type { Candidate, MetaFields, ProviderResult } from './types';
-import { wdEnrich } from './wikidata';
+import { titlesMatch, wdEnrich } from './wikidata';
 
 export type LookupDraft = Partial<BookDraft>;
 
@@ -229,4 +229,76 @@ export async function lookupCandidate(c: Candidate, f: Fetcher = fetch.bind(glob
   const base: LookupDraft = { title: c.title, subtitle: c.subtitle, authors: c.authors, cover: c.cover?.replace('-M.jpg', '-L.jpg') };
   if (c.year) base.firstPublishedYear = c.year;
   return { status: 'found', draft: { ...base, ...mergeResults(results) }, warnings };
+}
+
+/** Editions in the German National Library by free text (finds books from before ISBNs, with publisher, year and volume). */
+export async function searchEditions(query: string, f: Fetcher = fetch.bind(globalThis)): Promise<DnbHit[]> {
+  return dnbSearch(query, f);
+}
+
+/**
+ * What can be said about the *work* regardless of edition: description, first published, topics,
+ * where it was written. For books without an ISBN, where an edition's publisher, year, pages or cover
+ * found online would most likely be another edition's.
+ */
+const WORK_FIELDS = ['description', 'firstPublishedYear', 'originalLanguage', 'genres', 'subjects', 'writing'] as const;
+
+function workOnly(draft: LookupDraft): LookupDraft {
+  const out: LookupDraft = {};
+  const provenance: Record<string, SourceRef> = {};
+  for (const k of WORK_FIELDS) {
+    if (isEmpty(draft[k])) continue;
+    (out as Record<string, unknown>)[k] = draft[k];
+    if (draft.provenance?.[k]) provenance[k] = draft.provenance[k];
+  }
+  const ids = draft.identifiers ?? {};
+  const keep = Object.fromEntries(Object.entries(ids).filter(([k]) => k === 'olwork' || k === 'wikidata'));
+  if (Object.keys(keep).length) out.identifiers = keep;
+  out.provenance = provenance;
+  out.sources = draft.sources;
+  return out;
+}
+
+const surname = (name: string) => name.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase().split(/[\s,]+/).filter(Boolean).pop() ?? '';
+
+/**
+ * Work-level details for a book without ISBN: its DNB record if it came from there (that edition's own data),
+ * then the work on Open Library + Wikidata by title and author (only work facts).
+ */
+export async function lookupWithoutIsbn(
+  book: { title: string; authors: string[]; identifiers?: Record<string, string> },
+  f: Fetcher = fetch.bind(globalThis)
+): Promise<LookupResult> {
+  const warnings: string[] = [];
+  let edition: LookupDraft = {};
+  let failed = 0;
+  const dnbId = book.identifiers?.dnb;
+  if (dnbId) {
+    const r = await attempt('dnb', dnbById(dnbId, f), warnings);
+    if (!r.ok) failed++;
+    else if (r.value) edition = mergeResults([r.value]);
+  }
+  let work: LookupDraft = {};
+  const author = book.authors[0];
+  if (book.title.trim()) {
+    const hits = await attempt('openlibrary', olSearch(`${book.title} ${author ?? ''}`.trim(), f, 10), warnings);
+    if (!hits.ok) failed++;
+    else {
+      const hit = hits.value.find((h) => titlesMatch(h.title, book.title) && (!author || h.authors.some((a) => surname(a) === surname(author))));
+      if (hit) {
+        const found = await lookupCandidate(hit, f);
+        warnings.push(...found.warnings);
+        work = workOnly(found.draft);
+      }
+    }
+  }
+  const any = Object.keys(edition).length || WORK_FIELDS.some((k) => !isEmpty(work[k])) || work.identifiers;
+  if (!any) return { status: failed && failed === (dnbId ? 2 : 1) ? 'error' : 'notfound', draft: {}, warnings };
+  // The edition's own record wins where both know something (e.g. the DNB's subject headings).
+  const workFields = Object.fromEntries(Object.entries(work).filter(([k, v]) => !isEmpty(v) && k !== 'provenance' && k !== 'sources' && k !== 'identifiers'));
+  const draft: LookupDraft = { ...workFields, ...edition };
+  draft.identifiers = { ...edition.identifiers, ...work.identifiers };
+  draft.provenance = { ...work.provenance, ...edition.provenance };
+  draft.sources = [...new Set([...(edition.sources ?? []), ...(work.sources ?? [])])];
+  return { status: 'found', draft, warnings };
 }

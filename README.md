@@ -10,6 +10,13 @@ All data stays on your device (IndexedDB). The app needs no backend and no API k
   - ISBN entry, title/author search, or a full manual form
   - Details come from Open Library, Google Books and Wikidata, filled in the background so adding never waits
   - Repeated ISBNs ask "another copy?" before adding
+- **Old books without ISBN**
+  - Title / author search also asks the Deutsche Nationalbibliothek, which lists every book published in Germany since 1913: pick an edition and its publisher, year, pages, editors, series and volume come along (oldest editions are listed first)
+  - **Editions in several volumes** (e.g. *Fontane Nymphenburger*): Booked collects all volumes of the set from the DNB as a checklist in volume order. Tick the ones you have, choose the room, tags and optionally one cover photo for all, and add them in one go (undoable). Volumes already in your library are marked
+  - **Save & next volume** in the hand-entry form: author, publisher, year, series, room and tags stay, the volume number goes up by one
+  - **List**: type or paste one book per line (`Fontane: Effi Briest`, `Frisch – Homo faber (Suhrkamp 1957)` or `Author | Title | Publisher | Year | Series | Volume`). *Read a shelf from photos* gives you a request for any chat AI: attach photos of the spines, paste its answer back, check and add
+  - Books without ISBN get their details in the background too: their DNB record, and facts about the work (description, first published, topics, where it was written) by title and author, never another edition's publisher, year or cover. Old books with an ISBN that only the DNB knows get the same work lookup
+  - Without an ISBN, duplicates are recognised by title, author and volume (or the same DNB record)
 - **Wishlist, kept apart**
   - Its own page (Home › Wishlist): add a wish by title search or by hand, remove it, or tap **Bought it** and choose the room
   - Wishes have no room and never appear in the library, room counts, stats, the wall or the map

@@ -97,6 +97,28 @@ export function findDuplicates(books: Book[], candidate: { id?: Id; isbn10?: str
   return books.filter((b) => b.id !== candidate.id && isbnKeys(b).some((k) => keys.includes(k)));
 }
 
+const foldKey = (s: string | undefined) => (s ?? '').normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
+const surnameKey = (authors: string[] | undefined) => foldKey(authors?.[0]?.split(/\s+/).pop());
+
+/**
+ * Books without ISBN that are probably the same edition: the same DNB record, or the same title,
+ * first author's surname and volume / number in its series. (Books with an ISBN use findDuplicates.)
+ */
+export function findLikelySame(
+  books: Book[],
+  c: Pick<Book, 'title'> & Partial<Pick<Book, 'authors' | 'volume' | 'seriesNumber'>> & { id?: Id; identifiers?: Record<string, string> }
+): Book[] {
+  const dnb = c.identifiers?.dnb;
+  const title = foldKey(cleanTitle(c.title));
+  if (!title && !dnb) return [];
+  const who = surnameKey(c.authors);
+  const vol = foldKey(c.volume) + '|' + foldKey(c.seriesNumber);
+  return books.filter((b) => b.id !== c.id && (
+    (!!dnb && b.identifiers?.dnb === dnb) ||
+    (foldKey(cleanTitle(b.title)) === title && surnameKey(b.authors) === who && foldKey(b.volume) + '|' + foldKey(b.seriesNumber) === vol)
+  ));
+}
+
 export function isLent(book: Book): boolean {
   return !!book.lending?.to;
 }
