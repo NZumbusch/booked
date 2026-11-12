@@ -92,3 +92,35 @@ describe('Enricher', () => {
     expect(lib.state.books).toEqual([]);
   });
 });
+
+describe('Enricher: books without ISBN', () => {
+  it('looks up books without ISBN by title and author, and fills only empty fields', async () => {
+    const b = await lib.addBook({ title: 'Der Stechlin', authors: ['Theodor Fontane'], publisher: 'Nymphenburger', pendingLookup: true });
+    const asked: string[] = [];
+    const e = new Enricher(lib, {
+      lookupIsbn: async () => found({}),
+      lookupCandidate: async () => found({}),
+      lookupWithoutIsbn: async (book) => {
+        asked.push(book.title);
+        return found({ description: 'Roman', firstPublishedYear: 1898, publisher: 'Other' });
+      }
+    });
+    e.enqueue(b.id);
+    await e.idle();
+    expect(asked).toEqual(['Der Stechlin']);
+    expect(lib.book(b.id)).toMatchObject({ description: 'Roman', firstPublishedYear: 1898, publisher: 'Nymphenburger' });
+    expect(lib.book(b.id)?.pendingLookup).toBeUndefined();
+  });
+
+  it('asks for the work too when an ISBN lookup knows nothing about it (old books)', async () => {
+    const b = await lib.addBook({ title: 'Quitt', authors: ['Theodor Fontane'], isbn13: '9783485012409', pendingLookup: true });
+    const e = new Enricher(lib, {
+      lookupIsbn: async () => found({ publisher: 'Nymphenburger', publishedYear: 1959 }),
+      lookupCandidate: async () => found({}),
+      lookupWithoutIsbn: async () => found({ firstPublishedYear: 1890, description: 'Roman' })
+    });
+    e.enqueue(b.id);
+    await e.idle();
+    expect(lib.book(b.id)).toMatchObject({ publisher: 'Nymphenburger', publishedYear: 1959, firstPublishedYear: 1890, description: 'Roman' });
+  });
+});

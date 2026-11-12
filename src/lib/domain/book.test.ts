@@ -153,3 +153,25 @@ describe('cleanTitle / displayTitle', () => {
     expect(displayTitle({ title: 'Malina' })).toBe('Malina');
   });
 });
+
+import { findLikelySame } from './book';
+
+describe('findLikelySame (books without ISBN)', () => {
+  const now = '2026-01-01T00:00:00.000Z';
+  const mk = (id: string, d: Parameters<typeof createBook>[0]) => createBook(d, { id, now });
+  const books = [
+    mk('a', { title: 'Der Stechlin', authors: ['Theodor Fontane'], series: 'Sämtliche Werke', seriesNumber: '8' }),
+    mk('b', { title: 'Causerien über Theater', authors: ['Theodor Fontane'], seriesNumber: '22', volume: '1' }),
+    mk('c', { title: 'Quitt', authors: ['Theodor Fontane'], identifiers: { dnb: '123' } })
+  ];
+
+  it('matches title, surname and volume, ignoring case and accents', () => {
+    expect(findLikelySame(books, { title: 'der stechlin', authors: ['Fontane'], seriesNumber: '8' }).map((b) => b.id)).toEqual(['a']);
+    expect(findLikelySame(books, { title: 'Der Stechlin', authors: ['Theodor Fontane'], seriesNumber: '9' })).toEqual([]);
+    expect(findLikelySame(books, { title: 'Causerien über Theater', authors: ['Theodor Fontane'], seriesNumber: '22', volume: '2' })).toEqual([]);
+  });
+
+  it('matches the same DNB record whatever the title', () => {
+    expect(findLikelySame(books, { title: 'Quitt (Roman)', identifiers: { dnb: '123' } }).map((b) => b.id)).toEqual(['c']);
+  });
+});

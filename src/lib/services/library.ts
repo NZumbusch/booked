@@ -1,4 +1,4 @@
-import { applyPatch, cleanList, createBook, findDuplicates, onWishlist } from '../domain/book';
+import { applyPatch, cleanList, createBook, findDuplicates, findLikelySame, onWishlist } from '../domain/book';
 import { fold } from '../domain/query';
 import {
   base64ToBytes, bytesToBase64, decodeDataUrl, isInlinePhoto, photoIdFor, photoRef, type PhotoFile, type StoredPhoto
@@ -200,6 +200,26 @@ export class Library {
     );
     await this.run(`Added “${book.title}”`, { putBooks: [book] });
     return book;
+  }
+
+  /** Several books in one undoable step (e.g. the volumes of a set). */
+  async addBooks(drafts: BookDraft[], label: string): Promise<Book[]> {
+    const now = this.now();
+    const books = drafts.map((draft) => createBook(
+      {
+        addedBy: this.state.settings.userName,
+        ...draft,
+        locationId: draft.locationId === undefined ? this.state.settings.defaultLocationId : draft.locationId
+      },
+      { id: newId(), now }
+    ));
+    if (books.length) await this.run(label, { putBooks: books });
+    return books;
+  }
+
+  /** Books without ISBN that look like the same edition (title, author, volume; or the same DNB record). */
+  likelySame(candidate: Parameters<typeof findLikelySame>[1]): Book[] {
+    return findLikelySame(this.state.books, candidate);
   }
 
   async updateBook(id: Id, patch: Partial<Book>): Promise<Book> {
